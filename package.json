@@ -1,0 +1,29 @@
+{
+  "name": "tink",
+  "version": "0.1.0",
+  "description": "A small, controller-friendly game launcher for Windows",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/",
+    "dist": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "dev.tink.launcher",
+    "productName": "Tink",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**",
+      "renderer/**"
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "artifactName": "Tink.exe"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  }
+}
