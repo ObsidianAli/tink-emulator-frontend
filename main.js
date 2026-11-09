@@ -5,6 +5,7 @@ const steam = require('./src/steam');
 
 const POLL_MS = 2000;
 // How long to wait for Steam to actually start the game before giving up and showing Tink again.
+// Generous, because a first launch can wait on an update or a Steam login.
 const START_TIMEOUT_MS = 5 * 60 * 1000;
 
 let win = null;
@@ -30,12 +31,11 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
-function getLibrary() {
-  const steamDir = steam.findSteamDir();
-  const games = steamDir ? steam.getSteamGames(steamDir) : [];
+async function getLibrary() {
+  const steamDir = await steam.findSteamDir();
   return {
     steamFound: Boolean(steamDir),
-    games: games.map((game) => ({ ...game, art: steam.artUrls(game.appId) })),
+    games: steamDir ? steam.getSteamGames(steamDir) : [],
   };
 }
 
@@ -51,8 +51,14 @@ async function waitForGameToEnd() {
     await sleep(POLL_MS);
     const running = await steam.getRunningAppId();
     if (running === null) continue;
-    if (running !== 0) started = true;
-    else if (started) return;
+    if (running === 0) {
+      if (started) return;
+    } else if (await steam.isSteamRunning()) {
+      started = true;
+    } else if (started) {
+      // Steam itself is gone (it crashed), so the game id is stale and nothing is left to wait for.
+      return;
+    }
   }
 }
 

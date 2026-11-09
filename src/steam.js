@@ -1,13 +1,13 @@
 // Reads the installed Steam library and checks which Steam game is running.
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFile, execFileSync } = require('node:child_process');
+const { execFile } = require('node:child_process');
 
 const DEFAULT_STEAM_DIR = 'C:\\Program Files (x86)\\Steam';
 
 // Steam installs these as "games", but they are tools and runtimes, not something to play.
 const SKIPPED_APP_IDS = new Set(['228980', '250820', '1070560', '1391110', '1628350', '1493710']);
-const SKIPPED_NAMES = /^(Steamworks Common Redistributables|Proton|Steam Linux Runtime|SteamVR)/i;
+const SKIPPED_NAMES = /^(Steamworks Common Redistributables|Proton (\d|Experimental|Hotfix)|Steam Linux Runtime)/i;
 
 // Parses Steam's text format (.vdf / .acf) into nested objects. Only quoted strings and braces matter.
 function parseVdf(text) {
@@ -48,13 +48,21 @@ function readVdfFile(file) {
 function libraryFolders(steamDir) {
   const folders = [steamDir];
   const vdf = readVdfFile(path.join(steamDir, 'steamapps', 'libraryfolders.vdf'));
-  const entries = vdf && vdf.libraryfolders ? Object.values(vdf.libraryfolders) : [];
+  // Newer Steam calls the root "libraryfolders", older Steam "LibraryFolders". Folders are numbered "0", "1", ...
+  const root = vdf && (vdf.libraryfolders || vdf.LibraryFolders);
+  const entries = root ? Object.entries(root).filter(([key]) => /^\d+$/.test(key)).map(([, value]) => value) : [];
   for (const entry of entries) {
-    if (entry && entry.path && path.resolve(entry.path) !== path.resolve(steamDir)) {
-      folders.push(entry.path);
-    }
+    // Newer Steam writes an object with a "path"; older Steam wrote just the path.
+    const folder = typeof entry === 'string' ? entry : entry && entry.path;
+    if (folder && path.resolve(folder) !== path.resolve(steamDir)) folders.push(folder);
   }
   return folders;
+}
+
+// StateFlags bit 4 means "fully installed"; half-downloaded or uninstalling games don't have it.
+// A manifest without the field is treated as installed.
+function isFullyInstalled(state) {
+  return state.StateFlags === undefined || (Number(state.StateFlags) & 4) !== 0;
 }
 
 // The installed games, sorted by title. A missing or unreadable Steam install gives an empty list.
@@ -72,8 +80,9 @@ function getSteamGames(steamDir) {
       const manifest = readVdfFile(path.join(appsDir, file));
       const state = manifest && manifest.AppState;
       if (!state || !state.appid || !state.name) continue;
+      if (!isFullyInstalled(state)) continue;
       if (SKIPPED_APP_IDS.has(state.appid) || SKIPPED_NAMES.test(state.name)) continue;
-      games.set(state.appid, { appId: state.appid, title: state.name });
+      games.set(state.appid, { appId: state.appid, title: state.name, art: artUrls(state.appid) });
     }
   }
   return [...games.values()].sort((a, b) => a.title.localeCompare(b.title));
@@ -85,41 +94,45 @@ function artUrls(appId) {
   return { cover: `${base}/library_600x900.jpg`, fallback: `${base}/header.jpg` };
 }
 
-function readRegistry(valueName) {
-  try {
-    const out = execFileSync('reg', ['query', 'HKCU\\Software\\Valve\\Steam', '/v', valueName], {
-      encoding: 'utf8',
-      windowsHide: true,
+const STEAM_REGISTRY_KEY = 'HKCU\\Software\\Valve\\Steam';
+
+// Reads one value from Steam's registry key. Returns its text, or null if it can't be read.
+function readSteamRegistry(valueName) {
+  return new Promise((resolve) => {
+    execFile('reg', ['query', STEAM_REGISTRY_KEY, '/v', valueName], { windowsHide: true }, (err, stdout) => {
+      if (err) return resolve(null);
+      // Output looks like: "    SteamPath    REG_SZ    c:/program files (x86)/steam"
+      for (const line of String(stdout).split(/\r?\n/)) {
+        const match = line.match(/^\s+(\S+)\s+REG_\w+\s+(.*)$/);
+        if (match && match[1] === valueName) return resolve(match[2].trim());
+      }
+      resolve(null);
     });
-    const match = out.match(new RegExp(`${valueName}\\s+REG_\\w+\\s+(.+)`));
-    return match ? match[1].trim() : null;
-  } catch {
-    return null;
-  }
+  });
 }
 
-// Steam's install folder: from the registry, else the default location.
-function findSteamDir() {
-  const fromRegistry = readRegistry('SteamPath');
+// Steam's install folder: from the registry, else the default location. Null if Steam isn't installed.
+async function findSteamDir() {
+  const fromRegistry = await readSteamRegistry('SteamPath');
   if (fromRegistry && fs.existsSync(fromRegistry)) return path.normalize(fromRegistry);
   return fs.existsSync(DEFAULT_STEAM_DIR) ? DEFAULT_STEAM_DIR : null;
 }
 
 // Steam keeps the id of the running game in the registry; 0 means nothing is running.
-// Returns null if the registry couldn't be read.
-function getRunningAppId() {
+// Returns null if it couldn't be read (which is not the same as "nothing is running").
+async function getRunningAppId() {
+  const value = await readSteamRegistry('RunningAppID');
+  return /^0x[0-9a-f]+$/i.test(value || '') ? parseInt(value, 16) : null;
+}
+
+// After a Steam crash the registry can still name a game that is long gone,
+// so "a game is running" only counts while steam.exe itself is running.
+function isSteamRunning() {
   return new Promise((resolve) => {
-    execFile(
-      'reg',
-      ['query', 'HKCU\\Software\\Valve\\Steam', '/v', 'RunningAppID'],
-      { windowsHide: true },
-      (err, stdout) => {
-        const match = !err && String(stdout).match(/RunningAppID\s+REG_DWORD\s+0x([0-9a-f]+)/i);
-        // null means "couldn't tell", which is different from 0 ("nothing is running").
-        resolve(match ? parseInt(match[1], 16) : null);
-      },
-    );
+    execFile('tasklist', ['/FI', 'IMAGENAME eq steam.exe', '/NH', '/FO', 'CSV'], { windowsHide: true }, (err, stdout) => {
+      resolve(!err && /"steam\.exe"/i.test(String(stdout)));
+    });
   });
 }
 
-module.exports = { parseVdf, getSteamGames, artUrls, findSteamDir, getRunningAppId };
+module.exports = { parseVdf, getSteamGames, artUrls, findSteamDir, getRunningAppId, isSteamRunning };
