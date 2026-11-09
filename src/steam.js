@@ -106,6 +106,7 @@ function findSteamDir() {
 }
 
 // Steam keeps the id of the running game in the registry; 0 means nothing is running.
+// Returns null if the registry couldn't be read.
 function getRunningAppId() {
   return new Promise((resolve) => {
     execFile(
@@ -114,7 +115,8 @@ function getRunningAppId() {
       { windowsHide: true },
       (err, stdout) => {
         const match = !err && String(stdout).match(/RunningAppID\s+REG_DWORD\s+0x([0-9a-f]+)/i);
-        resolve(match ? parseInt(match[1], 16) : 0);
+        // null means "couldn't tell", which is different from 0 ("nothing is running").
+        resolve(match ? parseInt(match[1], 16) : null);
       },
     );
   });

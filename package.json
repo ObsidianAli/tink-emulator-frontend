@@ -1,11 +1,12 @@
 {
   "name": "tink",
   "version": "0.1.0",
+  "author": "ObsidianAli",
   "description": "A small, controller-friendly game launcher for Windows",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/",
+    "test": "node --test test/*.test.js",
     "dist": "electron-builder --win portable"
   },
   "build": {

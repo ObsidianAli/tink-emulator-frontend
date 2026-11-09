@@ -36,8 +36,11 @@ function render() {
 async function play() {
   if (launching || !games[selected]) return;
   launching = true;
-  await window.tink.launch(games[selected].appId);
-  launching = false;
+  try {
+    await window.tink.launch(games[selected].appId);
+  } finally {
+    launching = false;
+  }
 }
 
 document.addEventListener('keydown', (event) => {
