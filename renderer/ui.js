@@ -11,14 +11,36 @@ function showMessage(text) {
   message.hidden = !text;
 }
 
-// Steam games: library image first; if it doesn't exist, the wide header image.
-// Emulated games have no cover yet, so they get an empty box of the same size.
-function makeImage(art) {
-  if (!art) {
+const covers = new Map();
+
+// A Plain cover: the title on its console's colour.
+function plainCover(game, colour) {
+  const box = document.createElement('div');
+  box.className = 'plain-cover';
+  box.style.backgroundColor = colour;
+  box.textContent = game.title;
+  return box;
+}
+
+// Emulated games: an empty box until the main process has found the cover.
+function emulatedCover(game) {
+  const cover = covers.get(game.id);
+  if (!cover) {
     const box = document.createElement('div');
     box.className = 'no-cover';
     return box;
   }
+  if (cover.plain) return plainCover(game, cover.plain.colour);
+  const img = document.createElement('img');
+  img.alt = '';
+  img.src = cover.src;
+  return img;
+}
+
+// Steam games: library image first; if it doesn't exist, the wide header image.
+function makeImage(game) {
+  const { art } = game;
+  if (!art) return emulatedCover(game);
   const img = document.createElement('img');
   img.alt = '';
   img.src = art.cover;
@@ -35,7 +57,7 @@ function render() {
     const consoleName = document.createElement('span');
     consoleName.className = 'console';
     consoleName.textContent = game.consoleName;
-    item.append(makeImage(game.art), game.title, consoleName);
+    item.append(makeImage(game), game.title, consoleName);
     return item;
   }));
   const current = list.children[selected];
@@ -67,6 +89,27 @@ async function start() {
   games = library.games.sort((a, b) => a.consoleName.localeCompare(b.consoleName) || a.title.localeCompare(b.title));
   if (games.length === 0) showMessage('No games found yet.');
   render();
+  loadCovers();
+}
+
+async function loadCovers() {
+  await Promise.all(games.filter((game) => !game.art).map(async (game) => {
+    const cover = await window.tink.getCover(game.id);
+    if (!cover) return;
+    covers.set(game.id, cover);
+    scheduleRender();
+  }));
+}
+
+// Covers arrive one by one; redraw at most once a frame.
+let renderPending = false;
+function scheduleRender() {
+  if (renderPending) return;
+  renderPending = true;
+  requestAnimationFrame(() => {
+    renderPending = false;
+    render();
+  });
 }
 
 start();

@@ -47,8 +47,21 @@ h1 {
   color: var(--muted);
 }
 
-#games .no-cover {
+#games .no-cover,
+#games .plain-cover {
   width: var(--cover-width);
   height: var(--cover-height);
   background: var(--surface);
+}
+
+#games .plain-cover {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space);
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--text-small);
+  text-align: center;
 }
