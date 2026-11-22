@@ -1,5 +1,5 @@
 // Tink's main process: the window, and the two things the UI can ask for.
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const steam = require('./src/steam');
@@ -7,12 +7,14 @@ const { CONSOLES, EMULATORS, launchSpec } = require('./src/presets');
 const { getEmulatedGames } = require('./src/library');
 const { detectEmulators, defaultSearchDirs } = require('./src/detect');
 const { loadSettings } = require('./src/settings');
-const { playGame } = require('./src/launcher');
+const { playGame, closeEmulator } = require('./src/launcher');
+const { watchCombo } = require('./src/pad');
 
 const POLL_MS = 2000;
 // How long to wait for Steam to actually start the game before giving up and showing Tink again.
 // Generous, because a first launch can wait on an update or a Steam login.
 const START_TIMEOUT_MS = 5 * 60 * 1000;
+const HINT_MS = 3000;
 
 // The portable exe unpacks to a temp folder, so "beside Tink" means beside the exe the user started.
 const TINK_DIR = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath);
@@ -85,9 +87,52 @@ async function waitForGameToEnd() {
   }
 }
 
+// Windows won't always let a hidden app take focus back, so Tink briefly goes on top to get there.
 function showTink() {
+  win.setAlwaysOnTop(true);
   win.show();
   win.focus();
+  win.setAlwaysOnTop(false);
+}
+
+// A small note over the game for a few seconds. It can't take focus or clicks, so the game keeps them.
+function showHint() {
+  const { workArea } = screen.getPrimaryDisplay();
+  const width = 560;
+  const height = 72;
+  const hint = new BrowserWindow({
+    width,
+    height,
+    x: Math.round(workArea.x + (workArea.width - width) / 2),
+    y: workArea.y + workArea.height - height - 48,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    focusable: false,
+    skipTaskbar: true,
+    show: false,
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  hint.setAlwaysOnTop(true, 'screen-saver');
+  hint.setIgnoreMouseEvents(true);
+  hint.once('ready-to-show', () => hint.showInactive());
+  hint.loadFile(path.join(__dirname, 'renderer', 'hint.html'));
+  const timer = setTimeout(() => close(), HINT_MS);
+  function close() {
+    clearTimeout(timer);
+    if (!hint.isDestroyed()) hint.destroy();
+  }
+  return close;
+}
+
+// While an emulated game runs: show the hint, and close the game when Select + Start is held.
+function whilePlaying(child) {
+  const closeHint = showHint();
+  const stopWatching = watchCombo(() => closeEmulator(child));
+  return () => {
+    stopWatching();
+    closeHint();
+  };
 }
 
 // Starts the game through Steam, hides Tink, and shows it again once Steam says the game has ended.
@@ -120,7 +165,7 @@ async function launchEmulated(game) {
   }
   if (!fs.existsSync(game.path)) return { error: "This game file can't be found." };
   try {
-    await playGame(launchSpec(game.console, exe, game.path), { hide: () => win.hide(), show: showTink });
+    await playGame(launchSpec(game.console, exe, game.path), { hide: () => win.hide(), show: showTink, whilePlaying });
   } catch {
     return { error: "The emulator couldn't be started." };
   }
