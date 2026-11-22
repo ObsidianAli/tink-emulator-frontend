@@ -1,6 +1,6 @@
 // First-run setup, three screens: emulators found, one games folder per Console, and whether to download Covers.
 // Up/Down move, A chooses, B goes back a screen and X clears a folder. Mouse clicks work too.
-import { element, shortPath } from './dom.js';
+import { element, focusRow, shortPath } from './dom.js';
 
 const root = document.getElementById('setup');
 let active = null;
@@ -109,7 +109,7 @@ export function runSetup(initial) {
         choose();
       }));
       focus = Math.min(focus, buttons.length - 1);
-      buttons[focus].focus();
+      focusRow(buttons[focus], false);
       showSetupHints();
     }
 
@@ -132,7 +132,7 @@ export function runSetup(initial) {
         if (action === 'up' || action === 'down') {
           const before = focus;
           focus = Math.max(0, Math.min(buttons.length - 1, focus + (action === 'down' ? 1 : -1)));
-          buttons[focus].focus();
+          focusRow(buttons[focus]);
           showSetupHints();
           return focus !== before ? 'list' : null;
         }

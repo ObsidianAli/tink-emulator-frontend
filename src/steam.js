@@ -1,7 +1,7 @@
 // Reads the installed Steam library and checks which Steam game is running.
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFile } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
 
 const DEFAULT_STEAM_DIR = 'C:\\Program Files (x86)\\Steam';
 
@@ -82,7 +82,8 @@ function getSteamGames(steamDir) {
       if (!state || !state.appid || !state.name) continue;
       if (!isFullyInstalled(state)) continue;
       if (SKIPPED_APP_IDS.has(state.appid) || SKIPPED_NAMES.test(state.name)) continue;
-      games.set(state.appid, { appId: state.appid, title: state.name, art: artUrls(state.appid) });
+      const installDir = state.installdir ? path.join(folder, 'steamapps', 'common', state.installdir) : null;
+      games.set(state.appid, { appId: state.appid, title: state.name, art: artUrls(state.appid), installDir });
     }
   }
   return [...games.values()].sort((a, b) => a.title.localeCompare(b.title));
@@ -135,4 +136,49 @@ function isSteamRunning() {
   });
 }
 
-module.exports = { parseVdf, getSteamGames, artUrls, findSteamDir, getRunningAppId, isSteamRunning };
+// Pids of the processes whose exe sits inside the game's install folder, never steam.exe itself.
+// processes: [{ pid, exe }].
+function gameProcesses(processes, installDir) {
+  if (!installDir) return [];
+  const root = path.resolve(installDir).toLowerCase() + path.sep;
+  return processes
+    .filter(({ exe }) => exe && path.resolve(exe).toLowerCase().startsWith(root) && path.basename(exe).toLowerCase() !== 'steam.exe')
+    .map(({ pid }) => pid);
+}
+
+function listProcesses() {
+  const script = 'Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath } | Select-Object ProcessId, ExecutablePath | ConvertTo-Json -Compress';
+  return new Promise((resolve) => {
+    execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, stdout) => {
+      if (err) return resolve([]);
+      try {
+        const rows = [].concat(JSON.parse(String(stdout) || '[]'));
+        resolve(rows.map((row) => ({ pid: row.ProcessId, exe: row.ExecutablePath })));
+      } catch {
+        resolve([]);
+      }
+    });
+  });
+}
+
+const taskkill = (args) =>
+  new Promise((resolve) => {
+    const proc = spawn('taskkill', args, { stdio: 'ignore', windowsHide: true });
+    proc.once('error', resolve);
+    proc.once('exit', resolve);
+  });
+
+const CLOSE_WAIT_MS = 5000;
+
+// Closes a running Steam game: asks its processes to close, and forces whatever is still there after waitMs.
+// Steam's running-game value clearing is what brings Tink back, so nothing waits for the exits here.
+async function closeSteamGame(installDir, { waitMs = CLOSE_WAIT_MS, list = listProcesses, kill = taskkill, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  const asked = gameProcesses(await list(), installDir);
+  await Promise.all(asked.map((pid) => kill(['/PID', String(pid)])));
+  if (asked.length === 0) return;
+  await wait(waitMs);
+  const left = gameProcesses(await list(), installDir).filter((pid) => asked.includes(pid));
+  await Promise.all(left.map((pid) => kill(['/PID', String(pid), '/T', '/F'])));
+}
+
+module.exports = { parseVdf, getSteamGames, artUrls, findSteamDir, getRunningAppId, isSteamRunning, gameProcesses, closeSteamGame };

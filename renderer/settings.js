@@ -1,6 +1,6 @@
 // The Settings screen: one list. Up/Down move, A changes the focused row, X is the row's second action
 // (Find automatically, Skip, Clear), B closes. Mouse clicks work too.
-import { element, shortPath } from './dom.js';
+import { element, focusRow, shortPath } from './dom.js';
 
 const root = document.getElementById('settings');
 let active = null;
@@ -129,7 +129,7 @@ export async function openSettings({ focusConsole } = {}) {
     function stopTyping(input) {
       input.value = '';
       typing = false;
-      nodes[focus].focus();
+      focusRow(nodes[focus], false);
       showSettingsHints();
     }
 
@@ -179,7 +179,7 @@ export async function openSettings({ focusConsole } = {}) {
       list.append(element('p', 'setup-note', `Tink ${state.version}`));
       root.replaceChildren(element('h1', '', 'Settings'), list);
       focus = Math.min(focus, nodes.length - 1);
-      nodes[focus].focus();
+      focusRow(nodes[focus], false);
       showSettingsHints();
     }
 
@@ -217,7 +217,7 @@ export async function openSettings({ focusConsole } = {}) {
         if (action === 'up' || action === 'down') {
           const before = focus;
           focus = Math.max(0, Math.min(nodes.length - 1, focus + (action === 'down' ? 1 : -1)));
-          nodes[focus].focus();
+          focusRow(nodes[focus]);
           showSettingsHints();
           return focus !== before ? 'list' : null;
         }
@@ -240,7 +240,7 @@ export async function openSettings({ focusConsole } = {}) {
     if (focusConsole) {
       render();
       focus = Math.max(0, rows.findIndex((row) => row.console === focusConsole));
-      nodes[focus].focus();
+      focusRow(nodes[focus], false);
       showSettingsHints();
     } else {
       render();
