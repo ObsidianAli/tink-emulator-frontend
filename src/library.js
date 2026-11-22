@@ -60,6 +60,7 @@ function getEmulatedGames(settings) {
       const base = path.basename(game.path);
       games.push({
         id: `${consoleId}:${game.path}`,
+        key: `${consoleId}:${base}`,
         console: consoleId,
         consoleName: preset.name,
         title: cleanTitle(base, { isFolder: game.isFolder }),

@@ -1,5 +1,5 @@
 // Tink's main process: the window, and the named things the UI can ask for.
-const { app, BrowserWindow, ipcMain, shell, screen, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, screen, dialog, nativeImage } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const steam = require('./src/steam');
@@ -8,6 +8,7 @@ const { getEmulatedGames, groupShelves } = require('./src/library');
 const { detectEmulators, defaultSearchDirs } = require('./src/detect');
 const { loadSettings, saveSettings } = require('./src/settings');
 const setup = require('./src/setup');
+const profiles = require('./src/profiles');
 const options = require('./src/options');
 const { resolveDataDir, migrateOldData } = require('./src/paths');
 const { createLog } = require('./src/log');
@@ -54,6 +55,8 @@ process.on('unhandledRejection', (reason) => log('Unhandled rejection', reason))
 let win = null;
 // The games last sent to the UI. Launches are looked up here, so the UI never passes a path or exe.
 let gamesById = new Map();
+// Every Console's Shelf, before a profile hides anything. Settings lists these.
+let allShelves = [];
 let settings = { consoles: {} };
 let emulators = {};
 const settingsFile = () => path.join(DATA_DIR, 'settings.json');
@@ -103,17 +106,78 @@ async function getLibrary() {
     consoleName: STEAM.name,
     // Steam Covers are cached by app id.
     fileName: game.appId,
+    key: `steam:${game.appId}`,
   }));
   const games = [...getEmulatedGames(settings), ...steamGames];
   gamesById = new Map(games.map((game) => [game.id, game]));
+  allShelves = groupShelves(games);
+  const current = loadSettings(settingsFile());
+  profiles.ensureProfiles(current);
+  const profile = profiles.activeProfile(current);
+  const shelves = profiles.buildShelves(allShelves, profile).map((shelf) => ({
+    ...shelf,
+    games: shelf.games.map(({ id, key, title, all }) => ({ id, title, all, fav: profile.favourites.includes(key) })),
+  }));
+  return { shelves };
+}
+
+const lookup = (id) => gamesById.get(profiles.realId(id));
+
+const AVATAR_TYPES = /\.(png|jpe?g)$/i;
+const AVATAR_MAX = 60;
+const AVATAR_SIZE = 256;
+const avatarDir = () => path.join(DATA_DIR, 'avatars');
+
+// The picture files the user dropped into data/avatars.
+function listAvatars() {
+  fs.mkdirSync(avatarDir(), { recursive: true });
+  return fs.readdirSync(avatarDir()).filter((name) => AVATAR_TYPES.test(name)).sort().slice(0, AVATAR_MAX);
+}
+
+// A picture cropped square and shrunk, as a data URL; the circle is drawn by the UI.
+function avatarSrc(file) {
+  const image = nativeImage.createFromPath(path.join(avatarDir(), file));
+  if (image.isEmpty()) return null;
+  const { width, height } = image.getSize();
+  const side = Math.min(width, height);
+  const square = image.crop({ x: Math.floor((width - side) / 2), y: Math.floor((height - side) / 2), width: side, height: side });
+  return square.resize({ width: AVATAR_SIZE, height: AVATAR_SIZE, quality: 'good' }).toDataURL();
+}
+
+function getProfiles() {
+  const current = loadSettings(settingsFile());
+  if (profiles.ensureProfiles(current)) saveSettings(settingsFile(), current);
+  const files = listAvatars();
   return {
-    shelves: groupShelves(games).map((shelf) => ({ ...shelf, games: shelf.games.map(({ id, title }) => ({ id, title })) })),
+    last: current.lastProfile,
+    profiles: current.profiles.map(({ id, name, colour, avatar }) => ({
+      id,
+      name,
+      colour,
+      avatar: files.includes(avatar) ? avatarSrc(avatar) : null,
+    })),
   };
 }
 
+function getAvatars() {
+  return listAvatars().map((file) => ({ file, src: avatarSrc(file) })).filter((avatar) => avatar.src);
+}
+
+// Applies one change to the saved settings and returns what it returned.
+function changeProfiles(change) {
+  const current = loadSettings(settingsFile());
+  profiles.ensureProfiles(current);
+  const result = change(current);
+  saveSettings(settingsFile(), current);
+  return result;
+}
+
+// Changes to the profile in use, like favourites and hidden shelves.
+const changeActive = (change) => changeProfiles((current) => change(profiles.activeProfile(current)));
+
 // A Game's Cover, as a data URL or a Plain cover colour. The UI itself never goes online.
 async function getCover(id) {
-  const game = gamesById.get(id);
+  const game = lookup(id);
   if (!game || !covers) return null;
   const cover = await covers.getCover(game);
   if (cover.plain) return cover;
@@ -314,7 +378,12 @@ function finishSetup(wantsCovers) {
 
 // What the Settings screen shows. The SteamGridDB key stays here; the UI only learns whether there is one.
 function getSettings() {
-  return options.buildSettings(loadSettings(settingsFile()), detect(), app.getVersion());
+  const current = loadSettings(settingsFile());
+  profiles.ensureProfiles(current);
+  return {
+    ...options.buildSettings(current, detect(), app.getVersion()),
+    ...profiles.settingsView(profiles.activeProfile(current), allShelves),
+  };
 }
 
 // Applies one change to the saved settings, then sends back the fresh Settings state.
@@ -353,6 +422,7 @@ async function launchEmulated(game) {
   try {
     const spec = launchSpec(game.console, exe, game.path, options.wantsFullscreen(settings));
     await playGame(spec, { hide: () => win.hide(), show: showTink, whilePlaying });
+    changeActive((profile) => profiles.recordPlay(profile, game.key));
   } catch (error) {
     log(`Could not start ${name} for ${game.consoleName}`, error);
     return { error: `${name} couldn't be started.`, fix: 'settings', console: game.console };
@@ -361,11 +431,12 @@ async function launchEmulated(game) {
 }
 
 async function launch(id) {
-  const game = gamesById.get(id);
+  const game = lookup(id);
   if (!game) return { error: "This game can't be found.", fix: 'rescan' };
   if (game.console === 'steam') {
     try {
       await launchSteam(game);
+      changeActive((profile) => profiles.recordPlay(profile, game.key));
     } catch (error) {
       log('Could not start a Steam game', error);
       return { error: "Steam couldn't start this game." };
@@ -440,6 +511,27 @@ app.whenReady().then(async () => {
   handle('setSteamKey', (key) => setSteamKey(key));
   handle('findAutomatically', (id) => findAutomatically(String(id)));
   handle('redownloadCovers', redownloadCovers);
+  handle('getProfiles', getProfiles);
+  handle('getAvatars', getAvatars);
+  handle('chooseProfile', (id) => changeProfiles((current) => {
+    if (current.profiles.some((p) => p.id === String(id))) current.lastProfile = String(id);
+  }));
+  handle('addProfile', () => changeProfiles((current) => (profiles.addProfile(current) || {}).id || null));
+  handle('saveProfile', (edit) => changeProfiles((current) => {
+    const profile = current.profiles.find((p) => p.id === String(edit && edit.id));
+    if (profile) profiles.editProfile(profile, edit, listAvatars());
+  }));
+  handle('removeProfile', (id) => changeProfiles((current) => profiles.removeProfile(current, String(id))));
+  handle('toggleFavourite', (id) => changeActive((profile) => {
+    const game = lookup(String(id));
+    if (game) profiles.toggleFavourite(profile, game.key);
+  }));
+  handle('hideGame', (id) => changeActive((profile) => {
+    const game = lookup(String(id));
+    if (game) profiles.hideGame(profile, game.key);
+  }));
+  handle('toggleShelf', (id) => { changeActive((profile) => profiles.toggleConsole(profile, String(id))); return getSettings(); });
+  handle('showHiddenGames', () => { changeActive(profiles.showAllGames); return getSettings(); });
   handle('getLibrary', getLibrary);
   handle('getCover', (id) => getCover(String(id)));
   handle('launch', (id) => launch(String(id)));
