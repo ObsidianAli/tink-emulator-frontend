@@ -24,8 +24,14 @@ const HINT_MS = 3000;
 // Let the shelf load first; the update check is not urgent.
 const UPDATE_CHECK_DELAY_MS = 10 * 1000;
 
+// An update is finished by the staged copy (Tink.new) started with the flag; its "Tink folder" is the real one.
+const FINISHING = process.argv.includes(FINISH_FLAG) && /\.new$/i.test(path.dirname(process.execPath));
 // The portable exe unpacks to a temp folder, so "beside Tink" means beside the exe the user started.
-const TINK_DIR = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath);
+const TINK_DIR = process.env.PORTABLE_EXECUTABLE_DIR
+  || (FINISHING ? path.dirname(process.execPath).slice(0, -'.new'.length) : path.dirname(process.execPath));
+// Finishing an update must not be turned away by the Tink that is still shutting down. Source runs (tests) skip the lock.
+const SECOND_INSTANCE = app.isPackaged && !FINISHING && !app.requestSingleInstanceLock();
+if (SECOND_INSTANCE) app.quit();
 
 const DATA_DIR = resolveDataDir({
   packaged: app.isPackaged,
@@ -370,15 +376,13 @@ function handle(name, fn) {
   });
 }
 
-// Only a packaged portable exe can replace itself. TINK_UPDATE_URL is honoured only for a local http://127.0.0.1 server (tests).
-// Started as Tink.exe.new with the flag, it is the downloaded exe finishing the swap.
+// Only an installed Tink folder can replace itself; the portable bridge exe can't. TINK_UPDATE_URL is honoured only
+// for a local http://127.0.0.1 server (tests).
 function makeUpdater() {
-  const running = process.env.PORTABLE_EXECUTABLE_FILE;
-  if (!app.isPackaged || !running) return null;
-  const exe = finishing(running) ? running.slice(0, -'.new'.length) : running;
+  if (!app.isPackaged || process.env.PORTABLE_EXECUTABLE_FILE) return null;
   const local = (process.env.TINK_UPDATE_URL || '').startsWith('http://127.0.0.1');
   return createUpdater({
-    exe,
+    appDir: TINK_DIR,
     dataDir: DATA_DIR,
     version: app.getVersion(),
     log,
@@ -386,13 +390,20 @@ function makeUpdater() {
   });
 }
 
-const finishing = (running) => process.argv.includes(FINISH_FLAG) && running.endsWith('.new');
 let notice = null;
 let updater = null;
 
+app.on('second-instance', () => {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+});
+
 app.whenReady().then(async () => {
+  if (SECOND_INSTANCE) return;
   updater = makeUpdater();
-  if (updater && finishing(process.env.PORTABLE_EXECUTABLE_FILE)) {
+  if (updater && FINISHING) {
     if (await updater.finishUpdate()) return app.quit();
   } else if (updater) {
     updater.removeOld();
