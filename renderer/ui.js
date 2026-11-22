@@ -1,4 +1,4 @@
-// The plain list screen: Up/Down to move, Enter to play.
+// The plain list screen: Up/Down to move, A (Enter) to play.
 const list = document.getElementById('games');
 const message = document.getElementById('message');
 
@@ -69,16 +69,17 @@ async function play() {
   launching = true;
   try {
     const result = await window.tink.launch(games[selected].id);
-    showMessage(result && result.error ? result.error : '');
+    if (result && result.error) await showDialog({ message: result.error });
   } finally {
     launching = false;
   }
 }
 
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'ArrowDown') selected = Math.min(selected + 1, games.length - 1);
-  else if (event.key === 'ArrowUp') selected = Math.max(selected - 1, 0);
-  else if (event.key === 'Enter') return play();
+listenForInput((action) => {
+  if (dialogTakesInput(action)) return;
+  if (action === 'down') selected = Math.min(selected + 1, games.length - 1);
+  else if (action === 'up') selected = Math.max(selected - 1, 0);
+  else if (action === 'a') return play();
   else return;
   render();
 });
@@ -88,6 +89,7 @@ async function start() {
   // Grouped by console, then by title.
   games = library.games.sort((a, b) => a.consoleName.localeCompare(b.consoleName) || a.title.localeCompare(b.title));
   if (games.length === 0) showMessage('No games found yet.');
+  else setHints([{ button: 'a', label: 'Play' }]);
   render();
   loadCovers();
 }

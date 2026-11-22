@@ -1,57 +1,78 @@
+html, body {
+  height: 100%;
+}
+
 body {
+  display: flex;
+  flex-direction: column;
   margin: 0;
-  padding: calc(var(--space) * 4);
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, sans-serif;
+  font-family: var(--font);
   font-size: var(--text-body);
+  font-weight: var(--weight-regular);
+  line-height: var(--line-height);
+  overflow: hidden;
+}
+
+main {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: var(--space-6) var(--space-8) var(--space-4);
 }
 
 h1 {
-  margin: 0 0 calc(var(--space) * 3);
+  margin: 0 0 var(--space-4);
   font-size: var(--text-title);
+  font-weight: var(--weight-bold);
 }
 
 #message {
+  margin: 0;
   color: var(--muted);
 }
+
+/* The list screen */
 
 #games {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: var(--focus-width);
 }
 
 #games li {
   display: flex;
   align-items: center;
-  gap: calc(var(--space) * 2);
-  padding: var(--space);
-  border-left: var(--focus-bar) solid transparent;
+  gap: var(--space-3);
+  padding: var(--space) var(--space-2);
+  border-radius: var(--radius-large);
+  outline: var(--focus-width) solid transparent;
+  outline-offset: var(--focus-offset);
+  transition: background-color var(--duration-ui) var(--ease-out), outline-color var(--duration-fast) var(--ease-out);
+}
+
+#games li + li {
+  margin-top: var(--space);
 }
 
 #games li.selected {
-  border-left-color: var(--accent);
-  background: var(--highlight);
+  background: var(--surface);
+  outline: var(--focus-ring);
+}
+
+#games img,
+#games .no-cover,
+#games .plain-cover {
+  flex: none;
+  width: var(--cover-width);
+  height: var(--cover-height);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
 
 #games img {
-  width: var(--cover-width);
-  height: var(--cover-height);
   object-fit: cover;
-  background: var(--surface);
-}
-
-#games .console {
-  margin-left: auto;
-  color: var(--muted);
-}
-
-#games .no-cover,
-#games .plain-cover {
-  width: var(--cover-width);
-  height: var(--cover-height);
-  background: var(--surface);
 }
 
 #games .plain-cover {
@@ -61,7 +82,109 @@ h1 {
   justify-content: center;
   padding: var(--space);
   overflow: hidden;
-  color: var(--text);
   font-size: var(--text-small);
   text-align: center;
+}
+
+#games .console {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--text-small);
+}
+
+/* Button hints along the bottom edge */
+
+#hints {
+  position: relative;
+  z-index: var(--layer-hints);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-4);
+  flex: none;
+  height: var(--hints-height);
+  padding: 0 var(--space-8);
+  border-top: var(--line-width) solid var(--line);
+  background: var(--bg);
+  font-size: var(--text-small);
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+}
+
+/* A self-made face-button glyph: a plain circle with the letter. */
+.glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--glyph-size);
+  height: var(--glyph-size);
+  border-radius: var(--radius-round);
+  background: var(--text);
+  color: var(--on-light);
+  font-weight: var(--weight-bold);
+}
+
+/* The friendly error dialog */
+
+.dialog-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--layer-dialog);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--scrim);
+  opacity: 0;
+  transition: opacity var(--duration-ui) var(--ease-out);
+}
+
+.dialog-scrim.open {
+  opacity: 1;
+}
+
+.dialog {
+  box-sizing: border-box;
+  width: var(--dialog-width);
+  max-width: calc(100% - var(--space-8));
+  padding: var(--space-6);
+  border-radius: var(--radius-large);
+  background: var(--surface-raised);
+  transform: translateY(var(--space-2));
+  transition: transform var(--duration-ui) var(--ease-out);
+}
+
+.dialog-scrim.open .dialog {
+  transform: none;
+}
+
+.dialog p {
+  margin: 0 0 var(--space-4);
+}
+
+.dialog-buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.dialog button {
+  min-width: var(--button-min-width);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  outline: var(--focus-width) solid transparent;
+  outline-offset: var(--focus-offset);
+  transition: background-color var(--duration-fast) var(--ease-out), outline-color var(--duration-fast) var(--ease-out);
+}
+
+.dialog button:focus {
+  background: var(--text);
+  color: var(--on-light);
+  outline: var(--focus-ring);
 }

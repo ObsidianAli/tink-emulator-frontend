@@ -1,19 +1,81 @@
-/* Every colour, size and spacing value the UI uses lives here. */
+/* Every colour, size, spacing and timing value the UI uses lives here. Other stylesheets use only these. */
+
+/* Inter, bundled so Tink looks the same on every PC. Licence: fonts/LICENSE.txt (SIL Open Font License). */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  src: url(fonts/inter-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  src: url(fonts/inter-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF,
+    U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 :root {
-  --bg: #101114;
-  --surface: #1c1e23;
-  --highlight: rgba(255, 255, 255, 0.06);
-  --text: #f2f2f2;
-  --muted: #8b8e96;
+  /* Colour. One accent, used for focus and nothing decorative. */
+  --bg: #0f1115;
+  --surface: #1a1d23;
+  --surface-raised: #252931;
+  --line: rgba(255, 255, 255, 0.08);
+  --text: #f3f4f6;
+  --muted: #9aa0aa;
   --accent: #4da3ff;
-  --hint-bg: rgba(16, 17, 20, 0.88);
+  --on-light: #0f1115;
+  --scrim: rgba(8, 9, 12, 0.72);
+  --hint-bg: rgba(15, 17, 21, 0.92);
 
-  --text-title: 32px;
-  --text-body: 20px;
-  --text-small: 12px;
+  /* Type. One font, three sizes, two weights. */
+  --font: 'Inter', system-ui, sans-serif;
+  --text-title: 40px;
+  --text-body: 24px;
+  --text-small: 16px;
+  --line-height: 1.3;
+  --weight-regular: 400;
+  --weight-bold: 600;
 
+  /* Spacing on an 8px grid. */
   --space: 8px;
-  --cover-width: calc(var(--space) * 8);
+  --space-2: calc(var(--space) * 2);
+  --space-3: calc(var(--space) * 3);
+  --space-4: calc(var(--space) * 4);
+  --space-6: calc(var(--space) * 6);
+  --space-8: calc(var(--space) * 8);
+
+  /* Shapes. */
+  --radius: var(--space);
+  --radius-large: var(--space-2);
+  --radius-round: 999px;
+  --line-width: 1px;
+
+  /* Focus: the same ring on everything a controller can land on. */
+  --focus-width: calc(var(--space) / 2);
+  --focus-offset: calc(var(--space) / 2);
+  --focus-ring: var(--focus-width) solid var(--accent);
+
+  /* Motion: always ease-out, never bouncy. UI 150–300ms, Case animations 400–600ms. */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-ui: 250ms;
+  --duration-case: 500ms;
+  --duration-case-slow: 600ms;
+
+  /* Sizes of recurring things. */
+  --cover-width: var(--space-8);
   --cover-height: calc(var(--space) * 12);
-  --focus-bar: calc(var(--space) / 2);
+  --glyph-size: var(--space-4);
+  --dialog-width: calc(var(--space) * 70);
+  --hints-height: calc(var(--space) * 10);
+  --button-min-width: calc(var(--space) * 20);
+
+  /* Layers. */
+  --layer-dialog: 10;
+  --layer-hints: 20;
 }
