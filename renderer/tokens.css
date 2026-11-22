@@ -1,0 +1,17 @@
+/* Every colour, size and spacing value the UI uses lives here. */
+:root {
+  --bg: #101114;
+  --surface: #1c1e23;
+  --highlight: rgba(255, 255, 255, 0.06);
+  --text: #f2f2f2;
+  --muted: #8b8e96;
+  --accent: #4da3ff;
+
+  --text-title: 32px;
+  --text-body: 20px;
+
+  --space: 8px;
+  --cover-width: calc(var(--space) * 8);
+  --cover-height: calc(var(--space) * 12);
+  --focus-bar: calc(var(--space) / 2);
+}
