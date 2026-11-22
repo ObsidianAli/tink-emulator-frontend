@@ -13,7 +13,9 @@ const VIEW_HEIGHT = 6.4;
 const TURN = 0.45;
 const CAMERA_LIFT = 0.45;
 const BOARD = { height: 0.08, depth: 1.4, back: 0.4 };
-const MAX_PIXEL_RATIO = 1;
+// Frames in motion are drawn at a low pixel ratio so they stay smooth; the still frame after is drawn sharp.
+const MOVING_PIXEL_RATIO = 1;
+const STILL_PIXEL_RATIO = Math.min(window.devicePixelRatio || 1, 3);
 // Extra Cases built past each edge of the screen, so moving never shows an empty slot.
 const SPARE = 2;
 const SETTLED = 0.0005;
@@ -33,7 +35,7 @@ function durationMs(name) {
 // onTint(colour) is called with the selected Cover's average colour.
 function createShelf(canvas, { onTint }) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+  renderer.setPixelRatio(STILL_PIXEL_RATIO);
   renderer.setClearColor(0x000000, 0);
 
   const scene = new THREE.Scene();
@@ -219,7 +221,11 @@ function createShelf(canvas, { onTint }) {
     return { moving, spinning };
   }
 
-
+  function setPixelRatio(ratio) {
+    if (renderer.getPixelRatio() === ratio) return;
+    renderer.setPixelRatio(ratio);
+    renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+  }
 
   let frameRequested = false;
   let lastTime = null;
@@ -228,6 +234,7 @@ function createShelf(canvas, { onTint }) {
     frameRequested = false;
     const dt = lastTime === null ? 16 : Math.min(now - lastTime, 50);
     const { moving, spinning } = step(dt);
+    setPixelRatio(moving ? MOVING_PIXEL_RATIO : STILL_PIXEL_RATIO);
     aimCamera();
     renderer.render(scene, camera);
     if (moving || spinning) {
