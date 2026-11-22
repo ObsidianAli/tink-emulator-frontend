@@ -67,3 +67,13 @@ test('finishing stores the covers choice and ends setup', () => {
   completeSetup(settings, true);
   assert.strictEqual(settings.covers, true);
 });
+
+test('ids that only exist on Object.prototype are refused', () => {
+  const settings = { consoles: {} };
+  for (const id of ['__proto__', 'constructor', 'toString']) {
+    assert.throws(() => setConsoleFolder(settings, id, 'D:\Games'), id);
+    assert.throws(() => setEmulatorExe(settings, id, 'C:\evil.exe'), id);
+  }
+  assert.strictEqual({}.folder, undefined);
+  assert.deepStrictEqual(settings, { consoles: {} });
+});

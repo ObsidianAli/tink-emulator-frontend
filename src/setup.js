@@ -1,20 +1,12 @@
 // The logic behind first-run setup: whether to show it, what to list on each screen, and how choices are stored.
-const fs = require('node:fs');
-const { CONSOLES, EMULATORS } = require('./presets');
+const { CONSOLES, EMULATORS, isConsole, isEmulator } = require('./presets');
+const { isFile } = require('./detect');
 
 // Setup shows until it has been finished once (setupDone is false while it's under way). Settings from before setup existed that already have a games
 // folder count as finished, so nobody who is already set up gets sent through it.
 function needsSetup(settings) {
   if (typeof settings.setupDone === 'boolean') return !settings.setupDone;
   return !Object.values(settings.consoles).some((entry) => entry && entry.folder);
-}
-
-function isFile(file) {
-  try {
-    return fs.statSync(file).isFile();
-  } catch {
-    return false;
-  }
 }
 
 // The exe for an emulator: the one the user picked, else the detected one.
@@ -47,17 +39,17 @@ function buildSetup(settings, detected, steamFound) {
 }
 
 function consoleEntry(settings, id) {
-  if (!CONSOLES[id]) throw new Error('Unknown console');
+  if (!isConsole(id)) throw new Error('Unknown console');
   if (!settings.consoles[id] || typeof settings.consoles[id] !== 'object') settings.consoles[id] = {};
   return settings.consoles[id];
 }
 
 function setEmulatorExe(settings, id, exe) {
-  if (CONSOLES[id] && !CONSOLES[id].emulator) {
+  if (isConsole(id) && !CONSOLES[id].emulator) {
     consoleEntry(settings, id).exe = exe;
     return;
   }
-  if (!EMULATORS[id]) throw new Error('Unknown emulator');
+  if (!isEmulator(id)) throw new Error('Unknown emulator');
   settings.emulators = { ...settings.emulators, [id]: exe };
 }
 
