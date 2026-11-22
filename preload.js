@@ -3,5 +3,5 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('tink', {
   getLibrary: () => ipcRenderer.invoke('getLibrary'),
-  launch: (appId) => ipcRenderer.invoke('launch', appId),
+  launch: (id) => ipcRenderer.invoke('launch', id),
 });
