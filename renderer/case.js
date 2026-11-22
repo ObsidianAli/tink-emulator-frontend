@@ -60,8 +60,8 @@ const SPINE_FILL = 0.7;
 const SHADOW_SPREAD = 0.35;
 // Clear plastic is glossy, card boxes are not.
 const ROUGHNESS = { plastic: 0.18, box: 0.62, shell: 0.55 };
-// The selected Cover's reflections are turned down and spread out so the art stays clean and sharp.
-const SELECTED_GLOSS = { strength: 0.3, extraRoughness: 0.12 };
+// The selected Cover is matte with no reflections, so the art shows its real colours.
+const SELECTED_GLOSS = { strength: 0, extraRoughness: 1 };
 
 function shapeFor(consoleId) {
   return SHAPES[SHAPE_OF_CONSOLE[consoleId] || 'dvd'];
@@ -250,7 +250,7 @@ function createCase(shape, colours) {
     for (const material of [coverMaterial, spineMaterial, backMaterial]) {
       material.color.setScalar(shade);
       material.envMapIntensity = SELECTED_GLOSS.strength + (1 - SELECTED_GLOSS.strength) * near;
-      material.roughness = roughness + SELECTED_GLOSS.extraRoughness * (1 - near);
+      material.roughness = Math.min(1, roughness + SELECTED_GLOSS.extraRoughness * (1 - near));
     }
   }
 
