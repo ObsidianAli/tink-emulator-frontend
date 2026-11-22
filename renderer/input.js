@@ -24,13 +24,16 @@ const REPEAT_EVERY_MS = 120;
 
 const inputHandlers = [];
 
-// Calls handler(action) for every press. Directions repeat while held; buttons don't.
+// Calls handler(action) for every press, and plays the sound name it returns, if any. Directions repeat while held; buttons don't.
 function listenForInput(handler) {
   inputHandlers.push(handler);
 }
 
+// A handler can return the name of the sound its action made; the first one returned plays.
 function emitAction(action) {
-  for (const handler of inputHandlers) handler(action);
+  let sound = null;
+  for (const handler of inputHandlers) sound = handler(action) || sound;
+  if (sound) playSound(sound);
 }
 
 document.addEventListener('keydown', (event) => {
