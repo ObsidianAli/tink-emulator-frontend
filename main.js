@@ -12,7 +12,7 @@ const options = require('./src/options');
 const { resolveDataDir, migrateOldData } = require('./src/paths');
 const { createLog } = require('./src/log');
 const { playGame, closeEmulator } = require('./src/launcher');
-const { watchCombo } = require('./src/pad');
+const { watchCombo, loadPadReader } = require('./src/pad');
 const { createCovers } = require('./src/covers');
 
 const POLL_MS = 2000;
@@ -177,12 +177,26 @@ function showHint() {
   return close;
 }
 
+// Loaded on the first game, so a missing XInput is logged once.
+let padReader;
+function getPadReader() {
+  if (padReader === undefined) {
+    padReader = loadPadReader();
+    if (!padReader) log("Could not load XInput, so Select + Start won't close games. They still come back when the emulator closes.");
+  }
+  return padReader;
+}
+
 // While an emulated game runs: show the hint, and close the game when Select + Start is held.
 function whilePlaying(child) {
   const closeHint = showHint();
-  const stopWatching = watchCombo(() => closeEmulator(child), {
-    onFail: (code) => log(`The pad watcher stopped early (exit code ${code}), so Select + Start won't work this time`),
-  });
+  const reader = getPadReader();
+  const stopWatching = reader
+    ? watchCombo(() => closeEmulator(child), {
+        read: reader.read,
+        onFail: (error) => log("Reading the pad failed, so Select + Start won't work this time", error),
+      })
+    : () => {};
   return () => {
     stopWatching();
     closeHint();
