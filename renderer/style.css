@@ -164,3 +164,117 @@ main {
   color: var(--on-light);
   outline: var(--focus-ring);
 }
+
+/* First-run setup */
+
+#setup {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  padding: var(--space-6) var(--space-8) var(--space-3);
+  background: var(--bg);
+}
+
+#setup[hidden] {
+  display: none;
+}
+
+#setup h1 {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+}
+
+.setup-text {
+  margin: 0;
+  color: var(--muted);
+}
+
+.setup-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space);
+  scrollbar-width: none;
+}
+
+.setup-row,
+.setup-next {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--space) var(--space-3);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  outline: var(--focus-width) solid transparent;
+  outline-offset: var(--focus-offset);
+  transition: background-color var(--duration-fast) var(--ease-out), outline-color var(--duration-fast) var(--ease-out);
+}
+
+.setup-row + .setup-row {
+  margin-top: var(--space);
+}
+
+.setup-row:focus,
+.setup-next:focus {
+  background: var(--text);
+  color: var(--on-light);
+  outline: var(--focus-ring);
+}
+
+.setup-next {
+  flex: none;
+  justify-content: center;
+  width: auto;
+  align-self: flex-end;
+  min-width: var(--button-min-width);
+  font-weight: var(--weight-bold);
+}
+
+.setup-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.setup-sub {
+  overflow: hidden;
+  font-size: var(--text-small);
+  opacity: 0.6;
+  text-overflow: ellipsis;
+}
+
+.setup-status {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setup-status.found {
+  color: var(--text);
+}
+
+.setup-row:focus .setup-status {
+  color: inherit;
+}
+
+.setup-note {
+  margin: var(--space-2) 0 0;
+  color: var(--muted);
+  font-size: var(--text-small);
+}

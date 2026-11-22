@@ -1,6 +1,7 @@
 // The shelf screen: LB/RB (Up/Down) switch Shelves, Left/Right move along one, A (Enter) plays,
 // Y (F) flips the selected Case, X (Space) opens it and B (Esc) undoes either.
 import { createShelf } from './shelf.js';
+import { runSetup } from './setup.js';
 
 const nav = document.getElementById('shelves');
 const title = document.getElementById('title');
@@ -97,6 +98,8 @@ listenForInput((action) => {
 });
 
 async function start() {
+  const setup = await window.tink.getSetup();
+  if (setup.needed) await runSetup(setup);
   const library = await window.tink.getLibrary();
   shelves = library.shelves;
   if (shelves.length === 0) {
