@@ -24,6 +24,9 @@
       "!node_modules/three/build/three.tsl.js",
       "!node_modules/three/build/three.webgpu*.js"
     ],
+    "asarUnpack": [
+      "node_modules/@koromix/koffi-win32-x64/**"
+    ],
     "win": {
       "target": "portable"
     },
@@ -35,6 +38,7 @@
     "playwright": "^1.65.1"
   },
   "dependencies": {
+    "koffi": "^3.3.8",
     "three": "^0.187.0"
   }
 }
