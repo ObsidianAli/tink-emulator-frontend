@@ -1,6 +1,7 @@
 // Runs Tink in Electron with a made-up library of a few dozen Games per Shelf, drives the Shelf with the keyboard and a
 // simulated pad, measures frame times while scrolling and while a Case flips and opens, and saves screenshots.
 // Usage: node test/shelf.e2e.js [screenshot folder]
+const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -149,6 +150,9 @@ async function main() {
   fs.mkdirSync(userData);
   fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify(makeLibrary(path.join(root, 'games'))));
   seedCovers(userData, path.join(root, 'games'));
+  // A picture the user dropped into data/avatars, which is not square.
+  fs.mkdirSync(path.join(userData, 'avatars'));
+  fs.writeFileSync(path.join(userData, 'avatars', 'sam.png'), fakeCover(3));
 
   const app = await electron.launch({
     // A 4K screen at 300% scale, where any blur from a low pixel ratio shows.
@@ -192,6 +196,64 @@ async function main() {
     const key = target > now ? 'ArrowDown' : 'ArrowUp';
     for (let i = 0; i < Math.abs(target - now); i++) await page.keyboard.press(key);
   };
+
+  const readSettings = () => JSON.parse(fs.readFileSync(path.join(userData, 'settings.json'), 'utf8'));
+  const key = async (name) => {
+    await page.keyboard.press(name);
+    await sleep(350);
+  };
+  const currentShelf = () => page.textContent('#shelves .current');
+
+  // Recent after a play, a second profile with a picture, Favourites, hiding, and the picker's two ways in.
+  async function profileSteps() {
+    const [first] = readSettings().profiles;
+    assert.deepStrictEqual(first.recent, ['switch2:Waiting Game.js'], 'a played game goes into Recent');
+    assert.ok(first.name && first.id, 'old settings got a profile');
+    await key('Tab');
+    await key('ArrowRight');
+    await key('Enter');
+    await key('Enter');
+    await page.keyboard.type('Sam');
+    await key('Enter');
+    assert.strictEqual(readSettings().profiles[1].name, 'Sam');
+    await key('ArrowDown');
+    await key('ArrowDown');
+    await key('Enter');
+    await shot('profiles-pictures');
+    await key('ArrowRight');
+    await key('Enter');
+    assert.strictEqual(readSettings().profiles[1].avatar, 'sam.png');
+    await shot('profiles-edit');
+    await key('Escape');
+    await shot('profiles-picker');
+    assert.strictEqual(await page.$$eval('.profile img', (images) => images.length), 1, 'the picture shows on the badge');
+    await key('ArrowLeft');
+    await key('Enter');
+    await sleep(500);
+    assert.strictEqual(await currentShelf(), 'Recent');
+    await key('ArrowRight');
+    assert.strictEqual(await title(), 'All games');
+    await shot('shelf-recent');
+    await key('Enter');
+    const first2 = await currentShelf();
+    assert.notStrictEqual(first2, 'Recent', 'All games jumps to the first Console shelf');
+    const liked = await title();
+    await key('l');
+    assert.deepStrictEqual(readSettings().profiles[0].favourites.length, 1);
+    await key('ArrowUp');
+    assert.strictEqual(await currentShelf(), 'Favourites');
+    assert.strictEqual(await title(), liked);
+    await shot('shelf-favourites');
+    await key('h');
+    assert.strictEqual(readSettings().profiles[0].hiddenGames.length, 1);
+    assert.ok(!(await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent))).includes('Favourites'), 'a hidden game leaves Favourites');
+    // Sam has their own shelves.
+    await key('Tab');
+    await key('ArrowRight');
+    await key('Enter');
+    await sleep(500);
+    assert.ok(!(await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent))).includes('Recent'), 'another profile has no Recent');
+  }
 
   await page.waitForSelector('#shelves .current');
   const shelfNames = await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent));
@@ -305,6 +367,8 @@ async function main() {
   const back = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((w) => w.isVisible() && w.isFocusable()));
   console.log('play: hidden while running', hidden, '/ back after exit', back);
   await shot('shelf-after-play');
+
+  await profileSteps();
 
   console.log('errors:', errors.length ? errors : 'none');
   await app.close();

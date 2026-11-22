@@ -84,6 +84,25 @@ export async function openSettings({ focusConsole } = {}) {
           activate: () => startTyping(),
         },
       ];
+      if (state.shelves.length) {
+        list.push({ group: 'Shelves' });
+        for (const item of state.shelves) {
+          list.push({
+            label: item.name,
+            status: item.hidden ? 'Hidden' : 'Shown',
+            hint: item.hidden ? 'Show' : 'Hide',
+            sound: 'toggle',
+            activate: () => change(window.tink.toggleShelf(item.id)),
+          });
+        }
+        list.push({
+          label: 'Hidden games',
+          status: state.hiddenGames ? String(state.hiddenGames) : 'None',
+          hint: 'Show all',
+          sound: 'toggle',
+          activate: () => (state.hiddenGames ? change(window.tink.showHiddenGames()) : undefined),
+        });
+      }
       for (const item of state.consoles) {
         const emulator = item.emulator;
         list.push(
