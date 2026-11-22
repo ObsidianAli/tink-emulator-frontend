@@ -16,6 +16,10 @@ const BOARD = { height: 0.08, depth: 1.4, back: 0.4 };
 // Frames in motion are drawn at a low pixel ratio so they stay smooth; the still frame after is drawn sharp.
 const MOVING_PIXEL_RATIO = 1;
 const STILL_PIXEL_RATIO = Math.min(window.devicePixelRatio || 1, 3);
+// The Disc keeps turning for as long as the Case is open, so on weak GPUs it gets fewer and smaller frames.
+const TURNING_PIXEL_RATIO = Math.min(STILL_PIXEL_RATIO, 1.5);
+// About 30 a second, with room for frame timing jitter.
+const TURNING_FRAME_MS = 28;
 // Extra Cases built past each edge of the screen, so moving never shows an empty slot.
 const SPARE = 2;
 const SETTLED = 0.0005;
@@ -229,26 +233,38 @@ function createShelf(canvas, { onTint }) {
 
   let frameRequested = false;
   let lastTime = null;
+  // Only the Disc is turning, so frames can be skipped until anything else changes.
+  let onlyTurning = false;
 
   function frame(now) {
     frameRequested = false;
+    if (onlyTurning && now - lastTime < TURNING_FRAME_MS) {
+      nextFrame();
+      return;
+    }
     const dt = lastTime === null ? 16 : Math.min(now - lastTime, 50);
     const { moving, spinning } = step(dt);
-    setPixelRatio(moving ? MOVING_PIXEL_RATIO : STILL_PIXEL_RATIO);
+    onlyTurning = spinning && !moving;
+    setPixelRatio(moving ? MOVING_PIXEL_RATIO : onlyTurning ? TURNING_PIXEL_RATIO : STILL_PIXEL_RATIO);
     aimCamera();
     renderer.render(scene, camera);
     if (moving || spinning) {
       lastTime = now;
-      requestRender();
+      nextFrame();
     } else {
       lastTime = null;
     }
   }
 
-  function requestRender() {
+  function nextFrame() {
     if (frameRequested) return;
     frameRequested = true;
     requestAnimationFrame(frame);
+  }
+
+  function requestRender() {
+    onlyTurning = false;
+    nextFrame();
   }
 
   function resize() {

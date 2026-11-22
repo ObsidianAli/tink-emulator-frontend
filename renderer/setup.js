@@ -1,5 +1,7 @@
 // First-run setup, three screens: emulators found, one games folder per Console, and whether to download Covers.
 // Up/Down move, A chooses, B goes back a screen and X clears a folder. Mouse clicks work too.
+import { element, shortPath } from './dom.js';
+
 const root = document.getElementById('setup');
 let active = null;
 
@@ -8,19 +10,6 @@ listenForInput((action) => {
   if (!active || active.busy || document.querySelector('.dialog-scrim')) return;
   active.handle(action);
 });
-
-function element(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
-// The last two folders, since the end of a path is the part that tells folders apart.
-function shortPath(folder) {
-  const parts = folder.split(/[\\/]/).filter(Boolean);
-  return parts.length > 2 ? `…\\${parts.slice(-2).join('\\')}` : folder;
-}
 
 export function runSetup(initial) {
   return new Promise((resolve) => {

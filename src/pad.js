@@ -53,14 +53,17 @@ function holdTimer(holdMs, onHold) {
   };
 }
 
-// Starts polling the pad. Returns a function that stops it.
-function watchCombo(onHold, { holdMs = HOLD_MS, poller = defaultPoller() } = {}) {
+// Starts polling the pad. Returns a function that stops it. onFail(code) hears if the helper dies on its own.
+function watchCombo(onHold, { holdMs = HOLD_MS, poller = defaultPoller(), onFail = () => {} } = {}) {
   let stopped = false;
   const update = holdTimer(holdMs, () => {
     if (!stopped) onHold();
   });
   const child = spawn(poller.exe, poller.args, { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
   child.on('error', () => {});
+  child.on('close', (code) => {
+    if (!stopped) onFail(code);
+  });
   let buffered = '';
   child.stdout.on('data', (chunk) => {
     buffered += chunk;
@@ -78,4 +81,4 @@ function watchCombo(onHold, { holdMs = HOLD_MS, poller = defaultPoller() } = {})
   };
 }
 
-module.exports = { watchCombo, holdTimer, HOLD_MS };
+module.exports = { watchCombo, holdTimer };

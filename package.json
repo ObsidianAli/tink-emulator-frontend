@@ -19,7 +19,10 @@
       "src/**",
       "renderer/**",
       "!node_modules/three/examples/**",
-      "!node_modules/three/src/**"
+      "!node_modules/three/src/**",
+      "!node_modules/three/build/three.cjs",
+      "!node_modules/three/build/three.tsl.js",
+      "!node_modules/three/build/three.webgpu*.js"
     ],
     "win": {
       "target": "portable"

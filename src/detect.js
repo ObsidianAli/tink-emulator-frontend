@@ -50,4 +50,4 @@ function detectEmulators(searchDirs) {
   return found;
 }
 
-module.exports = { detectEmulators, defaultSearchDirs };
+module.exports = { detectEmulators, defaultSearchDirs, isFile };

@@ -125,6 +125,23 @@ async function frameTimes(page, fn) {
   };
 }
 
+// How many frames the Shelf actually draws per second, and at what pixel ratio, over ms.
+async function drawing(page, ms) {
+  return page.evaluate(async (wait) => {
+    const proto = WebGL2RenderingContext.prototype;
+    const clear = proto.clear;
+    let count = 0;
+    proto.clear = function (...args) {
+      count++;
+      return clear.apply(this, args);
+    };
+    await new Promise((resolve) => setTimeout(resolve, wait));
+    proto.clear = clear;
+    const canvas = document.getElementById('shelf');
+    return { framesPerSecond: Math.round((count * 1000) / wait), pixelRatio: +(canvas.width / canvas.clientWidth).toFixed(2), devicePixelRatio };
+  }, ms);
+}
+
 async function main() {
   fs.mkdirSync(outDir, { recursive: true });
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tink-e2e-'));
@@ -134,7 +151,8 @@ async function main() {
   seedCovers(userData, path.join(root, 'games'));
 
   const app = await electron.launch({
-    args: [path.join(__dirname, '..'), `--user-data-dir=${userData}`],
+    // A high-density screen, so the pixel ratio caps show.
+    args: [path.join(__dirname, '..'), `--user-data-dir=${userData}`, '--force-device-scale-factor=2'],
     env: { ...process.env, TINK_DATA_DIR: userData },
   });
   const page = await app.firstWindow();
@@ -188,6 +206,7 @@ async function main() {
     await sleep(1000);
   });
   console.log('Disc out and turning, one second:', JSON.stringify(open));
+  console.log('Disc turning, drawn:', JSON.stringify(await drawing(page, 2000)));
   await page.keyboard.press('ArrowRight');
   await shot('case-reset-after-move');
   console.log('after moving on, hints:', await hints());
@@ -207,6 +226,7 @@ async function main() {
   console.log('flip, open and back again:', JSON.stringify(flipping));
   const settled = await frameTimes(page, () => sleep(1000));
   console.log('settled second after that:', JSON.stringify(settled));
+  console.log('at rest, drawn:', JSON.stringify(await drawing(page, 1000)));
   await page.screenshot({ path: path.join(outDir, 'sharp-cover.png'), clip: await coverClip(page) });
 
   for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight');

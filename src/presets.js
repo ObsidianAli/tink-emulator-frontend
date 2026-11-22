@@ -48,6 +48,15 @@ const CONSOLES = {
   dreamcast: { name: 'Dreamcast', libretro: 'Sega - Dreamcast', colour: '#6a5a40', emulator: 'retroarch', core: 'flycast', extensions: ['.gdi', '.cdi', '.chd', '.cue'] },
 };
 
+// Steam isn't an emulated Console, but its Games still need a Plain cover colour.
+const STEAM = { name: 'Steam', colour: '#3b4654' };
+
+// Own keys only, so ids from the screen like "__proto__" never match.
+const isConsole = (id) => Object.hasOwn(CONSOLES, id);
+const isEmulator = (id) => Object.hasOwn(EMULATORS, id);
+
+const coverColour = (consoleId) => (isConsole(consoleId) ? CONSOLES[consoleId].colour : STEAM.colour);
+
 // The exe and arguments that start one game. Consoles without a preset emulator get just the game path.
 function launchSpec(consoleId, exe, gamePath, fullscreen = true) {
   const preset = CONSOLES[consoleId];
@@ -55,4 +64,4 @@ function launchSpec(consoleId, exe, gamePath, fullscreen = true) {
   return { exe, args };
 }
 
-module.exports = { EMULATORS, CONSOLES, launchSpec };
+module.exports = { EMULATORS, CONSOLES, STEAM, isConsole, isEmulator, coverColour, launchSpec };

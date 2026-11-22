@@ -33,19 +33,9 @@ function canvasFor(aspect) {
 
 async function loadImage(src) {
   const img = new Image();
-  if (src.startsWith('https:')) img.crossOrigin = 'anonymous';
   img.src = src;
   await img.decode();
   return img;
-}
-
-// Steam's tall library image, or its wide header when a game has no tall one.
-async function loadSteamImage(art) {
-  try {
-    return await loadImage(art.cover);
-  } catch {
-    return loadImage(art.fallback);
-  }
 }
 
 function drawImage(img, aspect) {
@@ -192,12 +182,11 @@ function drawLabel(cover) {
 }
 
 async function coverCanvas(game, aspect) {
-  const cover = game.art ? null : await window.tink.getCover(game.id);
+  const cover = await window.tink.getCover(game.id);
   try {
-    if (game.art) return drawImage(await loadSteamImage(game.art), aspect);
     if (cover && cover.src) return drawImage(await loadImage(cover.src), aspect);
   } catch {
-    // offline, or a broken cached file: a Plain cover instead
+    // a broken cached file: a Plain cover instead
   }
   const colour = (cover && cover.plain && cover.plain.colour) || token('--surface-raised');
   return drawPlain(game.title, colour, aspect);

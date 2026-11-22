@@ -1,15 +1,7 @@
 // The logic behind the Settings screen: what it lists, and how each change is stored.
-const fs = require('node:fs');
-const { CONSOLES, EMULATORS } = require('./presets');
+const { CONSOLES, EMULATORS, isConsole, isEmulator } = require('./presets');
 const { resolveEmulator } = require('./setup');
-
-const isFile = (file) => {
-  try {
-    return fs.statSync(file).isFile();
-  } catch {
-    return false;
-  }
-};
+const { isFile } = require('./detect');
 
 // Start in fullscreen is on unless it was turned off.
 const wantsFullscreen = (settings) => settings.fullscreen !== false;
@@ -47,11 +39,11 @@ function buildSettings(settings, detected, version) {
 
 // "Find automatically": forgets a picked exe so detection decides again.
 function clearEmulator(settings, id) {
-  if (CONSOLES[id] && !CONSOLES[id].emulator) {
+  if (isConsole(id) && !CONSOLES[id].emulator) {
     if (settings.consoles[id]) delete settings.consoles[id].exe;
     return;
   }
-  if (!EMULATORS[id]) throw new Error('Unknown emulator');
+  if (!isEmulator(id)) throw new Error('Unknown emulator');
   if (settings.emulators) delete settings.emulators[id];
 }
 
