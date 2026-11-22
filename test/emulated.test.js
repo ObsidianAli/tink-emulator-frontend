@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { cleanTitle } = require('../src/titles');
-const { getEmulatedGames } = require('../src/library');
+const { getEmulatedGames, groupShelves } = require('../src/library');
 const { detectEmulators, defaultSearchDirs } = require('../src/detect');
 const { launchSpec, CONSOLES } = require('../src/presets');
 const { playGame } = require('../src/launcher');
@@ -152,4 +152,17 @@ test('Tink comes back if the emulator can\'t be started', async () => {
   const spec = { exe: path.join(os.tmpdir(), 'no-such-emulator.exe'), args: [] };
   await assert.rejects(playGame(spec, { hide: () => events.push('hide'), show: () => events.push('show') }));
   assert.deepStrictEqual(events, ['hide', 'show']);
+});
+
+test('only consoles with games get a shelf, in console order with Steam last', () => {
+  const root = makeTree(['snes/Zelda.sfc', 'snes/Axelay.sfc', 'gamecube/Pikmin.iso', 'ps2/']);
+  const settings = { consoles: {
+    snes: { folder: path.join(root, 'snes') },
+    gamecube: { folder: path.join(root, 'gamecube') },
+    ps2: { folder: path.join(root, 'ps2') },
+  } };
+  const steamGame = { id: 'steam:620', console: 'steam', consoleName: 'Steam', title: 'Portal 2' };
+  const shelves = groupShelves([steamGame, ...getEmulatedGames(settings)]);
+  assert.deepStrictEqual(shelves.map((s) => s.name), ['GameCube', 'SNES', 'Steam']);
+  assert.deepStrictEqual(shelves[1].games.map((g) => g.title), ['Axelay', 'Zelda']);
 });
