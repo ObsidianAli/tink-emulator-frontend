@@ -60,6 +60,8 @@ const SPINE_FILL = 0.7;
 const SHADOW_SPREAD = 0.35;
 // Clear plastic is glossy, card boxes are not.
 const ROUGHNESS = { plastic: 0.18, box: 0.62, shell: 0.55 };
+// The selected Cover's reflections are turned down and spread out so the art stays clean and sharp.
+const SELECTED_GLOSS = { strength: 0.3, extraRoughness: 0.12 };
 
 function shapeFor(consoleId) {
   return SHAPES[SHAPE_OF_CONSOLE[consoleId] || 'dvd'];
@@ -242,9 +244,14 @@ function createCase(shape, colours) {
   }
 
   // Darkens the printed art by amount (0 to 1), so Cases away from the selection sit back.
-  function setDim(amount) {
+  // near is 0 for the selected Case and 1 for the rest, which keep their full reflections.
+  function setDim(amount, near = 1) {
     const shade = 1 - amount;
-    for (const material of [coverMaterial, spineMaterial, backMaterial]) material.color.setScalar(shade);
+    for (const material of [coverMaterial, spineMaterial, backMaterial]) {
+      material.color.setScalar(shade);
+      material.envMapIntensity = SELECTED_GLOSS.strength + (1 - SELECTED_GLOSS.strength) * near;
+      material.roughness = roughness + SELECTED_GLOSS.extraRoughness * (1 - near);
+    }
   }
 
   // flip, lid and disc run from 0 (at rest) to 1 (flipped, open, out). spin is the Disc's turn in radians.

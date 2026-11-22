@@ -235,7 +235,7 @@ function createShelf(canvas, { onTint }) {
     const x = side * (near * NEAR * shape.width + Math.max(0, Math.abs(offset) - 1) * step);
     item.group.position.set(x, 0, PULL + near * (BACK - PULL));
     item.group.rotation.y = (1 - near) * SELECTED_TURN - side * near * SIDE_TURN;
-    item.setDim(near * SIDE_DIM);
+    item.setDim(near * SIDE_DIM, near);
   }
 
   function aimCamera() {
