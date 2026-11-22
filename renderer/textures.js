@@ -217,7 +217,7 @@ function createCache(keep, make) {
     }
   }
 
-  return function get(id, inUse, ...args) {
+  function get(id, inUse, ...args) {
     if (entries.has(id)) {
       const entry = entries.get(id);
       entries.delete(id);
@@ -228,7 +228,14 @@ function createCache(keep, make) {
     entries.set(id, entry);
     trim(inUse);
     return entry;
+  }
+
+  // Drops everything, so the next lookup is made fresh.
+  get.clear = () => {
+    for (const entry of entries.values()) entry.then((made) => made && made.textures.forEach((texture) => texture.dispose()));
+    entries.clear();
   };
+  return get;
 }
 
 function createTextures(maxAnisotropy) {
@@ -259,7 +266,13 @@ function createTextures(maxAnisotropy) {
     return details(game.id, inUse, game, made.texture.image, consoleName);
   }
 
-  return { get, getDetails };
+  // Forgets every texture made so far, for when the saved Covers were replaced.
+  function forget() {
+    covers.clear();
+    details.clear();
+  }
+
+  return { get, getDetails, forget };
 }
 
 export { createTextures };

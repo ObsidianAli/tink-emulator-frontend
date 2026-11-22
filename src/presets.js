@@ -1,18 +1,19 @@
 // Per-console defaults: which emulator runs it, which files count as games, and the launch arguments.
 
 // Each emulator: its exe name, and the arguments that start a game fullscreen.
-// RetroArch also gets the core to load; the others ignore it.
+// args(rom, core, fullscreen): RetroArch also gets the core to load. With fullscreen off the flag is left out
+// (PCSX2 gets its opposite). Dolphin and shadPS4 have no such flag, so they keep their own setting.
 const EMULATORS = {
   dolphin: { label: 'Dolphin', exe: 'Dolphin.exe', args: (rom) => ['-b', '-e', rom] },
-  cemu: { label: 'Cemu', exe: 'Cemu.exe', args: (rom) => ['-f', '-g', rom] },
-  eden: { label: 'Eden', exe: 'eden.exe', args: (rom) => ['-f', '-g', rom] },
-  pcsx2: { label: 'PCSX2', exe: 'pcsx2-qt.exe', args: (rom) => ['-batch', '-fullscreen', '--', rom] },
+  cemu: { label: 'Cemu', exe: 'Cemu.exe', args: (rom, _core, full) => [...(full ? ['-f'] : []), '-g', rom] },
+  eden: { label: 'Eden', exe: 'eden.exe', args: (rom, _core, full) => [...(full ? ['-f'] : []), '-g', rom] },
+  pcsx2: { label: 'PCSX2', exe: 'pcsx2-qt.exe', args: (rom, _core, full) => ['-batch', full ? '-fullscreen' : '-nofullscreen', '--', rom] },
   shadps4: { label: 'shadPS4', exe: 'shadPS4.exe', args: (rom) => ['-g', rom] },
-  azahar: { label: 'Azahar', exe: 'azahar.exe', args: (rom) => ['-f', rom] },
+  azahar: { label: 'Azahar', exe: 'azahar.exe', args: (rom, _core, full) => [...(full ? ['-f'] : []), rom] },
   retroarch: {
     label: 'RetroArch',
     exe: 'retroarch.exe',
-    args: (rom, core) => ['-f', '-L', `cores\\${core}_libretro.dll`, rom],
+    args: (rom, core, full) => [...(full ? ['-f'] : []), '-L', `cores\\${core}_libretro.dll`, rom],
   },
 };
 
@@ -48,9 +49,9 @@ const CONSOLES = {
 };
 
 // The exe and arguments that start one game. Consoles without a preset emulator get just the game path.
-function launchSpec(consoleId, exe, gamePath) {
+function launchSpec(consoleId, exe, gamePath, fullscreen = true) {
   const preset = CONSOLES[consoleId];
-  const args = preset.emulator ? EMULATORS[preset.emulator].args(gamePath, preset.core) : [gamePath];
+  const args = preset.emulator ? EMULATORS[preset.emulator].args(gamePath, preset.core, fullscreen) : [gamePath];
   return { exe, args };
 }
 

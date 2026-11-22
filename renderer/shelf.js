@@ -275,6 +275,12 @@ function createShelf(canvas, { onTint }) {
     resize();
   }
 
+  // After the saved Covers change: drops the Cases and their textures, so the next show() builds them again.
+  function forgetCovers() {
+    for (const i of [...live.keys()]) releaseCase(i);
+    textures.forget();
+  }
+
   function select(index) {
     const next = Math.max(0, Math.min(index, games.length - 1));
     if (next === selected) return false;
@@ -335,7 +341,7 @@ function createShelf(canvas, { onTint }) {
   window.addEventListener('resize', resize);
   document.addEventListener('visibilitychange', requestRender);
 
-  return { show, select, flip, open, back, caseState, selected: () => selected, game: () => games[selected] };
+  return { show, forgetCovers, select, flip, open, back, caseState, selected: () => selected, game: () => games[selected] };
 }
 
 export { createShelf };

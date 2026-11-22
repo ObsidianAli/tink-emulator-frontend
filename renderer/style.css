@@ -165,9 +165,10 @@ main {
   outline: var(--focus-ring);
 }
 
-/* First-run setup */
+/* First-run setup, and Settings, which uses the same list */
 
-#setup {
+#setup,
+#settings {
   position: absolute;
   inset: 0;
   display: flex;
@@ -178,11 +179,13 @@ main {
   background: var(--bg);
 }
 
-#setup[hidden] {
+#setup[hidden],
+#settings[hidden] {
   display: none;
 }
 
-#setup h1 {
+#setup h1,
+#settings h1 {
   margin: 0;
   font-size: var(--text-title);
   font-weight: var(--weight-bold);
@@ -271,6 +274,29 @@ main {
 
 .setup-row:focus .setup-status {
   color: inherit;
+}
+
+.settings-group {
+  margin: var(--space-3) 0 var(--space);
+  color: var(--muted);
+  font-size: var(--text-small);
+  font-weight: var(--weight-bold);
+}
+
+.settings-key {
+  box-sizing: border-box;
+  width: 50%;
+  padding: var(--space) var(--space-2);
+  border: var(--line-width) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-key:focus {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
 }
 
 .setup-note {

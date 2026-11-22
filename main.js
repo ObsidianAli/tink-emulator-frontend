@@ -1,4 +1,4 @@
-// Tink's main process: the window, and the two things the UI can ask for.
+// Tink's main process: the window, and the named things the UI can ask for.
 const { app, BrowserWindow, ipcMain, shell, screen, dialog } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -8,6 +8,9 @@ const { getEmulatedGames, groupShelves } = require('./src/library');
 const { detectEmulators, defaultSearchDirs } = require('./src/detect');
 const { loadSettings, saveSettings } = require('./src/settings');
 const setup = require('./src/setup');
+const options = require('./src/options');
+const { resolveDataDir, migrateOldData } = require('./src/paths');
+const { createLog } = require('./src/log');
 const { playGame, closeEmulator } = require('./src/launcher');
 const { watchCombo } = require('./src/pad');
 const { createCovers } = require('./src/covers');
@@ -21,19 +24,45 @@ const HINT_MS = 3000;
 // The portable exe unpacks to a temp folder, so "beside Tink" means beside the exe the user started.
 const TINK_DIR = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath);
 
+const DATA_DIR = resolveDataDir({
+  packaged: app.isPackaged,
+  tinkDir: TINK_DIR,
+  projectDir: __dirname,
+  override: process.env.TINK_DATA_DIR,
+});
+const log = createLog(path.join(DATA_DIR, 'tink.log'));
+
+try {
+  migrateOldData(DATA_DIR, app.getPath('userData'));
+} catch (error) {
+  log('Could not move the old settings over', error);
+}
+
+// Details go to the log, never to the screen.
+process.on('uncaughtException', (error) => log('Uncaught error', error));
+process.on('unhandledRejection', (reason) => log('Unhandled rejection', reason));
+
 let win = null;
 // The games last sent to the UI. Launches are looked up here, so the UI never passes a path or exe.
 let gamesById = new Map();
 let settings = { consoles: {} };
 let emulators = {};
-const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
+const settingsFile = () => path.join(DATA_DIR, 'settings.json');
 let covers = null;
+
+function makeCovers() {
+  return createCovers({
+    dir: path.join(DATA_DIR, 'covers'),
+    enabled: settings.covers === true,
+    steamGridKey: options.steamKey(settings),
+  });
+}
 
 function createWindow() {
   win = new BrowserWindow({
     width: 1280,
     height: 720,
-    fullscreen: true,
+    fullscreen: options.wantsFullscreen(loadSettings(settingsFile())),
     backgroundColor: '#0f1115',
     autoHideMenuBar: true,
     webPreferences: {
@@ -53,11 +82,7 @@ function createWindow() {
 async function getLibrary() {
   settings = loadSettings(settingsFile());
   emulators = detect();
-  covers = createCovers({
-    dir: path.join(app.getPath('userData'), 'covers'),
-    enabled: settings.covers === true,
-    steamGridKey: typeof settings.steamGridDbKey === 'string' ? settings.steamGridDbKey.trim() : '',
-  });
+  covers = makeCovers();
   const steamDir = await steam.findSteamDir();
   const steamGames = (steamDir ? steam.getSteamGames(steamDir) : []).map((game) => ({
     ...game,
@@ -206,11 +231,13 @@ async function pick(properties, filters) {
 // Returns null when the user cancels the picker, or { error } for a pick that can't be used.
 async function changeSetup(change) {
   const current = loadSettings(settingsFile());
+  const inSetup = setup.needsSetup(current);
   const error = await change(current);
   if (error === null) return null;
   if (error) return { error };
   // Marks setup as started, so quitting halfway doesn't count as finished once a folder is saved.
-  if (current.setupDone === undefined) current.setupDone = false;
+  // Changes made later in Settings leave it alone.
+  if (inSetup && current.setupDone === undefined) current.setupDone = false;
   saveSettings(settingsFile(), current);
   return { state: await setupState(current) };
 }
@@ -248,42 +275,96 @@ function finishSetup(covers) {
   saveSettings(settingsFile(), current);
 }
 
-// Starts an emulated game. Returns an error message for the UI if it can't.
+// What the Settings screen shows. The SteamGridDB key stays here; the UI only learns whether there is one.
+function getSettings() {
+  return options.buildSettings(loadSettings(settingsFile()), detect(), app.getVersion());
+}
+
+// Applies one change to the saved settings, then sends back the fresh Settings state.
+function changeSettings(change) {
+  const current = loadSettings(settingsFile());
+  change(current);
+  saveSettings(settingsFile(), current);
+  return getSettings();
+}
+
+function setFullscreen(on) {
+  const state = changeSettings((current) => options.setFullscreen(current, on));
+  win.setFullScreen(state.fullscreen);
+  return state;
+}
+
+const setSteamKey = (key) => changeSettings((current) => options.setSteamKey(current, key));
+const findAutomatically = (id) => changeSettings((current) => options.clearEmulator(current, id));
+
+// Forgets every cached Cover and remembered miss, and turns Covers on. The Shelf fetches them again as it loads.
+async function redownloadCovers() {
+  const current = loadSettings(settingsFile());
+  current.covers = true;
+  saveSettings(settingsFile(), current);
+  settings = current;
+  await (covers || makeCovers()).redownload();
+}
+
+// Starts an emulated game. Returns { error, fix, console } for the UI if it can't; fix is "settings" or "rescan".
 async function launchEmulated(game) {
+  const emulator = CONSOLES[game.console].emulator;
+  const name = emulator ? EMULATORS[emulator].label : `The ${game.consoleName} emulator`;
   const exe = emulatorExe(game);
-  if (!exe || !fs.existsSync(exe)) {
-    const emulator = CONSOLES[game.console].emulator;
-    const name = emulator ? EMULATORS[emulator].label : `The ${game.consoleName} emulator`;
-    return { error: `${name} isn't set up yet.` };
-  }
-  if (!fs.existsSync(game.path)) return { error: "This game file can't be found." };
+  if (!exe || !fs.existsSync(exe)) return { error: `${name} isn't set up yet.`, fix: 'settings', console: game.console };
+  if (!fs.existsSync(game.path)) return { error: "This game file can't be found.", fix: 'rescan' };
   try {
-    await playGame(launchSpec(game.console, exe, game.path), { hide: () => win.hide(), show: showTink, whilePlaying });
-  } catch {
-    return { error: "The emulator couldn't be started." };
+    const spec = launchSpec(game.console, exe, game.path, options.wantsFullscreen(settings));
+    await playGame(spec, { hide: () => win.hide(), show: showTink, whilePlaying });
+  } catch (error) {
+    log(`Could not start ${name} for ${game.consoleName}`, error);
+    return { error: `${name} couldn't be started.`, fix: 'settings', console: game.console };
   }
   return {};
 }
 
 async function launch(id) {
   const game = gamesById.get(id);
-  if (!game) return { error: "This game can't be found." };
+  if (!game) return { error: "This game can't be found.", fix: 'rescan' };
   if (game.console === 'steam') {
-    await launchSteam(game.appId);
+    try {
+      await launchSteam(game.appId);
+    } catch (error) {
+      log('Could not start a Steam game', error);
+      return { error: "Steam couldn't start this game." };
+    }
     return {};
   }
   return launchEmulated(game);
 }
 
+// Every call goes through here: a failure is logged in full, and the UI only gets a plain error.
+function handle(name, fn) {
+  ipcMain.handle(name, async (_event, ...args) => {
+    try {
+      return await fn(...args);
+    } catch (error) {
+      log(`${name} failed`, error);
+      throw new Error('Something went wrong.');
+    }
+  });
+}
+
 app.whenReady().then(() => {
-  ipcMain.handle('getSetup', getSetup);
-  ipcMain.handle('pickExe', (_event, id) => pickExe(String(id)));
-  ipcMain.handle('pickFolder', (_event, id) => pickFolder(String(id)));
-  ipcMain.handle('clearFolder', (_event, id) => clearFolder(String(id)));
-  ipcMain.handle('finishSetup', (_event, covers) => finishSetup(covers));
-  ipcMain.handle('getLibrary', getLibrary);
-  ipcMain.handle('getCover', (_event, id) => getCover(String(id)));
-  ipcMain.handle('launch', (_event, id) => launch(String(id)));
+  handle('getSetup', getSetup);
+  handle('pickExe', (id) => pickExe(String(id)));
+  handle('pickFolder', (id) => pickFolder(String(id)));
+  handle('clearFolder', (id) => clearFolder(String(id)));
+  handle('finishSetup', (covers) => finishSetup(covers));
+  handle('getSettings', getSettings);
+  handle('setFullscreen', (on) => setFullscreen(on === true));
+  handle('setSteamKey', (key) => setSteamKey(key));
+  handle('findAutomatically', (id) => findAutomatically(String(id)));
+  handle('redownloadCovers', redownloadCovers);
+  handle('getLibrary', getLibrary);
+  handle('getCover', (id) => getCover(String(id)));
+  handle('launch', (id) => launch(String(id)));
+  ipcMain.handle('logError', (_event, text) => log('Screen error', String(text).slice(0, 2000)));
   createWindow();
 });
 
