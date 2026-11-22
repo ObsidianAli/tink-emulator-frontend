@@ -1,12 +1,13 @@
 // Tink's main process: the window, and the two things the UI can ask for.
-const { app, BrowserWindow, ipcMain, shell, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, screen, dialog } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const steam = require('./src/steam');
 const { CONSOLES, EMULATORS, launchSpec } = require('./src/presets');
 const { getEmulatedGames, groupShelves } = require('./src/library');
 const { detectEmulators, defaultSearchDirs } = require('./src/detect');
-const { loadSettings } = require('./src/settings');
+const { loadSettings, saveSettings } = require('./src/settings');
+const setup = require('./src/setup');
 const { playGame, closeEmulator } = require('./src/launcher');
 const { watchCombo } = require('./src/pad');
 const { createCovers } = require('./src/covers');
@@ -25,6 +26,7 @@ let win = null;
 let gamesById = new Map();
 let settings = { consoles: {} };
 let emulators = {};
+const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 let covers = null;
 
 function createWindow() {
@@ -49,8 +51,8 @@ function createWindow() {
 }
 
 async function getLibrary() {
-  settings = loadSettings(path.join(app.getPath('userData'), 'settings.json'));
-  emulators = detectEmulators(defaultSearchDirs(process.env, TINK_DIR));
+  settings = loadSettings(settingsFile());
+  emulators = detect();
   covers = createCovers({
     dir: path.join(app.getPath('userData'), 'covers'),
     enabled: settings.covers === true,
@@ -176,7 +178,74 @@ function emulatorExe(game) {
   const chosen = settings.consoles[game.console] && settings.consoles[game.console].exe;
   if (chosen) return chosen;
   const emulator = CONSOLES[game.console].emulator;
-  return emulator ? emulators[emulator] : null;
+  return emulator ? setup.resolveEmulator(settings, emulators, emulator) : null;
+}
+
+function detect() {
+  return detectEmulators(defaultSearchDirs(process.env, TINK_DIR));
+}
+
+// What the setup screens need. Cheap when setup isn't due, so every start can ask.
+async function getSetup() {
+  const current = loadSettings(settingsFile());
+  if (!setup.needsSetup(current)) return { needed: false };
+  return setupState(current);
+}
+
+async function setupState(current) {
+  return setup.buildSetup(current, detect(), Boolean(await steam.findSteamDir()));
+}
+
+// Shows a native picker. The renderer only says which emulator or Console; paths never come from it.
+async function pick(properties, filters) {
+  const result = await dialog.showOpenDialog(win, { properties, filters });
+  return result.canceled || !result.filePaths[0] ? null : result.filePaths[0];
+}
+
+// Each setup change is applied to the saved file, then the fresh setup state goes back to the UI.
+// Returns null when the user cancels the picker, or { error } for a pick that can't be used.
+async function changeSetup(change) {
+  const current = loadSettings(settingsFile());
+  const error = await change(current);
+  if (error === null) return null;
+  if (error) return { error };
+  // Marks setup as started, so quitting halfway doesn't count as finished once a folder is saved.
+  if (current.setupDone === undefined) current.setupDone = false;
+  saveSettings(settingsFile(), current);
+  return { state: await setupState(current) };
+}
+
+async function pickExe(id) {
+  return changeSetup(async (current) => {
+    const exe = await pick(['openFile'], [{ name: 'Programs', extensions: ['exe'] }]);
+    if (!exe) return null;
+    if (!fs.statSync(exe, { throwIfNoEntry: false })?.isFile() || path.extname(exe).toLowerCase() !== '.exe') {
+      return "That isn't a program.";
+    }
+    setup.setEmulatorExe(current, id, exe);
+    return undefined;
+  });
+}
+
+async function pickFolder(id) {
+  return changeSetup(async (current) => {
+    const folder = await pick(['openDirectory']);
+    if (!folder) return null;
+    setup.setConsoleFolder(current, id, folder);
+    return undefined;
+  });
+}
+
+async function clearFolder(id) {
+  return changeSetup((current) => {
+    setup.setConsoleFolder(current, id, null);
+  });
+}
+
+function finishSetup(covers) {
+  const current = loadSettings(settingsFile());
+  setup.completeSetup(current, covers === true);
+  saveSettings(settingsFile(), current);
 }
 
 // Starts an emulated game. Returns an error message for the UI if it can't.
@@ -207,6 +276,11 @@ async function launch(id) {
 }
 
 app.whenReady().then(() => {
+  ipcMain.handle('getSetup', getSetup);
+  ipcMain.handle('pickExe', (_event, id) => pickExe(String(id)));
+  ipcMain.handle('pickFolder', (_event, id) => pickFolder(String(id)));
+  ipcMain.handle('clearFolder', (_event, id) => clearFolder(String(id)));
+  ipcMain.handle('finishSetup', (_event, covers) => finishSetup(covers));
   ipcMain.handle('getLibrary', getLibrary);
   ipcMain.handle('getCover', (_event, id) => getCover(String(id)));
   ipcMain.handle('launch', (_event, id) => launch(String(id)));
