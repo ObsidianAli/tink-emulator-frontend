@@ -9,6 +9,7 @@ const { detectEmulators, defaultSearchDirs } = require('./src/detect');
 const { loadSettings } = require('./src/settings');
 const { playGame, closeEmulator } = require('./src/launcher');
 const { watchCombo } = require('./src/pad');
+const { createCovers } = require('./src/covers');
 
 const POLL_MS = 2000;
 // How long to wait for Steam to actually start the game before giving up and showing Tink again.
@@ -24,6 +25,7 @@ let win = null;
 let gamesById = new Map();
 let settings = { consoles: {} };
 let emulators = {};
+let covers = null;
 
 function createWindow() {
   win = new BrowserWindow({
@@ -49,6 +51,7 @@ function createWindow() {
 async function getLibrary() {
   settings = loadSettings(path.join(app.getPath('userData'), 'settings.json'));
   emulators = detectEmulators(defaultSearchDirs(process.env, TINK_DIR));
+  covers = createCovers({ dir: path.join(app.getPath('userData'), 'covers'), enabled: settings.covers === true });
   const steamDir = await steam.findSteamDir();
   const steamGames = (steamDir ? steam.getSteamGames(steamDir) : []).map((game) => ({
     ...game,
@@ -62,6 +65,20 @@ async function getLibrary() {
     steamFound: Boolean(steamDir),
     games: games.map(({ id, title, consoleName, art }) => ({ id, title, consoleName, art: art || null })),
   };
+}
+
+// The Cover of an emulated Game, as a data URL or a Plain cover colour. Steam games bring their own art.
+async function getCover(id) {
+  const game = gamesById.get(id);
+  if (!game || game.console === 'steam' || !covers) return null;
+  const cover = await covers.getCover(game);
+  if (cover.plain) return cover;
+  try {
+    const data = await fs.promises.readFile(cover.file);
+    return { src: `data:${cover.mime};base64,${data.toString('base64')}` };
+  } catch {
+    return { plain: { colour: CONSOLES[game.console].colour } };
+  }
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -184,6 +201,7 @@ async function launch(id) {
 
 app.whenReady().then(() => {
   ipcMain.handle('getLibrary', getLibrary);
+  ipcMain.handle('getCover', (_event, id) => getCover(String(id)));
   ipcMain.handle('launch', (_event, id) => launch(String(id)));
   createWindow();
 });

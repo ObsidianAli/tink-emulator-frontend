@@ -10,6 +10,7 @@
 
   --text-title: 32px;
   --text-body: 20px;
+  --text-small: 12px;
 
   --space: 8px;
   --cover-width: calc(var(--space) * 8);

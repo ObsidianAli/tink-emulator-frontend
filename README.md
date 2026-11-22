@@ -19,5 +19,8 @@ Until the settings screen exists, Tink reads `%APPDATA%\tink\settings.json`, wit
 Emulators are found on their own (beside Tink, in Program Files, AppData and RetroArch's usual folder). Add an `exe`
 to use a different one; Switch 2 and PS5 always need one.
 
+Add `"covers": true` to let Tink download covers from the libretro thumbnail library. It only goes online when this is
+on. Covers are kept in `%APPDATA%\tink\covers`, and games with no cover there get a plain one with their title.
+
 Console names: gamecube, wii, wiiu, switch, switch2, ps2, ps4, ps5, 3ds, nes, snes, n64, gb, gbc, gba, ds, megadrive,
 mastersystem, gamegear, ps1, dreamcast.
