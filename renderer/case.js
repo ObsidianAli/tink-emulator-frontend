@@ -252,7 +252,8 @@ function createCase(shape, colours) {
     body.rotation.y = flip * Math.PI;
     hinge.rotation.y = lid * LID_OPEN;
     if (!discMesh) return;
-    discMesh.visible = out > 0;
+    // Stays in view until the lid is fully shut over it.
+    discMesh.visible = out > 0 || lid > 0;
     discHolder.position.set(0, height / 2 + out * DISC_OUT.y * height, discRest + out * DISC_OUT.z);
     discHolder.rotation.x = out * DISC_TILT;
     discMesh.rotation.y = LABEL_TURN - spin;

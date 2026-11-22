@@ -25,6 +25,8 @@ const SPARE = 2;
 const SETTLED = 0.0005;
 // How far one step of the open animation has to get before the next one starts.
 const NEXT_STEP = 0.9;
+// The lid starts to close once the Disc is this close to resting in the tray.
+const DISC_SEATED = 0.03;
 const DISC_SPIN = (Math.PI * 2) / 16000;
 const REST = { flip: 0, lid: 0 };
 const SHARP_STEP = 64;
@@ -250,7 +252,7 @@ function createShelf(canvas, { onTint }) {
     const flipTarget = target.flip && pose.lid > 0 ? pose.flip : target.flip;
     pose.flip = ease(pose.flip, flipTarget);
     const facingFront = pose.flip < 1 - NEXT_STEP;
-    const lidTarget = target.lid ? (facingFront ? 1 : pose.lid) : pose.disc > 0 ? pose.lid : 0;
+    const lidTarget = target.lid ? (facingFront ? 1 : pose.lid) : pose.disc > DISC_SEATED ? pose.lid : 0;
     pose.lid = ease(pose.lid, lidTarget);
     pose.disc = easeSlow(pose.disc, target.lid && pose.lid > NEXT_STEP ? 1 : 0);
   }
