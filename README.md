@@ -22,5 +22,8 @@ to use a different one; Switch 2 and PS5 always need one.
 Add `"covers": true` to let Tink download covers from the libretro thumbnail library. It only goes online when this is
 on. Covers are kept in `%APPDATA%\tink\covers`, and games with no cover there get a plain one with their title.
 
+For games libretro doesn't have (Wii U, Switch, PS4, PS5 and any misses), add `"steamGridDbKey": "your key"` and Tink
+searches SteamGridDB by title before giving up on a cover. Without a key it never talks to SteamGridDB.
+
 Console names: gamecube, wii, wiiu, switch, switch2, ps2, ps4, ps5, 3ds, nes, snes, n64, gb, gbc, gba, ds, megadrive,
 mastersystem, gamegear, ps1, dreamcast.

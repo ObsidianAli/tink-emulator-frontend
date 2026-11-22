@@ -17,6 +17,7 @@ function fakeNet(routes) {
     const route = routes[url];
     if (route instanceof Error) throw route;
     if (typeof route === 'function') return route();
+    if (route instanceof Response) return route.clone();
     return route ? new Response(route) : new Response('nope', { status: 404 });
   };
   return { fetch, requests };
@@ -149,4 +150,75 @@ test('every console has a plain cover colour', () => {
   for (const [id, preset] of Object.entries(CONSOLES)) {
     assert.match(preset.colour, /^#[0-9a-f]{6}$/, id);
   }
+});
+
+const GRID = 'https://www.steamgriddb.com/api/v2';
+const json = (data) => new Response(JSON.stringify({ success: true, data }));
+const astro = { console: 'ps5', title: 'Astro Bot', fileName: 'Astro Bot' };
+const gridRoutes = {
+  [`${GRID}/search/autocomplete/Astro%20Bot`]: json([{ id: 7, name: 'Astro Bot' }]),
+  [`${GRID}/grids/game/7?dimensions=600x900&types=static`]: json([{ url: 'https://cdn2.steamgriddb.com/grid/a.png' }]),
+  'https://cdn2.steamgriddb.com/grid/a.png': PNG,
+};
+
+test('without a key, SteamGridDB is never asked', async () => {
+  const dir = tempDir();
+  const net = fakeNet(gridRoutes);
+  const cover = await createCovers({ dir, enabled: true, fetch: net.fetch }).getCover(astro);
+  assert.ok(cover.plain);
+  assert.deepStrictEqual(net.requests, []);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('a console libretro lacks is searched on SteamGridDB by title', async () => {
+  const dir = tempDir();
+  const net = fakeNet(gridRoutes);
+  const cover = await createCovers({ dir, enabled: true, steamGridKey: 'k', fetch: net.fetch }).getCover(astro);
+  assert.deepStrictEqual(fs.readFileSync(cover.file), PNG);
+  assert.deepStrictEqual(net.requests, Object.keys(gridRoutes));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('libretro is tried before SteamGridDB, which only hears about its misses', async () => {
+  const dir = tempDir();
+  const hit = fakeNet({ [zeldaUrl]: PNG });
+  assert.ok((await createCovers({ dir, enabled: true, steamGridKey: 'k', fetch: hit.fetch }).getCover(zelda)).file);
+  assert.ok(hit.requests.every((url) => url.startsWith('https://raw.githubusercontent.com/')));
+
+  const miss = fakeNet({
+    [`${GRID}/search/autocomplete/${encodeURIComponent(zelda.title)}`]: json([{ id: 7 }]),
+    [`${GRID}/grids/game/7?dimensions=600x900&types=static`]: json([{ url: 'https://cdn2.steamgriddb.com/grid/a.png' }]),
+    'https://cdn2.steamgriddb.com/grid/a.png': PNG,
+  });
+  const other = tempDir();
+  assert.ok((await createCovers({ dir: other, enabled: true, steamGridKey: 'k', fetch: miss.fetch }).getCover(zelda)).file);
+  const firstGrid = miss.requests.findIndex((url) => url.includes('steamgriddb'));
+  assert.ok(firstGrid > 0);
+  assert.ok(miss.requests.slice(0, firstGrid).every((url) => url.includes('libretro')));
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(other, { recursive: true, force: true });
+});
+
+test('the key is sent only to the SteamGridDB API, and nothing is remembered when it is offline', async () => {
+  const dir = tempDir();
+  const seen = [];
+  const fetch = async (url, opts) => {
+    seen.push([url, opts && opts.headers]);
+    throw new TypeError('fetch failed');
+  };
+  assert.ok((await createCovers({ dir, enabled: true, steamGridKey: 'secret', fetch }).getCover(astro)).plain);
+  assert.ok(seen.every(([url, headers]) => url.startsWith(GRID) && headers.Authorization === 'Bearer secret'));
+  const net = fakeNet(gridRoutes);
+  assert.ok((await createCovers({ dir, enabled: true, steamGridKey: 'k', fetch: net.fetch }).getCover(astro)).file);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('a title SteamGridDB does not know gets a plain cover and is remembered', async () => {
+  const dir = tempDir();
+  const net = fakeNet({ [`${GRID}/search/autocomplete/Astro%20Bot`]: json([]) });
+  const covers = createCovers({ dir, enabled: true, steamGridKey: 'k', fetch: net.fetch });
+  assert.ok((await covers.getCover(astro)).plain);
+  assert.ok((await covers.getCover(astro)).plain);
+  assert.strictEqual(net.requests.length, 1);
+  fs.rmSync(dir, { recursive: true, force: true });
 });
