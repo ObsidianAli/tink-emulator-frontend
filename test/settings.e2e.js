@@ -79,27 +79,9 @@ async function main() {
   await sleep(300);
   assert.ok(await settingsOpen(), 'Open Settings opens it');
   console.log('opened on:', await focusedRow(), '| hints:', await hints());
-  assert.ok((await focusedRow()).startsWith('Emulator | Dolphin'), 'focus lands on the GameCube emulator row');
+  assert.ok((await focusedRow()).startsWith('GameCube'), 'focus lands on the GameCube emulator row');
+  assert.strictEqual(await page.textContent('#settings h1'), 'Emulators');
   await shot('3-settings-on-gamecube-emulator');
-
-  // Moving down the list only scrolls as far as needed, never back up, and keeps the focused row fully in view.
-  const view = () => page.evaluate(() => {
-    const list = document.querySelector('#settings .setup-list');
-    const row = document.activeElement.getBoundingClientRect();
-    const box = list.getBoundingClientRect();
-    return { top: list.scrollTop, inside: row.top >= box.top && row.bottom <= box.bottom };
-  });
-  let last = (await view()).top;
-  for (let i = 0; i < 12; i++) {
-    await key('ArrowDown');
-    await sleep(350);
-    const now = await view();
-    assert.ok(now.top >= last && now.inside, `step ${i}: scrollTop ${last} -> ${now.top}, row fully visible: ${now.inside}`);
-    last = now.top;
-  }
-  console.log('scrolled down to', last);
-  for (let i = 0; i < 12; i++) await key('ArrowUp');
-  await sleep(400);
 
   // Pick the emulator with A.
   await pick(dolphin);
@@ -112,41 +94,36 @@ async function main() {
   await key(' ');
   assert.strictEqual(readSettings().emulators.dolphin, undefined);
   console.log('after Find automatically:', await focusedRow());
-  await shot('5-find-automatically');
   await pick(dolphin);
   await key('Enter');
 
-  // Games folder row.
+  // B goes back to the top level with the cursor on Emulators, which fits without scrolling.
+  await key('Escape');
+  assert.ok(await settingsOpen(), 'B in a sub-list does not close Settings');
+  assert.strictEqual(await page.textContent('#settings h1'), 'Settings');
+  assert.ok((await focusedRow()).startsWith('Emulators'), await focusedRow());
+  const fits = await page.$eval('#settings .setup-list', (list) => list.scrollHeight <= list.clientHeight);
+  assert.ok(fits, 'the top level fits on one screen: ' + JSON.stringify(await page.$eval('#settings .setup-list', (l) => [l.scrollHeight, l.clientHeight])));
+  await shot('top-level');
+
+  // Games folders sub-list.
   await key('ArrowDown');
+  await key('Enter');
+  assert.strictEqual(await page.textContent('#settings h1'), 'Games folders');
+  assert.ok((await focusedRow()).startsWith('GameCube'));
   console.log('folder row:', await focusedRow(), '| hints:', await hints());
-  await shot('6-folder-row-focused');
+  await key('Escape');
+  assert.ok((await focusedRow()).startsWith('Games folders'));
 
-  // Top of the list: fullscreen, rescan, covers, key.
-  await key('Home').catch(() => {});
-  await down(0);
-  for (let i = 0; i < 2; i++) await key('ArrowUp');
-  console.log('focus:', await focusedRow());
-  for (let i = 0; i < 20; i++) {
-    if ((await focusedRow()).startsWith('Start in fullscreen')) break;
-    await key('ArrowUp');
-  }
-  assert.ok((await focusedRow()).startsWith('Start in fullscreen | On'));
-  assert.strictEqual(await isFullscreen(), true);
-  await shot('7-fullscreen-on');
-  await key('Enter');
-  assert.strictEqual(readSettings().fullscreen, false);
-  assert.strictEqual(await isFullscreen(), false);
-  console.log('fullscreen toggled:', await focusedRow());
-  await shot('8-fullscreen-off');
-  await key('Enter');
-  assert.strictEqual(await isFullscreen(), true);
-
-  // Rescan, Re-download, key.
+  // Shelves sub-list.
   await key('ArrowDown');
   await key('Enter');
-  console.log('rescan:', await focusedRow());
-  await shot('9-rescan-done');
+  assert.strictEqual(await page.textContent('#settings h1'), 'Shelves');
+  await key('Escape');
+  assert.ok((await focusedRow()).startsWith('Shelves'));
   await key('ArrowDown');
+
+  // Covers: re-download and the key.
   console.log('re-download hints:', await hints());
   await key('Enter');
   assert.ok((await dialogText()).startsWith('Replace all covers?'));
@@ -154,27 +131,40 @@ async function main() {
   await key('Escape');
   await key('ArrowDown');
   console.log('key row:', await focusedRow(), '| hints:', await hints());
-  await shot('11-key-row-focused');
   await key('Enter');
   console.log('typing hints:', await hints());
   await page.keyboard.type(`${SECRET} f s`.replace(/ /g, ''));
   assert.ok(!(await page.evaluate(() => document.body.innerText)).includes(SECRET), 'the key is not shown');
   assert.strictEqual(await page.$eval('.settings-key', (input) => input.type), 'password');
-  await shot('12-key-typing');
   await key('Enter');
   assert.strictEqual(readSettings().steamGridDbKey, `${SECRET}fs`);
   console.log('key saved:', await focusedRow(), '| hints:', await hints());
   assert.ok(!(await page.evaluate(() => document.body.innerHTML)).includes(SECRET), 'the key never reaches the page');
-  await shot('13-key-saved');
   await key(' ');
   assert.strictEqual(readSettings().steamGridDbKey, undefined);
   console.log('key cleared');
 
-  // About, at the bottom.
-  for (let i = 0; i < 60; i++) await page.keyboard.press('ArrowDown');
+  // Fullscreen.
+  await key('ArrowDown');
+  assert.ok((await focusedRow()).startsWith('Start in fullscreen | On'), await focusedRow());
+  assert.strictEqual(await isFullscreen(), true);
+  await key('Enter');
+  assert.strictEqual(readSettings().fullscreen, false);
+  assert.strictEqual(await isFullscreen(), false);
+  await key('Enter');
+  assert.strictEqual(await isFullscreen(), true);
+
+  // Rescan, then the bottom: version and the update check (from source it just says Up to date).
+  await key('ArrowDown');
+  await key('Enter');
+  assert.ok((await focusedRow()).endsWith('Done'));
+  await key('ArrowDown');
+  await key('ArrowDown');
+  assert.ok((await focusedRow()).startsWith('Check for updates'), await focusedRow());
+  assert.ok((await page.textContent('#settings')).includes(`Version ${require('../package.json').version}`));
+  await key('Enter');
   await sleep(300);
-  assert.ok((await page.textContent('#settings')).includes(`Tink ${require('../package.json').version}`));
-  await shot('14-bottom-with-about');
+  assert.ok((await focusedRow()).endsWith('Up to date'), await focusedRow());
 
   // Closing reloads the Shelf. One game file goes missing meanwhile.
   fs.rmSync(path.join(games, 'Luigis Mansion (USA).rvz'));

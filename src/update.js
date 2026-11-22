@@ -197,6 +197,12 @@ function createUpdater({
     }
   }
 
+  // For the Settings button: throws on failure, otherwise the version now waiting to install, or null.
+  async function checkNow() {
+    await check();
+    return pendingVersion();
+  }
+
   const isNewer = (next) => compareVersions(next, version) > 0;
 
   function start(file, args, cwd) {
@@ -302,7 +308,7 @@ function createUpdater({
     return compareVersions(done, version) === 0 ? `Updated to ${version}` : null;
   }
 
-  return { checkInBackground, pendingVersion, applyPending, finishUpdate, removeOld, takeNotice };
+  return { checkNow, checkInBackground, pendingVersion, applyPending, finishUpdate, removeOld, takeNotice };
 }
 
 module.exports = { compareVersions, allowedUrl, createUpdater, FINISH_FLAG, LATEST_URL };
