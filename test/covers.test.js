@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { createCovers } = require('../src/covers');
-const { CONSOLES } = require('../src/presets');
+const { CONSOLES, STEAM } = require('../src/presets');
+const { artUrls } = require('../src/steam');
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32, 1)]);
 const GC = 'https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_GameCube/master/Named_Boxarts/';
@@ -147,9 +148,43 @@ test('redirects are not followed', async () => {
 });
 
 test('every console has a plain cover colour', () => {
-  for (const [id, preset] of Object.entries(CONSOLES)) {
+  for (const [id, preset] of Object.entries({ ...CONSOLES, steam: STEAM })) {
     assert.match(preset.colour, /^#[0-9a-f]{6}$/, id);
   }
+});
+
+test('a stalled connection gives up instead of waiting forever, and is not remembered', async () => {
+  const dir = tempDir();
+  const stalled = (url, opts) => new Promise((_resolve, reject) => {
+    opts.signal.addEventListener('abort', () => reject(opts.signal.reason));
+  });
+  const cover = await createCovers({ dir, enabled: true, fetch: stalled, timeoutMs: 20 }).getCover(zelda);
+  assert.ok(cover.plain);
+  assert.ok((await createCovers({ dir, enabled: true, fetch: fakeNet({ [zeldaUrl]: PNG }).fetch }).getCover(zelda)).file);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+const portal = { console: 'steam', title: 'Portal', fileName: '400', art: artUrls('400') };
+
+test("a Steam game uses Steam's tall art, then its header, and is cached by app id", async () => {
+  const dir = tempDir();
+  const net = fakeNet({ [portal.art.fallback]: PNG });
+  const cover = await createCovers({ dir, enabled: true, steamGridKey: 'k', fetch: net.fetch }).getCover(portal);
+  assert.deepStrictEqual(net.requests, [portal.art.cover, portal.art.fallback]);
+  assert.strictEqual(path.basename(cover.file), '400.png');
+  const offline = fakeNet({});
+  assert.deepStrictEqual(await createCovers({ dir, enabled: true, fetch: offline.fetch }).getCover(portal), cover);
+  assert.deepStrictEqual(offline.requests, []);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('with covers off, a Steam game stays offline too', async () => {
+  const dir = tempDir();
+  const net = fakeNet({ [portal.art.cover]: PNG });
+  const cover = await createCovers({ dir, enabled: false, fetch: net.fetch }).getCover(portal);
+  assert.deepStrictEqual(cover, { plain: { colour: STEAM.colour } });
+  assert.deepStrictEqual(net.requests, []);
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 const GRID = 'https://www.steamgriddb.com/api/v2';

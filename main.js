@@ -3,7 +3,7 @@ const { app, BrowserWindow, ipcMain, shell, screen, dialog } = require('electron
 const fs = require('node:fs');
 const path = require('node:path');
 const steam = require('./src/steam');
-const { CONSOLES, EMULATORS, launchSpec } = require('./src/presets');
+const { CONSOLES, EMULATORS, STEAM, coverColour, launchSpec } = require('./src/presets');
 const { getEmulatedGames, groupShelves } = require('./src/library');
 const { detectEmulators, defaultSearchDirs } = require('./src/detect');
 const { loadSettings, saveSettings } = require('./src/settings');
@@ -70,10 +70,13 @@ function createWindow() {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      // Chromium could otherwise fetch spelling dictionaries, and Tink only goes online for Covers.
+      spellcheck: false,
     },
   });
   win.removeMenu();
   win.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+  win.webContents.session.setPermissionCheckHandler(() => false);
   win.webContents.on('will-navigate', (event) => event.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -88,30 +91,28 @@ async function getLibrary() {
     ...game,
     id: `steam:${game.appId}`,
     console: 'steam',
-    consoleName: 'Steam',
+    consoleName: STEAM.name,
+    // Steam Covers are cached by app id.
+    fileName: game.appId,
   }));
   const games = [...getEmulatedGames(settings), ...steamGames];
   gamesById = new Map(games.map((game) => [game.id, game]));
   return {
-    steamFound: Boolean(steamDir),
-    shelves: groupShelves(games).map((shelf) => ({
-      ...shelf,
-      games: shelf.games.map(({ id, title, art }) => ({ id, title, art: art || null })),
-    })),
+    shelves: groupShelves(games).map((shelf) => ({ ...shelf, games: shelf.games.map(({ id, title }) => ({ id, title })) })),
   };
 }
 
-// The Cover of an emulated Game, as a data URL or a Plain cover colour. Steam games bring their own art.
+// A Game's Cover, as a data URL or a Plain cover colour. The UI itself never goes online.
 async function getCover(id) {
   const game = gamesById.get(id);
-  if (!game || game.console === 'steam' || !covers) return null;
+  if (!game || !covers) return null;
   const cover = await covers.getCover(game);
   if (cover.plain) return cover;
   try {
     const data = await fs.promises.readFile(cover.file);
     return { src: `data:${cover.mime};base64,${data.toString('base64')}` };
   } catch {
-    return { plain: { colour: CONSOLES[game.console].colour } };
+    return { plain: { colour: coverColour(game.console) } };
   }
 }
 
@@ -179,7 +180,9 @@ function showHint() {
 // While an emulated game runs: show the hint, and close the game when Select + Start is held.
 function whilePlaying(child) {
   const closeHint = showHint();
-  const stopWatching = watchCombo(() => closeEmulator(child));
+  const stopWatching = watchCombo(() => closeEmulator(child), {
+    onFail: (code) => log(`The pad watcher stopped early (exit code ${code}), so Select + Start won't work this time`),
+  });
   return () => {
     stopWatching();
     closeHint();
@@ -269,9 +272,9 @@ async function clearFolder(id) {
   });
 }
 
-function finishSetup(covers) {
+function finishSetup(wantsCovers) {
   const current = loadSettings(settingsFile());
-  setup.completeSetup(current, covers === true);
+  setup.completeSetup(current, wantsCovers === true);
   saveSettings(settingsFile(), current);
 }
 
@@ -355,7 +358,7 @@ app.whenReady().then(() => {
   handle('pickExe', (id) => pickExe(String(id)));
   handle('pickFolder', (id) => pickFolder(String(id)));
   handle('clearFolder', (id) => clearFolder(String(id)));
-  handle('finishSetup', (covers) => finishSetup(covers));
+  handle('finishSetup', (wantsCovers) => finishSetup(wantsCovers === true));
   handle('getSettings', getSettings);
   handle('setFullscreen', (on) => setFullscreen(on === true));
   handle('setSteamKey', (key) => setSteamKey(key));
