@@ -5,6 +5,7 @@ const { CONSOLES } = require('./presets');
 
 // libretro's own GitHub copy of its thumbnail library; thumbnails.libretro.com answers 404 for every file.
 const LIBRETRO = 'https://raw.githubusercontent.com/libretro-thumbnails';
+const GRIDDB = 'https://www.steamgriddb.com/api/v2';
 const MAX_BYTES = 8 * 1024 * 1024;
 const PARALLEL = 4;
 
@@ -34,9 +35,9 @@ class Rejected extends Error {}
 
 // The image at url, null if the server has none, Rejected if it isn't a safe image.
 // Anything else (offline, server down) throws, so it isn't remembered as a miss.
-async function download(fetchFn, url) {
+async function download(fetchFn, url, headers) {
   if (!url.startsWith('https://')) throw new Rejected('not https');
-  const response = await fetchFn(url, { redirect: 'error' });
+  const response = await fetchFn(url, headers ? { redirect: 'error', headers } : { redirect: 'error' });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   if (Number(response.headers.get('content-length')) > MAX_BYTES) throw new Rejected('too big');
@@ -51,6 +52,15 @@ async function download(fetchFn, url) {
   const type = IMAGE_TYPES.find((t) => t.magic(data));
   if (!type) throw new Rejected('not an image');
   return { data, type };
+}
+
+// SteamGridDB's JSON answer, null if it has none. The key only ever goes to its own API host.
+async function griddbJson(fetchFn, key, route) {
+  const response = await fetchFn(`${GRIDDB}${route}`, { redirect: 'error', headers: { Authorization: `Bearer ${key}` } });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const body = await response.json();
+  return body && body.success && Array.isArray(body.data) ? body.data : null;
 }
 
 async function writeAtomic(file, data) {
@@ -79,9 +89,9 @@ function limiter(limit) {
   });
 }
 
-// dir: the cache folder. enabled: whether Tink may go online. fetch: swapped out in tests.
+// dir: the cache folder. enabled: whether Tink may go online. steamGridKey: optional SteamGridDB API key. fetch: swapped out in tests.
 // getCover(game) gives { file, mime } for a real Cover, or { plain: { colour } } for a Plain cover.
-function createCovers({ dir, enabled, fetch: fetchFn = globalThis.fetch }) {
+function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.fetch }) {
   const missesFile = path.join(dir, 'misses.json');
   const inFlight = new Map();
   const queue = limiter(PARALLEL);
@@ -132,15 +142,36 @@ function createCovers({ dir, enabled, fetch: fetchFn = globalThis.fetch }) {
     return null;
   }
 
+  // Searches SteamGridDB by title and takes the first portrait grid of the best match.
+  async function fromGridDb(game) {
+    const term = encodeURIComponent(game.title || game.fileName);
+    const matches = await queue(() => griddbJson(fetchFn, steamGridKey, `/search/autocomplete/${term}`));
+    if (!matches || !matches.length) return null;
+    const grids = await queue(() => griddbJson(fetchFn, steamGridKey, `/grids/game/${matches[0].id}?dimensions=600x900&types=static`));
+    for (const grid of grids || []) {
+      try {
+        const image = await queue(() => download(fetchFn, String(grid.url)));
+        if (!image) continue;
+        const file = coverBase(game) + image.type.ext;
+        await writeAtomic(file, image.data);
+        return { file, mime: image.type.mime };
+      } catch (error) {
+        if (!(error instanceof Rejected)) throw error;
+      }
+    }
+    return null;
+  }
+
   async function resolve(game) {
     const preset = CONSOLES[game.console];
     const plain = { plain: { colour: preset.colour } };
     const found = await cached(game);
     if (found) return found;
     const key = `${game.console}/${game.fileName}`;
-    if (!enabled || !preset.libretro || (await loadMisses()).has(key)) return plain;
+    if (!enabled || (!preset.libretro && !steamGridKey) || (await loadMisses()).has(key)) return plain;
     try {
-      const cover = await fromLibretro(preset.libretro, game);
+      const cover = (preset.libretro && (await fromLibretro(preset.libretro, game)))
+        || (steamGridKey && (await fromGridDb(game)));
       if (cover) return cover;
       await remember(key);
     } catch {

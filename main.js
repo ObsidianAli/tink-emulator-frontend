@@ -51,7 +51,11 @@ function createWindow() {
 async function getLibrary() {
   settings = loadSettings(path.join(app.getPath('userData'), 'settings.json'));
   emulators = detectEmulators(defaultSearchDirs(process.env, TINK_DIR));
-  covers = createCovers({ dir: path.join(app.getPath('userData'), 'covers'), enabled: settings.covers === true });
+  covers = createCovers({
+    dir: path.join(app.getPath('userData'), 'covers'),
+    enabled: settings.covers === true,
+    steamGridKey: typeof settings.steamGridDbKey === 'string' ? settings.steamGridDbKey.trim() : '',
+  });
   const steamDir = await steam.findSteamDir();
   const steamGames = (steamDir ? steam.getSteamGames(steamDir) : []).map((game) => ({
     ...game,
