@@ -42,7 +42,7 @@ In Settings and setup, A picks, B goes back or closes, and X is the second actio
 
 ## Quitting a game
 
-On an emulator game, hold Select and Start together for 2 seconds and Tink closes the emulator and comes back. On an Xbox pad these are View and Menu. Steam games are quit from Steam's own menu, and Tink returns when the game ends.
+On a game, hold Select and Start together for 2 seconds and Tink closes the game and comes back. On an Xbox pad these are View and Menu. The same works on Steam games: Tink closes the game's own programs, and comes back once Steam says the game has ended. Steam itself is left running.
 
 ## Emulators
 

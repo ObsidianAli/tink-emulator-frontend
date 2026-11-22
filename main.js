@@ -213,13 +213,24 @@ function whilePlaying(child) {
 }
 
 // Starts the game through Steam, hides Tink, and shows it again once Steam says the game has ended.
-async function launchSteam(appId) {
+// While it runs, holding Select + Start closes the game's own processes, and Steam then reports it ended.
+async function launchSteam(game) {
+  const { appId } = game;
   if (!/^\d+$/.test(String(appId))) return;
+  let stopWatching = () => {};
   try {
     await shell.openExternal(`steam://rungameid/${appId}`);
     win.hide();
+    const reader = getPadReader();
+    if (reader) {
+      stopWatching = watchCombo(() => steam.closeSteamGame(game.installDir).catch((error) => log('Could not close the Steam game', error)), {
+        read: reader.read,
+        onFail: (error) => log("Reading the pad failed, so Select + Start won't work this time", error),
+      });
+    }
     await waitForGameToEnd();
   } finally {
+    stopWatching();
     showTink();
   }
 }
@@ -354,7 +365,7 @@ async function launch(id) {
   if (!game) return { error: "This game can't be found.", fix: 'rescan' };
   if (game.console === 'steam') {
     try {
-      await launchSteam(game.appId);
+      await launchSteam(game);
     } catch (error) {
       log('Could not start a Steam game', error);
       return { error: "Steam couldn't start this game." };
