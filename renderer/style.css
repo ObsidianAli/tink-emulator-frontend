@@ -202,6 +202,12 @@ main {
   display: none;
 }
 
+#settings {
+  gap: var(--space);
+  padding-top: var(--space-3);
+  padding-bottom: 0;
+}
+
 #setup h1,
 #settings h1 {
   margin: 0;
@@ -313,7 +319,7 @@ main {
 }
 
 .setup-note {
-  margin: var(--space-2) 0 0;
+  margin: var(--space) 0 var(--space);
   color: var(--muted);
   font-size: var(--text-small);
 }

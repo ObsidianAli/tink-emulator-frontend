@@ -1,5 +1,5 @@
-// The Settings screen: one list. Up/Down move, A changes the focused row, X is the row's second action
-// (Find automatically, Skip, Clear), B closes. Mouse clicks work too.
+// The Settings screen: a short top list; Emulators, Games folders and Shelves open sub-lists. Up/Down move, A changes
+// the focused row, X is the row's second action (Find automatically, Skip, Clear), B goes back or closes. Mouse clicks work too.
 import { element, focusRow, shortPath } from './dom.js';
 
 const root = document.getElementById('settings');
@@ -24,6 +24,9 @@ export async function openSettings({ focusConsole } = {}) {
     let nodes = [];
     let typing = false;
     const done = new Set();
+    let view = 'top';
+    let update = '';
+    let pendingFocus = null;
 
     async function change(request, { reload = true } = {}) {
       active.busy = true;
@@ -38,26 +41,68 @@ export async function openSettings({ focusConsole } = {}) {
       render();
     }
 
+    const link = (name, label, status) => ({ id: name, label, status, hint: 'Open', activate: () => { view = name; focus = 0; render(); } });
+
+    async function checkUpdates() {
+      if (update === 'Checking…') return;
+      update = 'Checking…';
+      render();
+      let result;
+      try {
+        result = await window.tink.checkForUpdates();
+      } catch {
+        result = { status: 'failed' };
+      }
+      update = result.status === 'failed' ? "Couldn't check" : 'Up to date';
+      render();
+      if (result.status !== 'ready') return;
+      update = '';
+      render();
+      const ok = await showDialog({ message: `Update available (${result.version}).`, confirm: 'Update', cancel: 'Not now', sound: 'confirm' });
+      if (ok) await window.tink.applyUpdate();
+    }
+
     const buildRows = () => {
-      const list = [
-        {
-          label: 'Start in fullscreen',
-          status: state.fullscreen ? 'On' : 'Off',
-          hint: 'Switch',
+      if (view === 'emulators') {
+        return state.consoles.map((item) => {
+          const emulator = item.emulator;
+          return {
+            console: item.id,
+            label: item.name,
+            status: emulator.status,
+            found: emulator.found,
+            hint: 'Pick',
+            second: { label: 'Find automatically', run: () => change(window.tink.findAutomatically(emulator.id)) },
+            activate: () => change(window.tink.pickExe(emulator.id)),
+          };
+        });
+      }
+      if (view === 'folders') {
+        return state.consoles.map((item) => ({
+          label: item.name,
+          status: item.folder ? shortPath(item.folder) : 'None',
+          found: Boolean(item.folder),
+          hint: 'Pick',
+          second: item.folder ? { label: 'Skip', run: () => change(window.tink.clearFolder(item.id)) } : null,
+          activate: () => change(window.tink.pickFolder(item.id)),
+        }));
+      }
+      if (view === 'shelves') {
+        return state.shelves.map((item) => ({
+          label: item.name,
+          status: item.hidden ? 'Hidden' : 'Shown',
+          hint: item.hidden ? 'Show' : 'Hide',
           sound: 'toggle',
-          activate: () => change(window.tink.setFullscreen(!state.fullscreen), { reload: false }),
-        },
-        {
-          label: 'Rescan games',
-          hint: 'Rescan',
-          status: done.has('rescan') ? 'Done' : '',
-          activate: () => {
-            changed = true;
-            done.add('rescan');
-            render();
-          },
-        },
-        { group: 'Covers' },
+          activate: () => change(window.tink.toggleShelf(item.id)),
+        }));
+      }
+      const emulatorsFound = state.consoles.filter((item) => item.emulator.found).length;
+      const foldersSet = state.consoles.filter((item) => item.folder).length;
+      const shown = state.shelves.filter((item) => !item.hidden).length;
+      return [
+        link('emulators', 'Emulators', `${emulatorsFound} of ${state.consoles.length} found`),
+        link('folders', 'Games folders', `${foldersSet} of ${state.consoles.length} set`),
+        link('shelves', 'Shelves', `${shown} of ${state.shelves.length} shown`),
         {
           label: 'Re-download covers',
           hint: 'Download',
@@ -83,51 +128,33 @@ export async function openSettings({ focusConsole } = {}) {
           second: state.hasKey ? { label: 'Clear', run: () => change(window.tink.setSteamKey(''), { reload: false }) } : null,
           activate: () => startTyping(),
         },
-      ];
-      if (state.shelves.length) {
-        list.push({ group: 'Shelves' });
-        for (const item of state.shelves) {
-          list.push({
-            label: item.name,
-            status: item.hidden ? 'Hidden' : 'Shown',
-            hint: item.hidden ? 'Show' : 'Hide',
-            sound: 'toggle',
-            activate: () => change(window.tink.toggleShelf(item.id)),
-          });
-        }
-        list.push({
+        {
+          label: 'Start in fullscreen',
+          status: state.fullscreen ? 'On' : 'Off',
+          hint: 'Switch',
+          sound: 'toggle',
+          activate: () => change(window.tink.setFullscreen(!state.fullscreen), { reload: false }),
+        },
+        {
+          label: 'Rescan games',
+          hint: 'Rescan',
+          status: done.has('rescan') ? 'Done' : '',
+          activate: () => {
+            changed = true;
+            done.add('rescan');
+            render();
+          },
+        },
+        {
           label: 'Hidden games',
           status: state.hiddenGames ? String(state.hiddenGames) : 'None',
           hint: 'Show all',
           sound: 'toggle',
           activate: () => (state.hiddenGames ? change(window.tink.showHiddenGames()) : undefined),
-        });
-      }
-      for (const item of state.consoles) {
-        const emulator = item.emulator;
-        list.push(
-          { group: item.name },
-          {
-            console: item.id,
-            label: 'Emulator',
-            sub: emulator.label === 'Emulator' ? '' : emulator.label,
-            status: emulator.status,
-            found: emulator.found,
-            hint: 'Pick',
-            second: { label: 'Find automatically', run: () => change(window.tink.findAutomatically(emulator.id)) },
-            activate: () => change(window.tink.pickExe(emulator.id)),
-          },
-          {
-            label: 'Games folder',
-            status: item.folder ? shortPath(item.folder) : 'None',
-            found: Boolean(item.folder),
-            hint: 'Pick',
-            second: item.folder ? { label: 'Skip', run: () => change(window.tink.clearFolder(item.id)) } : null,
-            activate: () => change(window.tink.pickFolder(item.id)),
-          },
-        );
-      }
-      return list;
+        },
+        { label: `Version ${state.version}`, plain: true },
+        { id: 'update', label: 'Check for updates', status: update, hint: 'Check', activate: checkUpdates },
+      ];
     };
 
     function startTyping() {
@@ -154,13 +181,17 @@ export async function openSettings({ focusConsole } = {}) {
 
     function render() {
       rows = buildRows();
+      if (pendingFocus) {
+        focus = rows.filter((row) => !row.plain).findIndex(pendingFocus);
+        pendingFocus = null;
+      }
       const list = element('div', 'setup-list');
       list.setAttribute('role', 'list');
       nodes = [];
       const focusable = [];
       for (const row of rows) {
-        if (row.group) {
-          list.append(element('h2', 'settings-group', row.group));
+        if (row.plain) {
+          list.append(element('p', 'setup-note', row.label));
           continue;
         }
         const node = element(row.key ? 'div' : 'button', 'setup-row');
@@ -195,9 +226,9 @@ export async function openSettings({ focusConsole } = {}) {
         focusable.push(row);
       }
       rows = focusable;
-      list.append(element('p', 'setup-note', `Tink ${state.version}`));
-      root.replaceChildren(element('h1', '', 'Settings'), list);
-      focus = Math.min(focus, nodes.length - 1);
+      const titles = { top: 'Settings', emulators: 'Emulators', folders: 'Games folders', shelves: 'Shelves' };
+      root.replaceChildren(element('h1', '', titles[view]), list);
+      focus = Math.max(0, Math.min(focus, nodes.length - 1));
       focusRow(nodes[focus], false);
       showSettingsHints();
     }
@@ -207,7 +238,7 @@ export async function openSettings({ focusConsole } = {}) {
       if (typing) return setHints([{ button: 'a', label: 'Save' }, { button: 'b', label: 'Cancel' }]);
       const hints = [{ button: 'a', label: row.hint || 'Start' }];
       if (row.second) hints.push({ button: 'x', label: row.second.label });
-      hints.push({ button: 'b', label: 'Close' });
+      hints.push({ button: 'b', label: view === 'top' ? 'Close' : 'Back' });
       setHints(hints);
     }
 
@@ -249,7 +280,13 @@ export async function openSettings({ focusConsole } = {}) {
           return 'toggle';
         }
         if (action === 'b') {
-          close();
+          if (view === 'top') close();
+          else {
+            const id = view;
+            view = 'top';
+            pendingFocus = (row) => row.id === id;
+            render();
+          }
           return 'back';
         }
         return null;
@@ -257,12 +294,9 @@ export async function openSettings({ focusConsole } = {}) {
     };
     root.hidden = false;
     if (focusConsole) {
-      render();
-      focus = Math.max(0, rows.findIndex((row) => row.console === focusConsole));
-      focusRow(nodes[focus], false);
-      showSettingsHints();
-    } else {
-      render();
+      view = 'emulators';
+      pendingFocus = (row) => row.console === focusConsole;
     }
+    render();
   });
 }

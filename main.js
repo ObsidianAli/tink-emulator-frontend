@@ -493,6 +493,16 @@ app.whenReady().then(async () => {
     setTimeout(() => updater.checkInBackground(), UPDATE_CHECK_DELAY_MS).unref();
   }
   handle('getUpdate', () => (updater ? updater.pendingVersion() : null));
+  handle('checkForUpdates', async () => {
+    if (!updater) return { status: 'current' };
+    try {
+      const version = await updater.checkNow();
+      return version ? { status: 'ready', version } : { status: 'current' };
+    } catch (error) {
+      log('Update check failed', error);
+      return { status: 'failed' };
+    }
+  });
   handle('applyUpdate', async () => {
     if (updater && await updater.applyPending()) app.quit();
   });
