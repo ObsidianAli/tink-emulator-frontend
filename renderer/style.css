@@ -191,11 +191,6 @@ main {
   font-weight: var(--weight-bold);
 }
 
-.setup-text {
-  margin: 0;
-  color: var(--muted);
-}
-
 .setup-list {
   flex: 1;
   min-height: 0;

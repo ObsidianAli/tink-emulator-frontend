@@ -177,9 +177,9 @@ async function main() {
   };
   for (let i = 0; i < 10; i++) await press(13);
   await press(0);
-  assert.strictEqual(await title(), 'Where are your games?', 'pad: A on Next moves on');
+  assert.strictEqual(await title(), 'Games folders', 'pad: A on Next moves on');
   await press(1);
-  assert.strictEqual(await title(), 'Finding your emulators…', 'pad: B goes back');
+  assert.strictEqual(await title(), 'Emulators', 'pad: B goes back');
   for (let i = 0; i < 10; i++) await press(13);
   await press(0);
   for (let i = 0; i < 22; i++) await press(13);

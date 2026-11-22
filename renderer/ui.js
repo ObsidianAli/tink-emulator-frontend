@@ -23,7 +23,7 @@ function report(reason) {
   reported.add(text);
   window.tink.logError(text).catch(() => {});
   if (!document.querySelector('.dialog-scrim')) {
-    showDialog({ message: 'Something went wrong. Tink saved the details in its log file.' });
+    showDialog({ message: 'Something went wrong.' });
   }
 }
 window.addEventListener('error', (event) => report(event.error || event.message));
@@ -75,8 +75,9 @@ function openShelf(index, from = 0) {
 
 function switchShelf(step) {
   const next = current + step;
-  if (next < 0 || next >= shelves.length) return;
+  if (next < 0 || next >= shelves.length) return false;
   openShelf(next, step);
+  return true;
 }
 
 async function play() {
@@ -94,10 +95,10 @@ async function play() {
 // A launch failure in plain words, with a way to fix it when there is one.
 async function explain({ error, fix, console }) {
   if (fix === 'settings') {
-    const ok = await showDialog({ message: `${error} Open Settings?`, confirm: 'Open Settings', cancel: 'Not now' });
+    const ok = await showDialog({ message: error, confirm: 'Open Settings', cancel: 'Not now' });
     if (ok) await goToSettings(console);
   } else if (fix === 'rescan') {
-    const ok = await showDialog({ message: `${error} Rescan?`, confirm: 'Rescan', cancel: 'Not now' });
+    const ok = await showDialog({ message: error, confirm: 'Rescan', cancel: 'Not now' });
     if (ok) await loadLibrary();
   } else {
     await showDialog({ message: error });
@@ -118,31 +119,33 @@ async function goToSettings(focusConsole) {
   }
 }
 
+// Returns the name of the sound the action made, if any.
 listenForInput((action) => {
-  if (dialogTakesInput(action) || settingsOpen() || inSettings) return;
+  const dialog = dialogTakesInput(action);
+  if (dialog) return dialog.sound;
+  if (settingsOpen() || inSettings) return null;
   if (action === 'menu') {
     goToSettings();
-    return;
+    return 'confirm';
   }
-  if (shelves.length === 0) return;
+  if (shelves.length === 0) return null;
   if (action === 'left' || action === 'right') {
-    if (shelf.select(shelf.selected() + (action === 'right' ? 1 : -1))) {
-      showTitle();
-      showHints();
-    }
-  } else if (action === 'up' || action === 'lb') {
-    switchShelf(-1);
-  } else if (action === 'down' || action === 'rb') {
-    switchShelf(1);
-  } else if (action === 'a') {
-    play();
-  } else if (action === 'y') {
-    if (shelf.flip()) showHints();
-  } else if (action === 'x') {
-    if (shelf.open()) showHints();
-  } else if (action === 'b') {
-    if (shelf.back()) showHints();
+    if (!shelf.select(shelf.selected() + (action === 'right' ? 1 : -1))) return null;
+    showTitle();
+    showHints();
+    return 'move';
   }
+  if (action === 'up' || action === 'lb') return switchShelf(-1) ? 'shelf' : null;
+  if (action === 'down' || action === 'rb') return switchShelf(1) ? 'shelf' : null;
+  if (action === 'a') {
+    if (launching || !shelf.game()) return null;
+    play();
+    return 'launch';
+  }
+  const moves = { y: shelf.flip, x: shelf.open, b: shelf.back };
+  if (!moves[action] || !moves[action]()) return null;
+  showHints();
+  return { y: 'flip', x: 'open', b: 'back' }[action];
 });
 
 // Reads the library again and shows it, staying on the same Shelf when it's still there.
@@ -155,7 +158,7 @@ async function loadLibrary() {
     shelf.show({ console: '', name: '', games: [] }, 0);
     nav.replaceChildren();
     title.textContent = '';
-    showMessage('No games found yet. Open Settings to choose a games folder.');
+    showMessage('No games found.');
     setHints([{ button: 'menu', label: 'Settings' }]);
     return;
   }

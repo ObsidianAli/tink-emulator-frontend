@@ -7,8 +7,8 @@ let active = null;
 
 // Registered before the shelf's handler, so a press that closes a dialog isn't also taken as a choice here.
 listenForInput((action) => {
-  if (!active || active.busy || document.querySelector('.dialog-scrim')) return;
-  active.handle(action);
+  if (!active || active.busy || document.querySelector('.dialog-scrim')) return null;
+  return active.handle(action);
 });
 
 export function runSetup(initial) {
@@ -44,14 +44,14 @@ export function runSetup(initial) {
     }));
 
     const coverRows = () => [
-      { label: 'Yes', activate: () => finish(true) },
-      { label: 'Not now', activate: () => finish(false) },
+      { label: 'Download', activate: () => finish(true) },
+      { label: 'Skip', activate: () => finish(false) },
     ];
 
     const SCREENS = [
-      { title: 'Finding your emulators…', text: 'Choose any that are missing.', rows: emulatorRows, next: 'Next' },
-      { title: 'Where are your games?', text: "Pick one folder for each console. Skip the ones you don't play.", rows: folderRows, next: 'Next' },
-      { title: 'Download covers?', text: 'Tink can download a cover for each game from the internet.', rows: coverRows, hint: 'Choose' },
+      { title: 'Emulators', rows: emulatorRows, next: 'Next' },
+      { title: 'Games folders', rows: folderRows, next: 'Next' },
+      { title: 'Covers', rows: coverRows, hint: 'Choose' },
     ];
 
     async function change(request) {
@@ -81,7 +81,7 @@ export function runSetup(initial) {
     }
 
     function render() {
-      const { title, text, rows, next } = SCREENS[screen];
+      const { title, rows, next } = SCREENS[screen];
       items = rows();
       const list = element('div', 'setup-list');
       list.setAttribute('role', 'list');
@@ -95,8 +95,8 @@ export function runSetup(initial) {
         return row;
       });
       list.append(...buttons);
-      if (state.steamFound && screen === 0) list.append(element('p', 'setup-note', 'Steam was found too.'));
-      const children = [element('h1', '', title), element('p', 'setup-text', text), list];
+      if (state.steamFound && screen === 0) list.append(element('p', 'setup-note', 'Steam found'));
+      const children = [element('h1', '', title), list];
       if (next) {
         const button = element('button', 'setup-next', next);
         button.type = 'button';
@@ -130,16 +130,25 @@ export function runSetup(initial) {
       busy: false,
       handle(action) {
         if (action === 'up' || action === 'down') {
+          const before = focus;
           focus = Math.max(0, Math.min(buttons.length - 1, focus + (action === 'down' ? 1 : -1)));
           buttons[focus].focus();
           showSetupHints();
-        } else if (action === 'a') {
-          choose();
-        } else if (action === 'b' && screen > 0) {
-          go(-1);
-        } else if (action === 'x' && focus < items.length && items[focus].clear) {
-          items[focus].clear();
+          return focus !== before ? 'list' : null;
         }
+        if (action === 'a') {
+          choose();
+          return 'confirm';
+        }
+        if (action === 'b' && screen > 0) {
+          go(-1);
+          return 'back';
+        }
+        if (action === 'x' && focus < items.length && items[focus].clear) {
+          items[focus].clear();
+          return 'toggle';
+        }
+        return null;
       },
     };
     root.hidden = false;

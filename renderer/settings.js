@@ -7,8 +7,8 @@ let active = null;
 
 // Registered before the shelf's handler, so the press that closes Settings isn't also taken by the shelf.
 listenForInput((action) => {
-  if (!active || active.busy || document.querySelector('.dialog-scrim')) return;
-  active.handle(action);
+  if (!active || active.busy || document.querySelector('.dialog-scrim')) return null;
+  return active.handle(action);
 });
 
 export const settingsOpen = () => active !== null;
@@ -44,6 +44,7 @@ export async function openSettings({ focusConsole } = {}) {
           label: 'Start in fullscreen',
           status: state.fullscreen ? 'On' : 'Off',
           hint: 'Switch',
+          sound: 'toggle',
           activate: () => change(window.tink.setFullscreen(!state.fullscreen), { reload: false }),
         },
         {
@@ -65,9 +66,10 @@ export async function openSettings({ focusConsole } = {}) {
             // Lets this press finish before the dialog opens, or the dialog would take it as its own.
             await null;
             const ok = await showDialog({
-              message: 'Download every cover again? The ones saved on this PC are replaced.',
-              confirm: 'Download again',
+              message: 'Replace all covers?',
+              confirm: 'Replace',
               cancel: 'Not now',
+              sound: 'list',
             });
             if (!ok) return;
             done.add('covers');
@@ -174,7 +176,7 @@ export async function openSettings({ focusConsole } = {}) {
         focusable.push(row);
       }
       rows = focusable;
-      list.append(element('p', 'setup-note', `About: Tink ${state.version}`));
+      list.append(element('p', 'setup-note', `Tink ${state.version}`));
       root.replaceChildren(element('h1', '', 'Settings'), list);
       focus = Math.min(focus, nodes.length - 1);
       nodes[focus].focus();
@@ -202,19 +204,36 @@ export async function openSettings({ focusConsole } = {}) {
       handle(action) {
         if (typing) {
           const input = nodes[focus].querySelector('input');
-          if (action === 'a') saveKey(input);
-          else if (action === 'b') stopTyping(input);
-        } else if (action === 'up' || action === 'down') {
+          if (action === 'a') {
+            saveKey(input);
+            return 'confirm';
+          }
+          if (action === 'b') {
+            stopTyping(input);
+            return 'back';
+          }
+          return null;
+        }
+        if (action === 'up' || action === 'down') {
+          const before = focus;
           focus = Math.max(0, Math.min(nodes.length - 1, focus + (action === 'down' ? 1 : -1)));
           nodes[focus].focus();
           showSettingsHints();
-        } else if (action === 'a') {
-          rows[focus].activate();
-        } else if (action === 'x' && rows[focus].second) {
-          rows[focus].second.run();
-        } else if (action === 'b') {
-          close();
+          return focus !== before ? 'list' : null;
         }
+        if (action === 'a') {
+          rows[focus].activate();
+          return rows[focus].sound || 'confirm';
+        }
+        if (action === 'x' && rows[focus].second) {
+          rows[focus].second.run();
+          return 'toggle';
+        }
+        if (action === 'b') {
+          close();
+          return 'back';
+        }
+        return null;
       },
     };
     root.hidden = false;

@@ -328,7 +328,7 @@ async function launchEmulated(game) {
   const emulator = CONSOLES[game.console].emulator;
   const name = emulator ? EMULATORS[emulator].label : `The ${game.consoleName} emulator`;
   const exe = emulatorExe(game);
-  if (!exe || !fs.existsSync(exe)) return { error: `${name} isn't set up yet.`, fix: 'settings', console: game.console };
+  if (!exe || !fs.existsSync(exe)) return { error: `${name} isn't set up.`, fix: 'settings', console: game.console };
   if (!fs.existsSync(game.path)) return { error: "This game file can't be found.", fix: 'rescan' };
   try {
     const spec = launchSpec(game.console, exe, game.path, options.wantsFullscreen(settings));

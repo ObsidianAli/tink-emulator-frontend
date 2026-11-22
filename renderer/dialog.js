@@ -1,9 +1,10 @@
-// showDialog({ message, confirm = 'OK', cancel }) shows a friendly message and resolves true when confirm is chosen.
+// showDialog({ message, confirm = 'OK', cancel, sound = 'error' }) shows a message and resolves true when confirm is chosen.
 let activeDialog = null;
 
-function showDialog({ message, confirm = 'OK', cancel }) {
+function showDialog({ message, confirm = 'OK', cancel, sound = 'error' }) {
   if (activeDialog) activeDialog.close(false);
   return new Promise((resolve) => {
+    playSound(sound);
     const scrim = document.createElement('div');
     scrim.className = 'dialog-scrim';
     const box = document.createElement('div');
@@ -43,22 +44,28 @@ function showDialog({ message, confirm = 'OK', cancel }) {
 
     function handle(action) {
       if (action === 'left' || action === 'right') {
+        const before = focused;
         focused = Math.max(0, Math.min(buttons.length - 1, focused + (action === 'right' ? 1 : -1)));
         buttons[focused].focus();
-      } else if (action === 'a') {
-        close(focused === 0);
-      } else if (action === 'b') {
-        close(false);
+        return focused !== before ? 'list' : null;
       }
+      if (action === 'a') {
+        close(focused === 0);
+        return 'confirm';
+      }
+      if (action === 'b') {
+        close(false);
+        return 'back';
+      }
+      return null;
     }
 
     activeDialog = { close, handle };
   });
 }
 
-// Lets the open dialog take an input action. Returns false when no dialog is open.
+// Lets the open dialog take an input action. Returns null when no dialog is open, else { sound }.
 function dialogTakesInput(action) {
-  if (!activeDialog) return false;
-  activeDialog.handle(action);
-  return true;
+  if (!activeDialog) return null;
+  return { sound: activeDialog.handle(action) };
 }

@@ -72,7 +72,7 @@ async function main() {
 
   // Play with no emulator: the friendly message, then straight into Settings on that Console.
   await key('Enter');
-  assert.strictEqual(await dialogText(), "Dolphin isn't set up yet. Open Settings?");
+  assert.strictEqual(await dialogText(), "Dolphin isn't set up.");
   console.log('error 1:', await dialogText(), '| hints:', await hints());
   await shot('2-error-not-set-up');
   await key('Enter');
@@ -130,7 +130,7 @@ async function main() {
   await key('ArrowDown');
   console.log('re-download hints:', await hints());
   await key('Enter');
-  assert.ok((await dialogText()).startsWith('Download every cover again?'));
+  assert.ok((await dialogText()).startsWith('Replace all covers?'));
   await shot('10-redownload-confirm');
   await key('Escape');
   await key('ArrowDown');
@@ -154,7 +154,7 @@ async function main() {
   // About, at the bottom.
   for (let i = 0; i < 60; i++) await page.keyboard.press('ArrowDown');
   await sleep(300);
-  assert.ok((await page.textContent('#settings')).includes(`About: Tink ${require('../package.json').version}`));
+  assert.ok((await page.textContent('#settings')).includes(`Tink ${require('../package.json').version}`));
   await shot('14-bottom-with-about');
 
   // Closing reloads the Shelf. One game file goes missing meanwhile.
@@ -169,7 +169,7 @@ async function main() {
   // A game that vanishes after the scan: delete it, then play.
   fs.rmSync(path.join(games, 'Wind Waker (USA).rvz'));
   await key('Enter');
-  assert.strictEqual(await dialogText(), "This game file can't be found. Rescan?");
+  assert.strictEqual(await dialogText(), "This game file can't be found.");
   await shot('16-error-file-missing');
   await key('Enter');
   await sleep(600);
@@ -198,7 +198,7 @@ async function main() {
   // An unexpected error is logged in full and only a plain message shows.
   await page.evaluate(() => { setTimeout(() => Promise.reject(new Error('boom from the screen'))); });
   await sleep(400);
-  assert.strictEqual(await dialogText(), 'Something went wrong. Tink saved the details in its log file.');
+  assert.strictEqual(await dialogText(), 'Something went wrong.');
   assert.ok(!(await page.textContent('.dialog')).includes('boom'));
   await shot('18-error-unexpected');
   await key('Enter');
