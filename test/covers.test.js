@@ -158,7 +158,10 @@ test('a stalled connection gives up instead of waiting forever, and is not remem
   const stalled = (url, opts) => new Promise((_resolve, reject) => {
     opts.signal.addEventListener('abort', () => reject(opts.signal.reason));
   });
+  // AbortSignal.timeout doesn't keep Node alive on its own; in Tink the window does.
+  const alive = setInterval(() => {}, 1000);
   const cover = await createCovers({ dir, enabled: true, fetch: stalled, timeoutMs: 20 }).getCover(zelda);
+  clearInterval(alive);
   assert.ok(cover.plain);
   assert.ok((await createCovers({ dir, enabled: true, fetch: fakeNet({ [zeldaUrl]: PNG }).fetch }).getCover(zelda)).file);
   fs.rmSync(dir, { recursive: true, force: true });
