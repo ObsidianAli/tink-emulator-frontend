@@ -1,25 +1,25 @@
-// The three.js Shelf: one Console's Cases standing in a row on a board, the selected one slid forward.
-// The selected Case can be flipped to its Back and opened to show its Disc.
-// Only the Cases near the selection exist at all, and a frame is drawn only while something is moving.
+// The three.js Shelf: one Console's Cases in a row, the selected one forward and facing the player, the others turned
+// towards it and stacked close behind on each side. The selected Case can be flipped to its Back and opened to show its
+// Disc. Only the Cases near the selection exist at all, and a frame is drawn only while something is moving.
 import * as THREE from '../node_modules/three/build/three.module.js';
-import { SHAPES, shapeFor, createCase } from './case.js';
+import { SHAPES, shapeFor, coverAspect, spineAspect, createCase } from './case.js';
 import { createTextures } from './textures.js';
 
-const GAP = 0.3;
-const PULL = 1;
 const FOV = 30;
-const VIEW_HEIGHT = 6.4;
-// Unselected Cases turn a little towards the middle, so their depth and spine show.
-const TURN = 0.45;
-const CAMERA_LIFT = 0.45;
-const BOARD = { height: 0.08, depth: 1.4, back: 0.4 };
-// Frames in motion are drawn at a low pixel ratio so they stay smooth; the still frame after is drawn sharp.
-const MOVING_PIXEL_RATIO = 1;
-const STILL_PIXEL_RATIO = Math.min(window.devicePixelRatio || 1, 3);
-// The Disc keeps turning for as long as the Case is open, so on weak GPUs it gets fewer and smaller frames.
-const TURNING_PIXEL_RATIO = Math.min(STILL_PIXEL_RATIO, 1.5);
-// About 30 a second, with room for frame timing jitter.
-const TURNING_FRAME_MS = 28;
+// How many Case heights the view spans at the row's depth.
+const FRAME = 2.5;
+// Where the camera sits and looks, in Case heights: a little above the middle, looking slightly down.
+const EYE = 0.62;
+const AIM = 0.42;
+// The selected Case comes this far forward and turns a little, so its spine and thickness show.
+const PULL = 0.9;
+const SELECTED_TURN = 0.32;
+// The others stand back, turned towards the selection, the first one clear of it and the rest overlapping.
+const BACK = -0.8;
+const SIDE_TURN = 1.05;
+const NEAR = 1.15;
+const STEP = 0.26;
+const SIDE_DIM = 0.35;
 // Extra Cases built past each edge of the screen, so moving never shows an empty slot.
 const SPARE = 2;
 const SETTLED = 0.0005;
@@ -27,6 +27,8 @@ const SETTLED = 0.0005;
 const NEXT_STEP = 0.9;
 const DISC_SPIN = (Math.PI * 2) / 16000;
 const REST = { flip: 0, lid: 0 };
+const SHARP_STEP = 64;
+const SHARP_MAX = 2048;
 
 function token(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -36,29 +38,51 @@ function durationMs(name) {
   return parseFloat(token(name)) || 500;
 }
 
+// A dark room with two soft light panels, baked into the reflections every Case's plastic picks up: a long one above
+// that lines the top edges, and a tall one to the front right that lies across the selected Cover as a gloss band.
+function studioLight(renderer) {
+  const room = new THREE.Scene();
+  const geometries = [];
+  const materials = [];
+  const add = (geometry, material) => {
+    geometries.push(geometry);
+    materials.push(material);
+    const mesh = new THREE.Mesh(geometry, material);
+    room.add(mesh);
+    return mesh;
+  };
+  add(new THREE.BoxGeometry(20, 20, 20), new THREE.MeshBasicMaterial({ color: 0x0b0c0f, side: THREE.BackSide }));
+  const panel = (width, height, strength, x, y, z) => {
+    const mesh = add(new THREE.PlaneGeometry(width, height), new THREE.MeshBasicMaterial({ color: new THREE.Color().setScalar(strength) }));
+    mesh.position.set(x, y, z);
+    mesh.lookAt(0, 0, 0);
+  };
+  panel(14, 1.6, 5, 0, 9, 2);
+  panel(0.9, 12, 7, 5.2, 0, 7.6);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const texture = pmrem.fromScene(room, 0.03).texture;
+  pmrem.dispose();
+  geometries.forEach((g) => g.dispose());
+  materials.forEach((m) => m.dispose());
+  return texture;
+}
+
 // onTint(colour) is called with the selected Cover's average colour.
 function createShelf(canvas, { onTint }) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(STILL_PIXEL_RATIO);
+  // At two or more device pixels per CSS pixel the edges are already fine, and multisampling a 4K buffer is costly.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: (window.devicePixelRatio || 1) < 2, alpha: true });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
   renderer.setClearColor(0x000000, 0);
 
   const scene = new THREE.Scene();
+  scene.environment = studioLight(renderer);
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 100);
-  camera.position.z = VIEW_HEIGHT / 2 / Math.tan(THREE.MathUtils.degToRad(FOV / 2));
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x404040, 2.2));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
-  sun.position.set(-2, 4, 6);
-  scene.add(sun);
+  const key = new THREE.DirectionalLight(0xffffff, 2.4);
+  key.position.set(-2, 3, 6);
+  scene.add(key);
 
-  const colours = { shell: token('--surface-raised'), blank: token('--surface'), disc: token('--muted') };
-  const board = new THREE.Mesh(
-    new THREE.BoxGeometry(1, BOARD.height, BOARD.depth),
-    new THREE.MeshLambertMaterial({ color: token('--surface') }),
-  );
-  board.position.set(0, -BOARD.height / 2, BOARD.depth / 2 - BOARD.back);
-  scene.add(board);
-
+  const colours = { shell: token('--surface'), blank: token('--surface-raised'), disc: token('--muted') };
   const row = new THREE.Group();
   scene.add(row);
 
@@ -77,20 +101,28 @@ function createShelf(canvas, { onTint }) {
   const live = new Map();
   // spare Cases per shape, reused instead of rebuilt
   const pools = new Map();
-  // eased values: where the row is scrolled to and how far it is from resting height
-  const motion = { x: 0, xTarget: 0, y: 0 };
-  const pulls = new Map();
+  // eased values: which index the row is centred on, and how far it is from resting height
+  const motion = { focus: 0, y: 0 };
   // index -> { flip, lid, disc, spin } of each live Case, all 0 at rest
   const poseOf = new Map();
   const restPose = () => ({ flip: 0, lid: 0, disc: 0, spin: 0 });
   // indexes of the Cases showing a Back and Disc label right now
   const detailed = new Set();
+  // the index whose Case has its sharp Cover on
+  let sharpIndex = -1;
 
-  const spacing = () => shape.width + GAP;
+  const halfTan = () => Math.tan(THREE.MathUtils.degToRad(FOV / 2));
 
   function visibleHalfCount() {
-    const halfWidth = camera.position.z * Math.tan(THREE.MathUtils.degToRad(FOV / 2)) * camera.aspect;
-    return Math.ceil(halfWidth / spacing()) + SPARE;
+    const halfWidth = (camera.position.z - BACK) * halfTan() * camera.aspect;
+    return Math.max(1, Math.ceil((halfWidth - NEAR * shape.width) / (STEP * shape.width + shape.depth))) + 1 + SPARE;
+  }
+
+  // How tall the selected Cover is on screen in device pixels, so its sharp texture matches.
+  function sharpHeight() {
+    const view = 2 * (camera.position.z - PULL) * halfTan();
+    const pixels = ((shape.height - shape.rim * 2) / view) * renderer.getDrawingBufferSize(new THREE.Vector2()).y;
+    return Math.min(SHARP_MAX, Math.ceil(pixels / SHARP_STEP) * SHARP_STEP);
   }
 
   function takeCase() {
@@ -102,22 +134,43 @@ function createShelf(canvas, { onTint }) {
   function releaseCase(index) {
     const item = live.get(index);
     live.delete(index);
-    pulls.delete(index);
     poseOf.delete(index);
     clearDetails(index, item);
+    if (sharpIndex === index) sharpIndex = -1;
     item.setPose(restPose());
     item.setCover(null);
+    item.setSpine(null);
     row.remove(item.group);
     pools.get(item.shape).push(item);
   }
 
   function coverOf(index) {
     const inUse = new Set([...live.keys()].map((i) => games[i].id));
-    return textures.get(games[index], shape.width / shape.height, inUse);
+    return textures.get(games[index], coverAspect(shape), spineAspect(shape), inUse);
   }
 
   function inUseDetails() {
-    return new Set([...detailed].map((i) => games[i].id));
+    return new Set([...detailed, selected].map((i) => games[i].id));
+  }
+
+  // Swaps the selected Case's small Cover for one as sharp as the screen, and puts the small one back on the last.
+  function sharpen() {
+    const before = sharpIndex;
+    if (before !== selected && live.has(before)) {
+      const item = live.get(before);
+      coverOf(before).then((made) => {
+        if (made && live.get(before) === item && sharpIndex !== before) item.setCover(made.texture);
+      });
+    }
+    const index = selected;
+    const item = live.get(index);
+    sharpIndex = item ? index : -1;
+    if (!item) return;
+    textures.getSharp(games[index], coverAspect(shape), sharpHeight(), inUseDetails()).then((made) => {
+      if (!made || live.get(index) !== item || sharpIndex !== index) return;
+      item.setCover(made.texture);
+      requestRender();
+    });
   }
 
   // Puts the generated Back and Disc label on the selected Case.
@@ -126,7 +179,7 @@ function createShelf(canvas, { onTint }) {
     const item = live.get(index);
     if (!item || detailed.has(index)) return;
     detailed.add(index);
-    textures.getDetails(games[index], shape.width / shape.height, consoleName, inUseDetails()).then((made) => {
+    textures.getDetails(games[index], coverAspect(shape), sharpHeight(), consoleName, inUseDetails()).then((made) => {
       if (live.get(index) !== item || !detailed.has(index) || !made) return;
       item.setBack(made.back);
       item.setLabel(made.label);
@@ -144,36 +197,48 @@ function createShelf(canvas, { onTint }) {
     coverOf(index).then((made) => {
       if (live.get(index) !== item || !made) return;
       item.setCover(made.texture);
-      if (index === selected) onTint(made.tint);
+      item.setSpine(made.spine);
+      if (index === selected) {
+        onTint(made.tint);
+        sharpen();
+      }
       requestRender();
     });
   }
 
-  // Builds the Cases in view of the selection and drops the ones that left it.
+  // Builds the Cases in view of the selection, and of where the row is still sliding from, and drops the rest.
   function updateWindow() {
     const reach = visibleHalfCount();
-    const from = Math.max(0, selected - reach);
-    const to = Math.min(games.length - 1, selected + reach);
+    const centre = Math.round(motion.focus);
+    const from = Math.max(0, Math.min(selected, centre) - reach);
+    const to = Math.min(games.length - 1, Math.max(selected, centre) + reach);
     for (const index of [...live.keys()]) {
       if (index < from || index > to) releaseCase(index);
     }
     for (let index = from; index <= to; index++) {
       if (live.has(index)) continue;
       const item = takeCase();
-      item.group.position.set(index * spacing(), 0, 0);
       live.set(index, item);
-      pulls.set(index, 0);
       poseOf.set(index, restPose());
       row.add(item.group);
       showCover(index, item);
     }
   }
 
+  // Where a Case stands when it is offset Cases away from the middle of the row.
+  function place(item, offset) {
+    const near = Math.min(1, Math.abs(offset));
+    const side = Math.sign(offset);
+    const step = STEP * shape.width + shape.depth;
+    const x = side * (near * NEAR * shape.width + Math.max(0, Math.abs(offset) - 1) * step);
+    item.group.position.set(x, 0, PULL + near * (BACK - PULL));
+    item.group.rotation.y = (1 - near) * SELECTED_TURN - side * near * SIDE_TURN;
+    item.setDim(near * SIDE_DIM);
+  }
+
   function aimCamera() {
-    camera.position.x = motion.x;
-    camera.position.y = shape.height / 2 + CAMERA_LIFT;
-    camera.lookAt(motion.x, shape.height / 2, 0);
-    board.position.x = motion.x;
+    camera.position.set(0, shape.height * EYE, shape.height * (FRAME / 2 / halfTan()));
+    camera.lookAt(0, shape.height * AIM, BACK);
     row.position.y = motion.y;
   }
 
@@ -204,15 +269,12 @@ function createShelf(canvas, { onTint }) {
     };
     const ease = easer(tau);
     const easeSlow = easer(discTau);
-    motion.x = ease(motion.x, motion.xTarget);
+    motion.focus = ease(motion.focus, selected);
     motion.y = ease(motion.y, 0);
     let spinning = false;
     for (const [index, item] of live) {
       const isSelected = index === selected;
-      const pull = ease(pulls.get(index), isSelected ? 1 : 0);
-      pulls.set(index, pull);
-      item.group.position.z = pull * PULL;
-      item.group.rotation.y = (1 - pull) * TURN * Math.sign(index * spacing() - motion.x);
+      place(item, index - motion.focus);
       const pose = poseOf.get(index);
       stepPose(pose, isSelected ? currentPose() : REST, ease, easeSlow);
       if (pose.disc > 0 && item.disc) {
@@ -225,27 +287,13 @@ function createShelf(canvas, { onTint }) {
     return { moving, spinning };
   }
 
-  function setPixelRatio(ratio) {
-    if (renderer.getPixelRatio() === ratio) return;
-    renderer.setPixelRatio(ratio);
-    renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
-  }
-
   let frameRequested = false;
   let lastTime = null;
-  // Only the Disc is turning, so frames can be skipped until anything else changes.
-  let onlyTurning = false;
 
   function frame(now) {
     frameRequested = false;
-    if (onlyTurning && now - lastTime < TURNING_FRAME_MS) {
-      nextFrame();
-      return;
-    }
     const dt = lastTime === null ? 16 : Math.min(now - lastTime, 50);
     const { moving, spinning } = step(dt);
-    onlyTurning = spinning && !moving;
-    setPixelRatio(moving ? MOVING_PIXEL_RATIO : onlyTurning ? TURNING_PIXEL_RATIO : STILL_PIXEL_RATIO);
     aimCamera();
     renderer.render(scene, camera);
     if (moving || spinning) {
@@ -253,6 +301,8 @@ function createShelf(canvas, { onTint }) {
       nextFrame();
     } else {
       lastTime = null;
+      // The row has stopped, so the Cases it slid past can go.
+      updateWindow();
     }
   }
 
@@ -262,18 +312,17 @@ function createShelf(canvas, { onTint }) {
     requestAnimationFrame(frame);
   }
 
-  function requestRender() {
-    onlyTurning = false;
-    nextFrame();
-  }
+  const requestRender = nextFrame;
 
   function resize() {
     const { clientWidth, clientHeight } = canvas;
     if (!clientWidth || !clientHeight) return;
+    // Follows the window onto a screen with a different scale.
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.setSize(clientWidth, clientHeight, false);
     camera.aspect = clientWidth / clientHeight;
     camera.updateProjectionMatrix();
-    board.scale.x = (visibleHalfCount() + 1) * 2 * spacing();
+    aimCamera();
     if (games.length) updateWindow();
     requestRender();
   }
@@ -286,7 +335,7 @@ function createShelf(canvas, { onTint }) {
     consoleName = item.name;
     poses = [];
     selected = Math.max(0, Math.min(index, games.length - 1));
-    motion.x = motion.xTarget = selected * spacing();
+    motion.focus = selected;
     motion.y = from * shape.height;
     resize();
   }
@@ -302,7 +351,6 @@ function createShelf(canvas, { onTint }) {
     if (next === selected) return false;
     selected = next;
     poses = [];
-    motion.xTarget = selected * spacing();
     updateWindow();
     const item = live.get(selected);
     if (item) {
@@ -310,6 +358,7 @@ function createShelf(canvas, { onTint }) {
         if (made && live.get(selected) === item) onTint(made.tint);
       });
     }
+    sharpen();
     requestRender();
     return true;
   }
