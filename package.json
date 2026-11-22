@@ -1,6 +1,6 @@
 {
   "name": "tink",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "ObsidianAli",
   "description": "A small, controller-friendly game launcher for Windows",
   "main": "main.js",
