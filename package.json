@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist": "electron-builder --win portable",
+    "dist": "electron-builder --win portable --publish never && node scripts/zip.js",
     "e2e": "node test/shelf.e2e.js"
   },
   "build": {

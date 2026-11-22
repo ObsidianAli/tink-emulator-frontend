@@ -4,15 +4,17 @@ Tink is a small game launcher for Windows that shows your games as cases on a 3D
 
 ## Download
 
-Get `Tink.exe` from the [Releases page](https://github.com/ObsidianAli/tink-emulator-frontend/releases). Put it in its own folder, for example `C:\Tink`. There is nothing to install, and you only need to download it once.
+Get `Tink.zip` from the [Releases page](https://github.com/ObsidianAli/tink-emulator-frontend/releases) and unzip it somewhere you like, for example `C:\Games`. That gives you a `Tink` folder; run `Tink.exe` inside it. There is nothing to install, and you only need to download it once.
 
-Tink keeps a `data` folder next to itself with your settings, the downloaded Covers and a log file. If something goes wrong, `data\tink.log` is where to look. To move Tink, move the whole folder.
+Tink keeps a `data` folder inside the `Tink` folder with your settings, the downloaded Covers and a log file. If something goes wrong, `data\tink.log` is where to look. To move Tink, move the whole folder.
 
 Windows SmartScreen may warn you the first time, because Tink isn't signed. Click "More info", then "Run anyway".
 
 ## Updates
 
-Tink updates itself. When a newer release is out, it downloads the new `Tink.exe` in the background and asks if you want to update, once per start and only while you're on the shelf. Choosing Update swaps the exe and restarts Tink. Not now keeps the download for next time. Your `data` folder isn't touched, and Settings shows which version you're on. If an update fails, Tink stays as it is and writes a line to `data\tink.log`.
+Tink updates itself. When a newer release is out, it downloads the new files in the background and asks if you want to update, once per start and only while you're on the shelf. Choosing Update replaces the program files and restarts Tink. Not now keeps the download for next time. Your `data` folder is kept, and Settings shows which version you're on. If an update fails, Tink stays as it is and writes a line to `data\tink.log`.
+
+The release also has a single `Tink.exe`. It's only there so older versions that were a single exe can find the update, and it starts slowly because it unpacks itself every time.
 
 ## First run
 
