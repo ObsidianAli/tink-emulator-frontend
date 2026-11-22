@@ -16,6 +16,7 @@ async function launch(root, userData) {
   const env = {
     ...process.env,
     PORTABLE_EXECUTABLE_DIR: path.join(root, 'tink'),
+    TINK_DATA_DIR: userData,
     ProgramFiles: empty,
     'ProgramFiles(x86)': empty,
     LOCALAPPDATA: empty,

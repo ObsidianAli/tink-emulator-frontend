@@ -133,7 +133,10 @@ async function main() {
   fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify(makeLibrary(path.join(root, 'games'))));
   seedCovers(userData, path.join(root, 'games'));
 
-  const app = await electron.launch({ args: [path.join(__dirname, '..'), `--user-data-dir=${userData}`] });
+  const app = await electron.launch({
+    args: [path.join(__dirname, '..'), `--user-data-dir=${userData}`],
+    env: { ...process.env, TINK_DATA_DIR: userData },
+  });
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
