@@ -1,4 +1,5 @@
 // The button hints along the bottom edge. setHints([{ button: 'a', label: 'Play' }]) replaces them.
+// button can also be a list, like ['lb', 'rb'], for one label shared by two buttons.
 const hintsBar = document.getElementById('hints');
 let currentHints = [];
 
@@ -7,10 +8,13 @@ function setHints(hints) {
   hintsBar.replaceChildren(...hints.map(({ button, label }) => {
     const hint = document.createElement('span');
     hint.className = 'hint';
-    const glyph = document.createElement('span');
-    glyph.className = 'glyph';
-    glyph.textContent = button.toUpperCase();
-    hint.append(glyph, label);
+    const glyphs = [].concat(button).map((name) => {
+      const glyph = document.createElement('span');
+      glyph.className = 'glyph';
+      glyph.textContent = name.toUpperCase();
+      return glyph;
+    });
+    hint.append(...glyphs, label);
     return hint;
   }));
 }

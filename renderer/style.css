@@ -6,90 +6,65 @@ body {
   display: flex;
   flex-direction: column;
   margin: 0;
-  background: var(--bg);
+  background: radial-gradient(ellipse at top, color-mix(in srgb, var(--tint) var(--tint-strength), var(--bg)), var(--bg) var(--tint-reach));
   color: var(--text);
   font-family: var(--font);
   font-size: var(--text-body);
   font-weight: var(--weight-regular);
   line-height: var(--line-height);
   overflow: hidden;
+  transition: --tint var(--duration-case) var(--ease-out);
 }
+
+/* The shelf screen */
 
 main {
+  position: relative;
   flex: 1;
-  overflow-y: auto;
-  scrollbar-width: none;
-  padding: var(--space-6) var(--space-8) var(--space-4);
+  min-height: 0;
 }
 
-h1 {
-  margin: 0 0 var(--space-4);
-  font-size: var(--text-title);
+#shelf {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#shelves {
+  position: relative;
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-8) 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+#shelves .current {
+  color: var(--text);
   font-weight: var(--weight-bold);
 }
 
-#message {
+#title {
+  position: absolute;
+  left: var(--space-8);
+  right: var(--space-8);
+  bottom: var(--space-6);
   margin: 0;
-  color: var(--muted);
-}
-
-/* The list screen */
-
-#games {
-  list-style: none;
-  margin: 0;
-  padding: var(--focus-width);
-}
-
-#games li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space) var(--space-2);
-  border-radius: var(--radius-large);
-  outline: var(--focus-width) solid transparent;
-  outline-offset: var(--focus-offset);
-  transition: background-color var(--duration-ui) var(--ease-out), outline-color var(--duration-fast) var(--ease-out);
-}
-
-#games li + li {
-  margin-top: var(--space);
-}
-
-#games li.selected {
-  background: var(--surface);
-  outline: var(--focus-ring);
-}
-
-#games img,
-#games .no-cover,
-#games .plain-cover {
-  flex: none;
-  width: var(--cover-width);
-  height: var(--cover-height);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-#games img {
-  object-fit: cover;
-}
-
-#games .plain-cover {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space);
   overflow: hidden;
-  font-size: var(--text-small);
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
   text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-#games .console {
-  margin-left: auto;
+#message {
+  position: relative;
+  margin: 0;
+  padding: var(--space-6) var(--space-8);
   color: var(--muted);
-  font-size: var(--text-small);
 }
 
 /* Button hints along the bottom edge */
@@ -105,7 +80,6 @@ h1 {
   height: var(--hints-height);
   padding: 0 var(--space-8);
   border-top: var(--line-width) solid var(--line);
-  background: var(--bg);
   font-size: var(--text-small);
 }
 
@@ -120,7 +94,9 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--glyph-size);
+  box-sizing: border-box;
+  min-width: var(--glyph-size);
+  padding: 0 var(--space);
   height: var(--glyph-size);
   border-radius: var(--radius-round);
   background: var(--text);

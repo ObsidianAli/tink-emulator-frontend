@@ -19,6 +19,13 @@
     U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* The background tint, taken from the selected Cover. Registered so it can fade between Covers. */
+@property --tint {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #0f1115;
+}
+
 :root {
   /* Colour. One accent, used for focus and nothing decorative. */
   --bg: #0f1115;
@@ -31,6 +38,8 @@
   --on-light: #0f1115;
   --scrim: rgba(8, 9, 12, 0.72);
   --hint-bg: rgba(15, 17, 21, 0.92);
+  --tint-strength: 28%;
+  --tint-reach: 80%;
 
   /* Type. One font, three sizes, two weights. */
   --font: 'Inter', system-ui, sans-serif;
@@ -68,8 +77,6 @@
   --duration-case-slow: 600ms;
 
   /* Sizes of recurring things. */
-  --cover-width: var(--space-8);
-  --cover-height: calc(var(--space) * 12);
   --glyph-size: var(--space-4);
   --dialog-width: calc(var(--space) * 70);
   --hints-height: calc(var(--space) * 10);

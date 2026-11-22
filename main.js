@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const steam = require('./src/steam');
 const { CONSOLES, EMULATORS, launchSpec } = require('./src/presets');
-const { getEmulatedGames } = require('./src/library');
+const { getEmulatedGames, groupShelves } = require('./src/library');
 const { detectEmulators, defaultSearchDirs } = require('./src/detect');
 const { loadSettings } = require('./src/settings');
 const { playGame, closeEmulator } = require('./src/launcher');
@@ -67,7 +67,10 @@ async function getLibrary() {
   gamesById = new Map(games.map((game) => [game.id, game]));
   return {
     steamFound: Boolean(steamDir),
-    games: games.map(({ id, title, consoleName, art }) => ({ id, title, consoleName, art: art || null })),
+    shelves: groupShelves(games).map((shelf) => ({
+      ...shelf,
+      games: shelf.games.map(({ id, title, art }) => ({ id, title, art: art || null })),
+    })),
   };
 }
 

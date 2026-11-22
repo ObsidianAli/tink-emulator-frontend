@@ -71,4 +71,17 @@ function getEmulatedGames(settings) {
   return games;
 }
 
-module.exports = { getEmulatedGames };
+// One Shelf per Console that has Games, in preset order with Steam last, each sorted by Title.
+function groupShelves(games) {
+  const order = [...Object.keys(CONSOLES), 'steam'];
+  const shelves = new Map();
+  for (const game of games) {
+    if (!shelves.has(game.console)) shelves.set(game.console, { console: game.console, name: game.consoleName, games: [] });
+    shelves.get(game.console).games.push(game);
+  }
+  return [...shelves.values()]
+    .sort((a, b) => order.indexOf(a.console) - order.indexOf(b.console))
+    .map((shelf) => ({ ...shelf, games: shelf.games.sort((a, b) => a.title.localeCompare(b.title, 'en', { numeric: true })) }));
+}
+
+module.exports = { getEmulatedGames, groupShelves };

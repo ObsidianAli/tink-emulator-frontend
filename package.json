@@ -7,7 +7,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist": "electron-builder --win portable"
+    "dist": "electron-builder --win portable",
+    "e2e": "node test/shelf.e2e.js"
   },
   "build": {
     "appId": "dev.tink.launcher",
@@ -16,7 +17,9 @@
       "main.js",
       "preload.js",
       "src/**",
-      "renderer/**"
+      "renderer/**",
+      "!node_modules/three/examples/**",
+      "!node_modules/three/src/**"
     ],
     "win": {
       "target": "portable"
@@ -25,6 +28,10 @@
   },
   "devDependencies": {
     "electron": "^45.2.3",
-    "electron-builder": "^26.18.0"
+    "electron-builder": "^26.18.0",
+    "playwright": "^1.65.1"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
   }
 }
