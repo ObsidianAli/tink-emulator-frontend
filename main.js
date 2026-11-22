@@ -14,12 +14,15 @@ const { createLog } = require('./src/log');
 const { playGame, closeEmulator } = require('./src/launcher');
 const { watchCombo, loadPadReader } = require('./src/pad');
 const { createCovers } = require('./src/covers');
+const { createUpdater, FINISH_FLAG } = require('./src/update');
 
 const POLL_MS = 2000;
 // How long to wait for Steam to actually start the game before giving up and showing Tink again.
 // Generous, because a first launch can wait on an update or a Steam login.
 const START_TIMEOUT_MS = 5 * 60 * 1000;
 const HINT_MS = 3000;
+// Let the shelf load first; the update check is not urgent.
+const UPDATE_CHECK_DELAY_MS = 10 * 1000;
 
 // The portable exe unpacks to a temp folder, so "beside Tink" means beside the exe the user started.
 const TINK_DIR = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath);
@@ -367,7 +370,44 @@ function handle(name, fn) {
   });
 }
 
-app.whenReady().then(() => {
+// Only a packaged portable exe can replace itself. TINK_UPDATE_URL is honoured only for a local http://127.0.0.1 server (tests).
+// Started as Tink.exe.new with the flag, it is the downloaded exe finishing the swap.
+function makeUpdater() {
+  const running = process.env.PORTABLE_EXECUTABLE_FILE;
+  if (!app.isPackaged || !running) return null;
+  const exe = finishing(running) ? running.slice(0, -'.new'.length) : running;
+  const local = (process.env.TINK_UPDATE_URL || '').startsWith('http://127.0.0.1');
+  return createUpdater({
+    exe,
+    dataDir: DATA_DIR,
+    version: app.getVersion(),
+    log,
+    ...(local ? { releaseUrl: process.env.TINK_UPDATE_URL, loopback: true } : {}),
+  });
+}
+
+const finishing = (running) => process.argv.includes(FINISH_FLAG) && running.endsWith('.new');
+let notice = null;
+let updater = null;
+
+app.whenReady().then(async () => {
+  updater = makeUpdater();
+  if (updater && finishing(process.env.PORTABLE_EXECUTABLE_FILE)) {
+    if (await updater.finishUpdate()) return app.quit();
+  } else if (updater) {
+    updater.removeOld();
+    notice = updater.takeNotice();
+    setTimeout(() => updater.checkInBackground(), UPDATE_CHECK_DELAY_MS).unref();
+  }
+  handle('getUpdate', () => (updater ? updater.pendingVersion() : null));
+  handle('applyUpdate', async () => {
+    if (updater && await updater.applyPending()) app.quit();
+  });
+  handle('getNotice', () => {
+    const text = notice;
+    notice = null;
+    return text;
+  });
   handle('getSetup', getSetup);
   handle('pickExe', (id) => pickExe(String(id)));
   handle('pickFolder', (id) => pickFolder(String(id)));

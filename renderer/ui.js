@@ -167,10 +167,38 @@ async function loadLibrary() {
   openShelf(Math.max(0, shelves.findIndex((item) => item.console === before)));
 }
 
+const NOTICE_MS = 4000;
+
+// A short note, like "Updated to 0.2.0", that goes away on its own.
+async function showNotice() {
+  const text = await window.tink.getNotice();
+  if (!text) return;
+  const notice = document.getElementById('notice');
+  notice.textContent = text;
+  notice.hidden = false;
+  setTimeout(() => { notice.hidden = true; }, NOTICE_MS);
+}
+
+const UPDATE_POLL_MS = 15 * 1000;
+
+// Offers a downloaded update once per start, and only while the shelf is idle (never during play).
+function offerUpdate() {
+  const timer = setInterval(async () => {
+    if (launching || inSettings || settingsOpen() || document.querySelector('.dialog-scrim')) return;
+    const version = await window.tink.getUpdate();
+    if (!version) return;
+    clearInterval(timer);
+    const ok = await showDialog({ message: `Update available (${version}).`, confirm: 'Update', cancel: 'Not now', sound: 'confirm' });
+    if (ok) await window.tink.applyUpdate();
+  }, UPDATE_POLL_MS);
+}
+
 async function start() {
   const setup = await window.tink.getSetup();
   if (setup.needed) await runSetup(setup);
   await loadLibrary();
+  showNotice().catch(() => {});
+  offerUpdate();
 }
 
 start();

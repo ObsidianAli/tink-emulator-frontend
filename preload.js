@@ -15,5 +15,8 @@ contextBridge.exposeInMainWorld('tink', {
   logError: (text) => ipcRenderer.invoke('logError', text),
   getLibrary: () => ipcRenderer.invoke('getLibrary'),
   getCover: (id) => ipcRenderer.invoke('getCover', id),
+  getUpdate: () => ipcRenderer.invoke('getUpdate'),
+  applyUpdate: () => ipcRenderer.invoke('applyUpdate'),
+  getNotice: () => ipcRenderer.invoke('getNotice'),
   launch: (id) => ipcRenderer.invoke('launch', id),
 });

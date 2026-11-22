@@ -67,6 +67,22 @@ main {
   color: var(--muted);
 }
 
+#notice {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: var(--layer-hints);
+  margin: 0;
+  padding: var(--space) var(--space-2);
+  border-radius: var(--radius);
+  background: var(--hint-bg);
+  font-size: var(--text-small);
+}
+
+#notice[hidden] {
+  display: none;
+}
+
 /* Button hints along the bottom edge */
 
 #hints {
