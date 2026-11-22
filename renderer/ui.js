@@ -1,7 +1,8 @@
 // The shelf screen: LB/RB (Up/Down) switch Shelves, Left/Right move along one, A (Enter) plays,
-// Y (F) flips the selected Case, X (Space) opens it and B (Esc) undoes either.
+// Y (F) flips the selected Case, X (Space) opens it and B (Esc) undoes either. Menu (S) opens Settings.
 import { createShelf } from './shelf.js';
 import { runSetup } from './setup.js';
+import { openSettings, settingsOpen } from './settings.js';
 
 const nav = document.getElementById('shelves');
 const title = document.getElementById('title');
@@ -12,6 +13,21 @@ let current = 0;
 // The selected Game on each Shelf, so coming back lands where you left.
 const positions = new Map();
 let launching = false;
+let inSettings = false;
+
+// Anything unexpected is logged in full and the player only sees a plain message, once per kind of failure.
+const reported = new Set();
+function report(reason) {
+  const text = String((reason && reason.stack) || reason);
+  if (reported.has(text)) return;
+  reported.add(text);
+  window.tink.logError(text).catch(() => {});
+  if (!document.querySelector('.dialog-scrim')) {
+    showDialog({ message: 'Something went wrong. Tink saved the details in its log file.' });
+  }
+}
+window.addEventListener('error', (event) => report(event.error || event.message));
+window.addEventListener('unhandledrejection', (event) => report(event.reason));
 
 const shelf = createShelf(document.getElementById('shelf'), {
   onTint: (colour) => document.body.style.setProperty('--tint', colour),
@@ -44,7 +60,7 @@ function showHints() {
   if (shelves.length > 1) hints.push({ button: ['lb', 'rb'], label: 'Shelf' });
   if (state !== 'open') hints.push({ button: 'y', label: 'Flip' }, { button: 'x', label: 'Open' });
   if (state !== 'front') hints.push({ button: 'b', label: 'Back' });
-  hints.push({ button: 'a', label: 'Play' });
+  hints.push({ button: 'a', label: 'Play' }, { button: 'menu', label: 'Settings' });
   setHints(hints);
 }
 
@@ -69,14 +85,46 @@ async function play() {
   launching = true;
   try {
     const result = await window.tink.launch(game.id);
-    if (result && result.error) await showDialog({ message: result.error });
+    if (result && result.error) await explain(result);
   } finally {
     launching = false;
   }
 }
 
+// A launch failure in plain words, with a way to fix it when there is one.
+async function explain({ error, fix, console }) {
+  if (fix === 'settings') {
+    const ok = await showDialog({ message: `${error} Open Settings?`, confirm: 'Open Settings', cancel: 'Not now' });
+    if (ok) await goToSettings(console);
+  } else if (fix === 'rescan') {
+    const ok = await showDialog({ message: `${error} Rescan?`, confirm: 'Rescan', cancel: 'Not now' });
+    if (ok) await loadLibrary();
+  } else {
+    await showDialog({ message: error });
+  }
+}
+
+async function goToSettings(focusConsole) {
+  if (inSettings) return;
+  inSettings = true;
+  try {
+    if (await openSettings({ focusConsole })) {
+      shelf.forgetCovers();
+      await loadLibrary();
+    }
+    else showHints();
+  } finally {
+    inSettings = false;
+  }
+}
+
 listenForInput((action) => {
-  if (dialogTakesInput(action) || shelves.length === 0) return;
+  if (dialogTakesInput(action) || settingsOpen() || inSettings) return;
+  if (action === 'menu') {
+    goToSettings();
+    return;
+  }
+  if (shelves.length === 0) return;
   if (action === 'left' || action === 'right') {
     if (shelf.select(shelf.selected() + (action === 'right' ? 1 : -1))) {
       showTitle();
@@ -97,16 +145,29 @@ listenForInput((action) => {
   }
 });
 
+// Reads the library again and shows it, staying on the same Shelf when it's still there.
+async function loadLibrary() {
+  const before = shelves[current] && shelves[current].console;
+  const library = await window.tink.getLibrary();
+  shelves = library.shelves;
+  positions.clear();
+  if (shelves.length === 0) {
+    shelf.show({ console: '', name: '', games: [] }, 0);
+    nav.replaceChildren();
+    title.textContent = '';
+    showMessage('No games found yet. Open Settings to choose a games folder.');
+    setHints([{ button: 'menu', label: 'Settings' }]);
+    return;
+  }
+  showMessage('');
+  current = 0;
+  openShelf(Math.max(0, shelves.findIndex((item) => item.console === before)));
+}
+
 async function start() {
   const setup = await window.tink.getSetup();
   if (setup.needed) await runSetup(setup);
-  const library = await window.tink.getLibrary();
-  shelves = library.shelves;
-  if (shelves.length === 0) {
-    showMessage('No games found yet.');
-    return;
-  }
-  openShelf(0);
+  await loadLibrary();
 }
 
 start();

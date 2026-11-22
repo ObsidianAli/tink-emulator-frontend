@@ -1,5 +1,5 @@
 // Keyboard and controller input in the app, turned into a few named actions:
-// up, down, left, right, a, b, x, y, lb, rb.
+// up, down, left, right, a, b, x, y, lb, rb, menu.
 
 const KEY_ACTIONS = {
   ArrowUp: 'up',
@@ -11,10 +11,12 @@ const KEY_ACTIONS = {
   ' ': 'x',
   f: 'y',
   F: 'y',
+  s: 'menu',
+  S: 'menu',
 };
 
 // Standard gamepad layout button numbers.
-const PAD_ACTIONS = { 0: 'a', 1: 'b', 2: 'x', 3: 'y', 4: 'lb', 5: 'rb', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
+const PAD_ACTIONS = { 0: 'a', 1: 'b', 2: 'x', 3: 'y', 4: 'lb', 5: 'rb', 9: 'menu', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
 const DIRECTIONS = new Set(['up', 'down', 'left', 'right']);
 const STICK_DEADZONE = 0.5;
 const REPEAT_DELAY_MS = 400;
@@ -32,6 +34,8 @@ function emitAction(action) {
 }
 
 document.addEventListener('keydown', (event) => {
+  // Typing in a text field belongs to the field.
+  if (event.target instanceof HTMLInputElement) return;
   const action = KEY_ACTIONS[event.key];
   if (!action) return;
   // Stops Enter or Space from also clicking whatever has focus, so each press counts once.
