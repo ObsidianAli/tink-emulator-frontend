@@ -8,11 +8,17 @@ let launching = false;
 
 function showMessage(text) {
   message.textContent = text;
-  message.hidden = false;
+  message.hidden = !text;
 }
 
-// Library image first; if it doesn't exist, the wide header image.
+// Steam games: library image first; if it doesn't exist, the wide header image.
+// Emulated games have no cover yet, so they get an empty box of the same size.
 function makeImage(art) {
+  if (!art) {
+    const box = document.createElement('div');
+    box.className = 'no-cover';
+    return box;
+  }
   const img = document.createElement('img');
   img.alt = '';
   img.src = art.cover;
@@ -26,7 +32,10 @@ function render() {
   list.replaceChildren(...games.map((game, index) => {
     const item = document.createElement('li');
     item.className = index === selected ? 'selected' : '';
-    item.append(makeImage(game.art), game.title);
+    const consoleName = document.createElement('span');
+    consoleName.className = 'console';
+    consoleName.textContent = game.consoleName;
+    item.append(makeImage(game.art), game.title, consoleName);
     return item;
   }));
   const current = list.children[selected];
@@ -37,7 +46,8 @@ async function play() {
   if (launching || !games[selected]) return;
   launching = true;
   try {
-    await window.tink.launch(games[selected].appId);
+    const result = await window.tink.launch(games[selected].id);
+    showMessage(result && result.error ? result.error : '');
   } finally {
     launching = false;
   }
@@ -53,9 +63,9 @@ document.addEventListener('keydown', (event) => {
 
 async function start() {
   const library = await window.tink.getLibrary();
-  games = library.games;
-  if (!library.steamFound) showMessage("Steam isn't installed on this PC.");
-  else if (games.length === 0) showMessage('No Steam games are installed yet.');
+  // Grouped by console, then by title.
+  games = library.games.sort((a, b) => a.consoleName.localeCompare(b.consoleName) || a.title.localeCompare(b.title));
+  if (games.length === 0) showMessage('No games found yet.');
   render();
 }
 

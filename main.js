@@ -1,14 +1,27 @@
 // Tink's main process: the window, and the two things the UI can ask for.
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const fs = require('node:fs');
 const path = require('node:path');
 const steam = require('./src/steam');
+const { CONSOLES, EMULATORS, launchSpec } = require('./src/presets');
+const { getEmulatedGames } = require('./src/library');
+const { detectEmulators, defaultSearchDirs } = require('./src/detect');
+const { loadSettings } = require('./src/settings');
+const { playGame } = require('./src/launcher');
 
 const POLL_MS = 2000;
 // How long to wait for Steam to actually start the game before giving up and showing Tink again.
 // Generous, because a first launch can wait on an update or a Steam login.
 const START_TIMEOUT_MS = 5 * 60 * 1000;
 
+// The portable exe unpacks to a temp folder, so "beside Tink" means beside the exe the user started.
+const TINK_DIR = process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath);
+
 let win = null;
+// The games last sent to the UI. Launches are looked up here, so the UI never passes a path or exe.
+let gamesById = new Map();
+let settings = { consoles: {} };
+let emulators = {};
 
 function createWindow() {
   win = new BrowserWindow({
@@ -32,10 +45,20 @@ function createWindow() {
 }
 
 async function getLibrary() {
+  settings = loadSettings(path.join(app.getPath('userData'), 'settings.json'));
+  emulators = detectEmulators(defaultSearchDirs(process.env, TINK_DIR));
   const steamDir = await steam.findSteamDir();
+  const steamGames = (steamDir ? steam.getSteamGames(steamDir) : []).map((game) => ({
+    ...game,
+    id: `steam:${game.appId}`,
+    console: 'steam',
+    consoleName: 'Steam',
+  }));
+  const games = [...getEmulatedGames(settings), ...steamGames];
+  gamesById = new Map(games.map((game) => [game.id, game]));
   return {
     steamFound: Boolean(steamDir),
-    games: steamDir ? steam.getSteamGames(steamDir) : [],
+    games: games.map(({ id, title, consoleName, art }) => ({ id, title, consoleName, art: art || null })),
   };
 }
 
@@ -62,22 +85,61 @@ async function waitForGameToEnd() {
   }
 }
 
+function showTink() {
+  win.show();
+  win.focus();
+}
+
 // Starts the game through Steam, hides Tink, and shows it again once Steam says the game has ended.
-async function launch(appId) {
+async function launchSteam(appId) {
   if (!/^\d+$/.test(String(appId))) return;
   try {
     await shell.openExternal(`steam://rungameid/${appId}`);
     win.hide();
     await waitForGameToEnd();
   } finally {
-    win.show();
-    win.focus();
+    showTink();
   }
+}
+
+// The exe the user set for this console, else the detected one.
+function emulatorExe(game) {
+  const chosen = settings.consoles[game.console] && settings.consoles[game.console].exe;
+  if (chosen) return chosen;
+  const emulator = CONSOLES[game.console].emulator;
+  return emulator ? emulators[emulator] : null;
+}
+
+// Starts an emulated game. Returns an error message for the UI if it can't.
+async function launchEmulated(game) {
+  const exe = emulatorExe(game);
+  if (!exe || !fs.existsSync(exe)) {
+    const emulator = CONSOLES[game.console].emulator;
+    const name = emulator ? EMULATORS[emulator].label : `The ${game.consoleName} emulator`;
+    return { error: `${name} isn't set up yet.` };
+  }
+  if (!fs.existsSync(game.path)) return { error: "This game file can't be found." };
+  try {
+    await playGame(launchSpec(game.console, exe, game.path), { hide: () => win.hide(), show: showTink });
+  } catch {
+    return { error: "The emulator couldn't be started." };
+  }
+  return {};
+}
+
+async function launch(id) {
+  const game = gamesById.get(id);
+  if (!game) return { error: "This game can't be found." };
+  if (game.console === 'steam') {
+    await launchSteam(game.appId);
+    return {};
+  }
+  return launchEmulated(game);
 }
 
 app.whenReady().then(() => {
   ipcMain.handle('getLibrary', getLibrary);
-  ipcMain.handle('launch', (_event, appId) => launch(appId));
+  ipcMain.handle('launch', (_event, id) => launch(String(id)));
   createWindow();
 });
 

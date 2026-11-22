@@ -41,3 +41,14 @@ h1 {
   object-fit: cover;
   background: var(--surface);
 }
+
+#games .console {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+#games .no-cover {
+  width: var(--cover-width);
+  height: var(--cover-height);
+  background: var(--surface);
+}
