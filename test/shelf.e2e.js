@@ -1,9 +1,10 @@
 // Runs Tink in Electron with a made-up library of about 1,000 Games, drives the Shelf with the keyboard and a
-// simulated pad, measures frame times while scrolling and saves screenshots.
+// simulated pad, measures frame times while scrolling and while a Case flips and opens, and saves screenshots.
 // Usage: node test/shelf.e2e.js [screenshot folder]
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const zlib = require('node:zlib');
 const { _electron: electron } = require('playwright');
 
 const outDir = path.resolve(process.argv[2] || path.join(__dirname, '..', 'out', 'e2e'));
@@ -30,6 +31,58 @@ function makeLibrary(root) {
   fs.writeFileSync(path.join(waiter, 'Waiting Game.js'), 'setTimeout(() => {}, 1500);\n');
   consoles.switch2 = { folder: waiter, exe: process.execPath };
   return { consoles, covers: false };
+}
+
+// A made-up painted Cover as a PNG: a sky, a sun, hills and a band of "lettering", different per seed.
+function fakeCover(seed, width = 400, height = 560) {
+  const pixels = Buffer.alloc((width * 3 + 1) * height);
+  const hue = (seed * 47) % 360;
+  const rgb = (h, s, l) => {
+    const k = (n) => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    return [0, 8, 4].map((n) => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1)))));
+  };
+  for (let y = 0; y < height; y++) {
+    const row = y * (width * 3 + 1);
+    for (let x = 0; x < width; x++) {
+      const hill = height * 0.68 + Math.sin(x / 37 + seed) * 30 + Math.sin(x / 13) * 8;
+      const sun = Math.hypot(x - width * 0.68, y - height * 0.36) < width * 0.16;
+      const letters = y > height * 0.08 && y < height * 0.18 && x > width * 0.1 && x < width * 0.9 && (x >> 4) % 3 !== 2;
+      let colour;
+      if (letters) colour = [245, 245, 240];
+      else if (y > hill) colour = rgb((hue + 140) % 360, 0.45, 0.22 + (y - hill) / height * 0.3);
+      else if (sun) colour = rgb((hue + 40) % 360, 0.9, 0.62);
+      else colour = rgb(hue, 0.6, 0.25 + (y / height) * 0.35);
+      pixels.set(colour, row + 1 + x * 3);
+    }
+  }
+  const chunk = (type, data) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(data.length);
+    head.write(type, 4, 'latin1');
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(zlib.crc32(Buffer.concat([head.subarray(4), data])));
+    return Buffer.concat([head, data, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr.set([8, 2, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', zlib.deflateSync(pixels)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+// Puts a painted Cover in the cache for every GameCube Game, so that Shelf shows real-looking art offline.
+function seedCovers(userData, gamesRoot) {
+  const dir = path.join(userData, 'covers', 'gamecube');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.readdirSync(path.join(gamesRoot, 'gamecube')).forEach((file, i) => {
+    fs.writeFileSync(path.join(dir, file.replace(/\.[^.]+$/, '') + '.png'), fakeCover(i));
+  });
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -78,6 +131,7 @@ async function main() {
   const userData = path.join(root, 'user');
   fs.mkdirSync(userData);
   fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify(makeLibrary(path.join(root, 'games'))));
+  seedCovers(userData, path.join(root, 'games'));
 
   const app = await electron.launch({ args: [path.join(__dirname, '..'), `--user-data-dir=${userData}`] });
   const page = await app.firstWindow();
@@ -89,6 +143,26 @@ async function main() {
     await page.screenshot({ path: path.join(outDir, `${name}.png`) });
   };
   const title = () => page.textContent('#title');
+  const hints = () => page.$$eval('#hints .hint', (els) => els.map((el) => el.textContent).join(' '));
+
+  // Y flips, X opens, then B undoes every step, with a screenshot and the hints at each one.
+  const caseSteps = async (prefix) => {
+    const seen = [`front: ${await hints()}`];
+    await page.keyboard.press('f');
+    await shot(`${prefix}-back`);
+    seen.push(`back: ${await hints()}`);
+    await page.keyboard.press(' ');
+    await sleep(450);
+    await page.screenshot({ path: path.join(outDir, `${prefix}-lid-open.png`) });
+    await shot(`${prefix}-disc-out`);
+    seen.push(`open: ${await hints()}`);
+    for (const step of ['closed', 'flipped', 'front-again']) {
+      await page.keyboard.press('Escape');
+      await shot(`${prefix}-${step}`);
+      seen.push(`${step}: ${await hints()}`);
+    }
+    console.log(`${prefix} hints:`, seen.join(' | '));
+  };
 
   // Up/Down until the named Shelf is current.
   const goTo = async (name) => {
@@ -102,6 +176,35 @@ async function main() {
   const shelfNames = await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent));
   console.log('shelves:', shelfNames.join(', '));
   await shot('shelf-gamecube');
+  await caseSteps('case-art');
+
+  // Open from the front, then move away: the Case should close and the next one stay at rest.
+  await page.keyboard.press(' ');
+  await sleep(1500);
+  const open = await frameTimes(page, async () => {
+    await sleep(1000);
+  });
+  console.log('Disc out and turning, one second:', JSON.stringify(open));
+  await page.keyboard.press('ArrowRight');
+  await shot('case-reset-after-move');
+  console.log('after moving on, hints:', await hints());
+
+  const flipping = await frameTimes(page, async () => {
+    await page.keyboard.press('f');
+    await sleep(700);
+    await page.keyboard.press(' ');
+    await sleep(1500);
+    await page.keyboard.press('Escape');
+    await sleep(800);
+    await page.keyboard.press('Escape');
+    await sleep(800);
+    await page.keyboard.press('Escape');
+    await sleep(800);
+  });
+  console.log('flip, open and back again:', JSON.stringify(flipping));
+  const settled = await frameTimes(page, () => sleep(1000));
+  console.log('settled second after that:', JSON.stringify(settled));
+  await page.screenshot({ path: path.join(outDir, 'sharp-cover.png'), clip: await coverClip(page) });
 
   for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight');
   await shot('shelf-moved');
@@ -126,6 +229,20 @@ async function main() {
   const counts = await page.evaluate(() => performance.memory && Math.round(performance.memory.usedJSHeapSize / 1e6));
   console.log('JS heap MB:', counts, 'title now:', await title());
   await shot('shelf-ps2-far');
+  await caseSteps('case-plain');
+  await page.screenshot({ path: path.join(outDir, 'sharp-plain.png'), clip: await coverClip(page) });
+
+  // Flip and open 40 Cases in a row; the generated Backs and Discs must not pile up.
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press('f');
+    await sleep(60);
+    await page.keyboard.press(' ');
+    await sleep(60);
+    await page.keyboard.press('ArrowRight');
+  }
+  await sleep(1500);
+  const after = await page.evaluate(() => performance.memory && Math.round(performance.memory.usedJSHeapSize / 1e6));
+  console.log('JS heap MB after opening 40 Cases:', after);
 
   for (const name of ['SNES', 'Game Boy Advance', 'NES', 'PS1', 'Switch', 'Steam'].filter((n) => shelfNames.includes(n))) {
     await goTo(name);
@@ -165,6 +282,13 @@ async function main() {
   console.log('errors:', errors.length ? errors : 'none');
   await app.close();
   fs.rmSync(root, { recursive: true, force: true });
+}
+
+// The selected Case's spot on screen, for a close-up of its Cover.
+async function coverClip(page) {
+  const box = await page.$eval('#shelf', (el) => el.getBoundingClientRect().toJSON());
+  const width = box.height * 0.3;
+  return { x: box.x + (box.width - width) / 2, y: box.y + box.height * 0.3, width, height: box.height * 0.4 };
 }
 
 main().catch((error) => {

@@ -1,5 +1,5 @@
-// Turns a Game's Cover (or Plain cover) into a texture sized for its Case, plus the colour for the background tint.
-// Textures are made on demand and only the most recent few are kept.
+// Turns a Game's Cover (or Plain cover) into a texture sized for its Case, plus the colour for the background tint,
+// and composes the Back and the Disc label from it. Textures are made on demand and only the most recent few are kept.
 import * as THREE from '../node_modules/three/build/three.module.js';
 
 const TEXTURE_HEIGHT = 512;
@@ -7,6 +7,15 @@ const KEEP = 64;
 // Covers closer than this to the Case's shape are cropped to fill it; others are fitted whole.
 const CROP_LIMIT = 0.25;
 const TINT_SAMPLES = 16;
+// Only the selected Case ever shows its Back or Disc, so a handful is plenty.
+const KEEP_DETAILS = 4;
+// Back and Disc label are made sharper than Covers, since only one is on screen.
+const DETAIL_SCALE = Math.min(window.devicePixelRatio || 1, 2);
+const BACK_BLUR = 0.04;
+const BACK_MARGIN = 0.08;
+const BACK_DIM = 0.6;
+const HOLE = 0.07;
+const HUB = 0.17;
 
 const tokens = new Map();
 
@@ -110,6 +119,78 @@ function averageColour(canvas) {
   return `rgb(${sum.map((v) => Math.round(v / count)).join(' ')})`;
 }
 
+function makeTexture(canvas, anisotropy) {
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = anisotropy;
+  return texture;
+}
+
+function fontFor(size, weight) {
+  return `${token(weight)} ${Math.round(size)}px Inter`;
+}
+
+// The Back: the Cover blurred and darkened, the Title at the top and the Console name at the bottom.
+async function drawBack(cover, title, consoleName) {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(cover.width * DETAIL_SCALE);
+  canvas.height = Math.round(cover.height * DETAIL_SCALE);
+  const { width, height } = canvas;
+  const ctx = canvas.getContext('2d');
+  const blur = width * BACK_BLUR;
+  ctx.filter = `blur(${blur}px)`;
+  // Drawn past the edges so the blur doesn't fade them.
+  ctx.drawImage(cover, -blur * 2, -blur * 2, width + blur * 4, height + blur * 4);
+  ctx.filter = 'none';
+  ctx.globalAlpha = BACK_DIM;
+  ctx.fillStyle = token('--scrim');
+  ctx.fillRect(0, 0, width, height);
+  ctx.globalAlpha = 1;
+
+  const titleSize = width / 10;
+  const smallSize = titleSize * (parseFloat(token('--text-body')) / parseFloat(token('--text-title')));
+  const titleFont = fontFor(titleSize, '--weight-bold');
+  const smallFont = fontFor(smallSize, '--weight-regular');
+  await Promise.all([document.fonts.load(titleFont), document.fonts.load(smallFont)]);
+  const margin = width * BACK_MARGIN;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.font = titleFont;
+  ctx.fillStyle = token('--text');
+  const lineHeight = titleSize * parseFloat(token('--line-height'));
+  wrap(ctx, title, width - margin * 2).forEach((line, i) => ctx.fillText(line, margin, margin + i * lineHeight));
+  ctx.font = smallFont;
+  ctx.fillStyle = token('--muted');
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(consoleName, margin, height - margin);
+  return canvas;
+}
+
+// The Disc label: the middle of the Cover cropped into a circle, with a hub ring and a hole in the centre.
+function drawLabel(cover) {
+  const canvas = document.createElement('canvas');
+  const size = Math.round(Math.max(cover.width, cover.height) * DETAIL_SCALE);
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const r = size / 2;
+  const circle = (radius) => {
+    ctx.beginPath();
+    ctx.arc(r, r, radius, 0, Math.PI * 2);
+  };
+  circle(r);
+  ctx.clip();
+  const scale = Math.max(size / cover.width, size / cover.height);
+  ctx.drawImage(cover, (size - cover.width * scale) / 2, (size - cover.height * scale) / 2, cover.width * scale, cover.height * scale);
+  circle(r * HUB);
+  ctx.fillStyle = token('--muted');
+  ctx.fill();
+  circle(r * HOLE);
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.fill();
+  return canvas;
+}
+
 async function coverCanvas(game, aspect) {
   const cover = game.art ? null : await window.tink.getCover(game.id);
   try {
@@ -122,42 +203,63 @@ async function coverCanvas(game, aspect) {
   return drawPlain(game.title, colour, aspect);
 }
 
-function createTextures(maxAnisotropy) {
+// A most-recently-used cache of promises for texture sets, disposing what falls out.
+function createCache(keep, make) {
   const entries = new Map();
 
-  async function make(game, aspect) {
-    const canvas = await coverCanvas(game, aspect);
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = Math.min(4, maxAnisotropy);
-    return { texture, tint: averageColour(canvas) };
-  }
-
-  // Drops the oldest textures no live Case is showing.
+  // Drops the oldest entries no live Case is showing.
   function trim(inUse) {
     for (const [id, entry] of entries) {
-      if (entries.size <= KEEP) return;
+      if (entries.size <= keep) return;
       if (inUse.has(id)) continue;
       entries.delete(id);
-      entry.then((made) => made && made.texture.dispose());
+      entry.then((made) => made && made.textures.forEach((texture) => texture.dispose()));
     }
   }
 
-  // Resolves to { texture, tint }, or null if the Cover couldn't be made at all.
-  function get(game, aspect, inUse) {
-    if (entries.has(game.id)) {
-      const entry = entries.get(game.id);
-      entries.delete(game.id);
-      entries.set(game.id, entry);
+  return function get(id, inUse, ...args) {
+    if (entries.has(id)) {
+      const entry = entries.get(id);
+      entries.delete(id);
+      entries.set(id, entry);
       return entry;
     }
-    const entry = make(game, aspect).catch(() => null);
-    entries.set(game.id, entry);
+    const entry = make(...args).catch(() => null);
+    entries.set(id, entry);
     trim(inUse);
     return entry;
+  };
+}
+
+function createTextures(maxAnisotropy) {
+  const anisotropy = Math.min(4, maxAnisotropy);
+
+  const covers = createCache(KEEP, async (game, aspect) => {
+    const canvas = await coverCanvas(game, aspect);
+    const texture = makeTexture(canvas, anisotropy);
+    return { texture, tint: averageColour(canvas), textures: [texture] };
+  });
+
+  const details = createCache(KEEP_DETAILS, async (game, cover, consoleName) => {
+    const back = makeTexture(await drawBack(cover, game.title, consoleName), anisotropy);
+    const label = makeTexture(drawLabel(cover), anisotropy);
+    return { back, label, textures: [back, label] };
+  });
+
+  // Resolves to { texture, tint }, or null if the Cover couldn't be made at all.
+  // inUse: ids of the Games whose textures must not be dropped.
+  function get(game, aspect, inUse) {
+    return covers(game.id, inUse, game, aspect);
   }
 
-  return { get };
+  // Resolves to { back, label } composed from the Game's Cover, or null.
+  async function getDetails(game, aspect, consoleName, inUse) {
+    const made = await get(game, aspect, inUse);
+    if (!made) return null;
+    return details(game.id, inUse, game, made.texture.image, consoleName);
+  }
+
+  return { get, getDetails };
 }
 
 export { createTextures };

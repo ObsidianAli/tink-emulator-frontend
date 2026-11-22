@@ -1,4 +1,5 @@
-// The shelf screen: LB/RB (Up/Down) switch Shelves, Left/Right move along one, A (Enter) plays.
+// The shelf screen: LB/RB (Up/Down) switch Shelves, Left/Right move along one, A (Enter) plays,
+// Y (F) flips the selected Case, X (Space) opens it and B (Esc) undoes either.
 import { createShelf } from './shelf.js';
 
 const nav = document.getElementById('shelves');
@@ -35,13 +36,24 @@ function showTitle() {
   title.textContent = game ? game.title : '';
 }
 
+// The hints for what the selected Case can do next.
+function showHints() {
+  const state = shelf.caseState();
+  const hints = [];
+  if (shelves.length > 1) hints.push({ button: ['lb', 'rb'], label: 'Shelf' });
+  if (state !== 'open') hints.push({ button: 'y', label: 'Flip' }, { button: 'x', label: 'Open' });
+  if (state !== 'front') hints.push({ button: 'b', label: 'Back' });
+  hints.push({ button: 'a', label: 'Play' });
+  setHints(hints);
+}
+
 function openShelf(index, from = 0) {
   positions.set(current, shelf.selected());
   current = index;
-  const item = shelves[current];
-  shelf.show(item.games, item.console, positions.get(current) || 0, from);
+  shelf.show(shelves[current], positions.get(current) || 0, from);
   renderNav();
   showTitle();
+  showHints();
 }
 
 function switchShelf(step) {
@@ -65,13 +77,22 @@ async function play() {
 listenForInput((action) => {
   if (dialogTakesInput(action) || shelves.length === 0) return;
   if (action === 'left' || action === 'right') {
-    if (shelf.select(shelf.selected() + (action === 'right' ? 1 : -1))) showTitle();
+    if (shelf.select(shelf.selected() + (action === 'right' ? 1 : -1))) {
+      showTitle();
+      showHints();
+    }
   } else if (action === 'up' || action === 'lb') {
     switchShelf(-1);
   } else if (action === 'down' || action === 'rb') {
     switchShelf(1);
   } else if (action === 'a') {
     play();
+  } else if (action === 'y') {
+    if (shelf.flip()) showHints();
+  } else if (action === 'x') {
+    if (shelf.open()) showHints();
+  } else if (action === 'b') {
+    if (shelf.back()) showHints();
   }
 });
 
@@ -82,9 +103,6 @@ async function start() {
     showMessage('No games found yet.');
     return;
   }
-  const hints = [{ button: 'a', label: 'Play' }];
-  if (shelves.length > 1) hints.unshift({ button: ['lb', 'rb'], label: 'Shelf' });
-  setHints(hints);
   openShelf(0);
 }
 

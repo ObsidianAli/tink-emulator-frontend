@@ -43,6 +43,12 @@ const SHAPE_OF_CONSOLE = {
 
 const LID_THICKNESS = 0.02;
 const DISC_THICKNESS = 0.012;
+// How far the lid swings open, and where the Disc floats once it's out, relative to the Case.
+const LID_OPEN = -0.8 * Math.PI;
+const DISC_OUT = { z: 0.9, y: 0.3 };
+const DISC_TILT = -0.12;
+// The cap UVs put the label on its side; this stands it upright.
+const LABEL_TURN = Math.PI / 2;
 // Keeps the art planes just off the shell so they never flicker into it.
 const SURFACE_GAP = 0.001;
 
@@ -87,25 +93,29 @@ function createCase(shape, colours) {
   const geometries = geometriesFor(shape);
   const materials = sharedMaterials(colours);
   const group = new THREE.Group();
+  // The shelf turns and slides group; body is what flips, so the two never fight.
+  const body = new THREE.Group();
+  group.add(body);
 
   const tray = new THREE.Mesh(geometries.tray, materials.shell);
   tray.position.set(0, height / 2, -LID_THICKNESS / 2);
-  group.add(tray);
+  body.add(tray);
 
+  const backMaterial = new THREE.MeshBasicMaterial();
   const back = new THREE.Mesh(geometries.face, materials.shell);
   back.rotation.y = Math.PI;
   back.position.set(0, height / 2, -depth / 2 - SURFACE_GAP);
-  group.add(back);
+  body.add(back);
 
   const spine = new THREE.Mesh(geometries.spine, materials.shell);
   spine.rotation.y = -Math.PI / 2;
   spine.position.set(-width / 2 - SURFACE_GAP, height / 2, 0);
-  group.add(spine);
+  body.add(spine);
 
-  // The lid turns around the spine edge: rotate hinge.rotation.y to open it.
+  // The lid turns around the spine edge.
   const hinge = new THREE.Group();
   hinge.position.set(-width / 2, 0, depth / 2 - LID_THICKNESS / 2);
-  group.add(hinge);
+  body.add(hinge);
 
   const lid = new THREE.Mesh(geometries.lid, materials.shell);
   lid.position.set(width / 2, height / 2, 0);
@@ -116,14 +126,21 @@ function createCase(shape, colours) {
   front.position.set(width / 2, height / 2, LID_THICKNESS / 2 + SURFACE_GAP);
   hinge.add(front);
 
+  // The Disc sits in a holder that lifts it out; the Disc itself only spins.
+  const discRest = depth / 2 - LID_THICKNESS - DISC_THICKNESS;
+  const discHolder = new THREE.Group();
+  discHolder.position.set(0, height / 2, discRest);
+  body.add(discHolder);
+  // The label's centre hole is transparent in its texture.
+  const labelMaterial = new THREE.MeshLambertMaterial({ alphaTest: 0.5 });
   let discMesh = null;
   if (disc) {
-    discMesh = new THREE.Mesh(geometries.disc, materials.disc);
+    // Cylinder groups are side, top, bottom.
+    discMesh = new THREE.Mesh(geometries.disc, [materials.disc, materials.disc, materials.disc]);
     discMesh.rotation.x = Math.PI / 2;
-    discMesh.position.set(0, height / 2, depth / 2 - LID_THICKNESS - DISC_THICKNESS);
     // Hidden inside the closed Case, so there's no point drawing it yet.
     discMesh.visible = false;
-    group.add(discMesh);
+    discHolder.add(discMesh);
   }
 
   // Shows a Cover texture on the front, or the blank front while it loads.
@@ -137,7 +154,34 @@ function createCase(shape, colours) {
     front.material = coverMaterial;
   }
 
-  return { group, shape, hinge, lid, front, back, spine, disc: discMesh, setCover };
+  // Shows the generated Back, or plain shell while there is none.
+  function setBack(texture) {
+    backMaterial.map = texture;
+    backMaterial.needsUpdate = true;
+    back.material = texture ? backMaterial : materials.shell;
+  }
+
+  // Shows the Disc label, or a plain Disc while there is none.
+  function setLabel(texture) {
+    if (!discMesh) return;
+    labelMaterial.map = texture;
+    labelMaterial.needsUpdate = true;
+    const face = texture ? labelMaterial : materials.disc;
+    discMesh.material = [materials.disc, face, face];
+  }
+
+  // flip, lid and disc run from 0 (at rest) to 1 (flipped, open, out). spin is the Disc's turn in radians.
+  function setPose({ flip, lid, disc: out, spin }) {
+    body.rotation.y = flip * Math.PI;
+    hinge.rotation.y = lid * LID_OPEN;
+    if (!discMesh) return;
+    discMesh.visible = out > 0;
+    discHolder.position.set(0, height / 2 + out * DISC_OUT.y * height, discRest + out * DISC_OUT.z);
+    discHolder.rotation.x = out * DISC_TILT;
+    discMesh.rotation.y = LABEL_TURN - spin;
+  }
+
+  return { group, shape, hinge, lid, front, back, spine, disc: discMesh, setCover, setBack, setLabel, setPose };
 }
 
 export { SHAPES, shapeFor, createCase };
