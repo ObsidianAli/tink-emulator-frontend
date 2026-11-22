@@ -82,6 +82,25 @@ async function main() {
   assert.ok((await focusedRow()).startsWith('Emulator | Dolphin'), 'focus lands on the GameCube emulator row');
   await shot('3-settings-on-gamecube-emulator');
 
+  // Moving down the list only scrolls as far as needed, never back up, and keeps the focused row fully in view.
+  const view = () => page.evaluate(() => {
+    const list = document.querySelector('#settings .setup-list');
+    const row = document.activeElement.getBoundingClientRect();
+    const box = list.getBoundingClientRect();
+    return { top: list.scrollTop, inside: row.top >= box.top && row.bottom <= box.bottom };
+  });
+  let last = (await view()).top;
+  for (let i = 0; i < 12; i++) {
+    await key('ArrowDown');
+    await sleep(350);
+    const now = await view();
+    assert.ok(now.top >= last && now.inside, `step ${i}: scrollTop ${last} -> ${now.top}, row fully visible: ${now.inside}`);
+    last = now.top;
+  }
+  console.log('scrolled down to', last);
+  for (let i = 0; i < 12; i++) await key('ArrowUp');
+  await sleep(400);
+
   // Pick the emulator with A.
   await pick(dolphin);
   await key('Enter');
