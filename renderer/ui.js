@@ -1,8 +1,10 @@
 // The shelf screen: LB/RB (Up/Down) switch Shelves, Left/Right move along one, A (Enter) plays,
-// Y (F) flips the selected Case, X (Space) opens it and B (Esc) undoes either. Menu (S) opens Settings.
+// Y (F) flips the selected Case, X (Space) opens it and B (Esc) undoes either. L3 (L) favourites the Game, R3 (H) hides
+// it, View (Tab) goes back to the profile picker. Menu (S) opens Settings.
 import { createShelf } from './shelf.js';
 import { runSetup } from './setup.js';
 import { openSettings, settingsOpen } from './settings.js';
+import { chooseProfile } from './profiles.js';
 
 const nav = document.getElementById('shelves');
 const title = document.getElementById('title');
@@ -14,6 +16,8 @@ let current = 0;
 const positions = new Map();
 let launching = false;
 let inSettings = false;
+let inPicker = false;
+let changing = false;
 
 // Anything unexpected is logged in full and the player only sees a plain message, once per kind of failure.
 const reported = new Set();
@@ -60,7 +64,10 @@ function showHints() {
   if (shelves.length > 1) hints.push({ button: ['lb', 'rb'], label: 'Shelf' });
   if (state !== 'open') hints.push({ button: 'y', label: 'Flip' }, { button: 'x', label: 'Open' });
   if (state !== 'front') hints.push({ button: 'b', label: 'Back' });
-  hints.push({ button: 'a', label: 'Play' }, { button: 'menu', label: 'Settings' });
+  const game = shelf.game();
+  hints.push({ button: 'a', label: game && game.all ? 'Browse' : 'Play' });
+  if (game && !game.all) hints.push({ button: 'l3', label: game.fav ? 'Unfavourite' : 'Favourite' }, { button: 'r3', label: 'Hide' });
+  hints.push({ button: 'view', label: 'Profile' }, { button: 'menu', label: 'Settings' });
   setHints(hints);
 }
 
@@ -78,6 +85,31 @@ function switchShelf(step) {
   if (next < 0 || next >= shelves.length) return false;
   openShelf(next, step);
   return true;
+}
+
+// Switches profile from the shelf; B on the picker comes back to the same shelf.
+async function switchProfile() {
+  if (inPicker || launching) return;
+  inPicker = true;
+  try {
+    if (await chooseProfile({ canCancel: true })) await loadLibrary({ fresh: true });
+    else if (shelves.length) showHints();
+  } finally {
+    inPicker = false;
+  }
+}
+
+// Favourites or hides the selected Game, then shows the Shelves again where they were.
+async function changeGame(change) {
+  const game = shelf.game();
+  if (changing || !game || game.all) return;
+  changing = true;
+  try {
+    await change(game.id);
+    await loadLibrary();
+  } finally {
+    changing = false;
+  }
 }
 
 async function play() {
@@ -123,7 +155,11 @@ async function goToSettings(focusConsole) {
 listenForInput((action) => {
   const dialog = dialogTakesInput(action);
   if (dialog) return dialog.sound;
-  if (settingsOpen() || inSettings) return null;
+  if (settingsOpen() || inSettings || inPicker) return null;
+  if (action === 'view') {
+    switchProfile();
+    return 'confirm';
+  }
   if (action === 'menu') {
     goToSettings();
     return 'confirm';
@@ -137,7 +173,18 @@ listenForInput((action) => {
   }
   if (action === 'up' || action === 'lb') return switchShelf(-1) ? 'shelf' : null;
   if (action === 'down' || action === 'rb') return switchShelf(1) ? 'shelf' : null;
+  if (action === 'fav' || action === 'hide') {
+    if (changing || !shelf.game() || shelf.game().all) return null;
+    changeGame(action === 'fav' ? window.tink.toggleFavourite : window.tink.hideGame);
+    return 'toggle';
+  }
   if (action === 'a') {
+    if (shelf.game() && shelf.game().all) {
+      const first = shelves.findIndex((item) => item.console !== 'recent' && item.console !== 'favourites');
+      if (first < 0) return null;
+      openShelf(first, 1);
+      return 'shelf';
+    }
     if (launching || !shelf.game()) return null;
     play();
     return 'launch';
@@ -148,9 +195,11 @@ listenForInput((action) => {
   return { y: 'flip', x: 'open', b: 'back' }[action];
 });
 
-// Reads the library again and shows it, staying on the same Shelf when it's still there.
-async function loadLibrary() {
-  const before = shelves[current] && shelves[current].console;
+// Reads the library again and shows it, staying on the same Shelf and Game when they're still there.
+// fresh starts from the first Shelf instead, for a newly chosen profile.
+async function loadLibrary({ fresh = false } = {}) {
+  const before = !fresh && shelves[current] && shelves[current].console;
+  const selected = shelf.selected();
   const library = await window.tink.getLibrary();
   shelves = library.shelves;
   positions.clear();
@@ -159,12 +208,16 @@ async function loadLibrary() {
     nav.replaceChildren();
     title.textContent = '';
     showMessage('No games found.');
-    setHints([{ button: 'menu', label: 'Settings' }]);
+    setHints([{ button: 'view', label: 'Profile' }, { button: 'menu', label: 'Settings' }]);
     return;
   }
   showMessage('');
-  current = 0;
-  openShelf(Math.max(0, shelves.findIndex((item) => item.console === before)));
+  const found = shelves.findIndex((item) => item.console === before);
+  current = Math.max(0, found);
+  shelf.show(shelves[current], found >= 0 ? selected : 0);
+  renderNav();
+  showTitle();
+  showHints();
 }
 
 const NOTICE_MS = 4000;
@@ -184,7 +237,7 @@ const UPDATE_POLL_MS = 15 * 1000;
 // Offers a downloaded update once per start, and only while the shelf is idle (never during play).
 function offerUpdate() {
   const timer = setInterval(async () => {
-    if (launching || inSettings || settingsOpen() || document.querySelector('.dialog-scrim')) return;
+    if (launching || inSettings || inPicker || settingsOpen() || document.querySelector('.dialog-scrim')) return;
     const version = await window.tink.getUpdate();
     if (!version) return;
     clearInterval(timer);
@@ -196,6 +249,12 @@ function offerUpdate() {
 async function start() {
   const setup = await window.tink.getSetup();
   if (setup.needed) await runSetup(setup);
+  inPicker = true;
+  try {
+    await chooseProfile();
+  } finally {
+    inPicker = false;
+  }
   await loadLibrary();
   showNotice().catch(() => {});
   offerUpdate();

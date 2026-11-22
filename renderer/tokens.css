@@ -41,6 +41,14 @@
   --tint-strength: 28%;
   --tint-reach: 80%;
 
+  /* Profile colours, for the badge behind a name's first letter. */
+  --profile-blue: #2f6fd6;
+  --profile-green: #2f9e5b;
+  --profile-orange: #d9731f;
+  --profile-red: #d2433f;
+  --profile-purple: #8456d6;
+  --profile-teal: #1f9aa6;
+
   /* Type. One font, three sizes, two weights. */
   --font: 'Inter', system-ui, sans-serif;
   --text-title: 40px;
@@ -81,6 +89,8 @@
   --dialog-width: calc(var(--space) * 70);
   --hints-height: calc(var(--space) * 10);
   --button-min-width: calc(var(--space) * 20);
+  --avatar-size: calc(var(--space) * 16);
+  --avatar-small: calc(var(--space) * 9);
 
   /* Layers. */
   --layer-dialog: 10;
