@@ -181,7 +181,7 @@ function createCase(shape, colours) {
     discMesh.rotation.y = LABEL_TURN - spin;
   }
 
-  return { group, shape, hinge, lid, front, back, spine, disc: discMesh, setCover, setBack, setLabel, setPose };
+  return { group, shape, disc: discMesh, setCover, setBack, setLabel, setPose };
 }
 
 export { SHAPES, shapeFor, createCase };

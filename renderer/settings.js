@@ -1,5 +1,7 @@
 // The Settings screen: one list. Up/Down move, A changes the focused row, X is the row's second action
 // (Find automatically, Skip, Clear), B closes. Mouse clicks work too.
+import { element, shortPath } from './dom.js';
+
 const root = document.getElementById('settings');
 let active = null;
 
@@ -10,19 +12,6 @@ listenForInput((action) => {
 });
 
 export const settingsOpen = () => active !== null;
-
-function element(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
-// The last two folders, since the end of a path is the part that tells folders apart.
-function shortPath(folder) {
-  const parts = folder.split(/[\\/]/).filter(Boolean);
-  return parts.length > 2 ? `…\\${parts.slice(-2).join('\\')}` : folder;
-}
 
 // Resolves true when something changed that the Shelf needs to reload for.
 // focusConsole puts the cursor on that Console's emulator row.

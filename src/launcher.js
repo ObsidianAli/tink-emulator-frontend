@@ -57,4 +57,4 @@ async function playGame(spec, { hide, show, whilePlaying }) {
   }
 }
 
-module.exports = { runEmulator, playGame, closeEmulator };
+module.exports = { playGame, closeEmulator };

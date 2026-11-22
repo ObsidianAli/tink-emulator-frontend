@@ -65,3 +65,16 @@ test('holding the combo closes the game and Tink comes back', async () => {
   });
   assert.deepStrictEqual(events, ['hide', 'playing', 'stop polling', 'show']);
 });
+
+test('a pad watcher that dies on its own is reported, one that is stopped is not', async () => {
+  const codes = [];
+  const dies = { exe: process.execPath, args: ['-e', 'process.exit(3)'] };
+  watchCombo(() => {}, { poller: dies, onFail: (code) => codes.push(code) });
+  await sleep(1000);
+  assert.deepStrictEqual(codes, [3]);
+  const stop = watchCombo(() => {}, { poller: { exe: process.execPath, args: [path.join(__dirname, 'stub-pad.js')] }, onFail: (code) => codes.push(code) });
+  await sleep(300);
+  stop();
+  await sleep(300);
+  assert.deepStrictEqual(codes, [3]);
+});
