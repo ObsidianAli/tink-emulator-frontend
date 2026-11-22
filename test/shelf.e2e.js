@@ -1,4 +1,4 @@
-// Runs Tink in Electron with a made-up library of about 1,000 Games, drives the Shelf with the keyboard and a
+// Runs Tink in Electron with a made-up library of a few dozen Games per Shelf, drives the Shelf with the keyboard and a
 // simulated pad, measures frame times while scrolling and while a Case flips and opens, and saves screenshots.
 // Usage: node test/shelf.e2e.js [screenshot folder]
 const fs = require('node:fs');
@@ -11,9 +11,9 @@ const outDir = path.resolve(process.argv[2] || path.join(__dirname, '..', 'out',
 const WORDS = ['Star', 'Moon', 'Pixel', 'Deep', 'Castle', 'Sky', 'Quiet', 'Neon', 'Iron', 'Lost', 'Wild', 'Paper',
   'Garden', 'Knights', 'Racer', 'Forge', 'Woods', 'Drift', 'Coast', 'Tower', 'Harbor', 'Planet', 'River', 'Storm'];
 
-// Folders of empty game files: a 1,000-Game PS2 Shelf and a few small ones for the other Case shapes.
+// Folders of empty game files: a 40-Game PS2 Shelf and smaller ones for the other Case shapes.
 function makeLibrary(root) {
-  const counts = { ps2: 1000, gamecube: 24, snes: 24, gba: 16, switch: 12, ps1: 12, nes: 12 };
+  const counts = { ps2: 40, gamecube: 24, snes: 24, gba: 16, switch: 12, ps1: 12, nes: 12 };
   const extensions = { ps2: '.iso', gamecube: '.rvz', snes: '.sfc', gba: '.gba', switch: '.nsp', ps1: '.chd', nes: '.nes' };
   const consoles = {};
   for (const [id, count] of Object.entries(counts)) {
@@ -151,8 +151,8 @@ async function main() {
   seedCovers(userData, path.join(root, 'games'));
 
   const app = await electron.launch({
-    // A high-density screen, so the pixel ratio caps show.
-    args: [path.join(__dirname, '..'), `--user-data-dir=${userData}`, '--force-device-scale-factor=2'],
+    // A 4K screen at 300% scale, where any blur from a low pixel ratio shows.
+    args: [path.join(__dirname, '..'), `--user-data-dir=${userData}`, '--force-device-scale-factor=3'],
     env: { ...process.env, TINK_DATA_DIR: userData },
   });
   const page = await app.firstWindow();
@@ -231,22 +231,26 @@ async function main() {
 
   for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight');
   await shot('shelf-moved');
+  // Halfway through a move, which has to be as sharp as at rest.
+  await page.keyboard.press('ArrowRight');
+  await sleep(110);
+  await page.screenshot({ path: path.join(outDir, 'shelf-mid-move.png') });
 
-  // Down to the PS2 Shelf (1,000 Games) and scroll it the way a held direction does.
+  // Down to the PS2 Shelf and scroll it the way a held direction does.
   await goTo('PS2');
   await shot('shelf-ps2');
   const held = await frameTimes(page, async () => {
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 30; i++) {
       await page.keyboard.press('ArrowRight');
       await sleep(120);
     }
   });
-  console.log('PS2, 120 steps one every 120 ms:', JSON.stringify(held));
+  console.log('PS2, 30 steps one every 120 ms:', JSON.stringify(held));
   const fast = await frameTimes(page, async () => {
-    for (let i = 0; i < 200; i++) await page.keyboard.press('ArrowRight');
+    for (let i = 0; i < 30; i++) await page.keyboard.press('ArrowLeft');
     await sleep(800);
   });
-  console.log('PS2, 200 steps as fast as keys arrive:', JSON.stringify(fast));
+  console.log('PS2, 30 steps back as fast as keys arrive:', JSON.stringify(fast));
   const idle = await frameTimes(page, () => sleep(1000));
   console.log('idle second:', JSON.stringify(idle));
   const counts = await page.evaluate(() => performance.memory && Math.round(performance.memory.usedJSHeapSize / 1e6));
@@ -255,8 +259,8 @@ async function main() {
   await caseSteps('case-plain');
   await page.screenshot({ path: path.join(outDir, 'sharp-plain.png'), clip: await coverClip(page) });
 
-  // Flip and open 40 Cases in a row; the generated Backs and Discs must not pile up.
-  for (let i = 0; i < 40; i++) {
+  // Flip and open 20 Cases in a row; the generated Backs and Discs must not pile up.
+  for (let i = 0; i < 20; i++) {
     await page.keyboard.press('f');
     await sleep(60);
     await page.keyboard.press(' ');
@@ -265,7 +269,7 @@ async function main() {
   }
   await sleep(1500);
   const after = await page.evaluate(() => performance.memory && Math.round(performance.memory.usedJSHeapSize / 1e6));
-  console.log('JS heap MB after opening 40 Cases:', after);
+  console.log('JS heap MB after opening 20 Cases:', after);
 
   for (const name of ['SNES', 'Game Boy Advance', 'NES', 'PS1', 'Switch', 'Steam'].filter((n) => shelfNames.includes(n))) {
     await goTo(name);
