@@ -32,7 +32,7 @@ function createWindow() {
     width: 1280,
     height: 720,
     fullscreen: true,
-    backgroundColor: '#101114',
+    backgroundColor: '#0f1115',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -119,8 +119,8 @@ function showTink() {
 // A small note over the game for a few seconds. It can't take focus or clicks, so the game keeps them.
 function showHint() {
   const { workArea } = screen.getPrimaryDisplay();
-  const width = 560;
-  const height = 72;
+  const width = 720;
+  const height = 96;
   const hint = new BrowserWindow({
     width,
     height,
