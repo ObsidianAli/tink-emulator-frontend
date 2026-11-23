@@ -32,4 +32,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/Tink.zip dist/Tink.exe --title "Tink ${GITHUB_REF_NAME#v}" --notes "First version of Tink."
+          gh release create "$GITHUB_REF_NAME" dist/Tink.zip dist/Tink.exe --title "Tink ${GITHUB_REF_NAME#v}" --notes-from-tag
