@@ -5,6 +5,11 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: Release notes
+        required: true
 
 jobs:
   windows:
@@ -33,3 +38,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/Tink.zip dist/Tink.exe --title "Tink ${GITHUB_REF_NAME#v}" --notes-from-tag
+      - name: Release from main
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          gh release create "v$version" dist/Tink.zip dist/Tink.exe --target "$GITHUB_SHA" --title "Tink $version" --notes "$NOTES"
