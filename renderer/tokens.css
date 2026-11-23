@@ -96,6 +96,7 @@
   --menu-offset: 22vh;
   --info-cover-height: 44vh;
   --info-shot-height: 22vh;
+  --tray-size: calc(var(--space) * 8);
 
   /* Layers. */
   --layer-dialog: 10;

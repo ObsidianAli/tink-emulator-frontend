@@ -1,17 +1,20 @@
-// The shelf screen: LB/RB (Up/Down) switch Shelves, Left/Right move along one, A (Enter) plays,
+// The shelf screen: LB/RB (Page Up/Down) switch Shelves, Left/Right move along one, A (Enter) plays,
 // Y (F) flips the selected Case, X (Space) opens it and B (Esc) undoes either. L3 (L) favourites the Game, R3 (H) hides
 // it, View (Tab) goes back to the profile picker. Menu (S) opens the Game's panel: Favourite, Hide and Game info.
-// Comma opens Settings; with no games on the Shelf, Menu does too.
+// Down moves into the row of icons under the title (profile, Controllers, Settings, Power), Left/Right move along it,
+// A opens one and Up or B goes back to the shelf. Comma opens Settings; with no games on the Shelf, Menu does too.
 import { createShelf } from './shelf.js';
 import { runSetup } from './setup.js';
 import { openSettings, settingsOpen } from './settings.js';
 import { openCaseMenu, caseMenuOpen } from './casemenu.js';
 import { openInfo, infoOpen } from './info.js';
-import { chooseProfile } from './profiles.js';
+import { chooseProfile, badge } from './profiles.js';
+import { openPanel, updatePanel, panelOpen } from './panel.js';
 
 const nav = document.getElementById('shelves');
 const title = document.getElementById('title');
 const message = document.getElementById('message');
+const tray = document.getElementById('tray');
 
 let shelves = [];
 let current = 0;
@@ -20,6 +23,9 @@ const positions = new Map();
 let launching = false;
 let inSettings = false;
 let inPicker = false;
+let inPanel = false;
+// False until the library has loaded once, so keys meant for setup don't move into the icon row.
+let ready = false;
 let changing = false;
 let inMenu = false;
 
@@ -61,18 +67,118 @@ function showTitle() {
   title.textContent = game ? game.title : '';
 }
 
-// The hints for what the selected Case can do next.
+// The shelf has no button hints; this just puts focus back on the icon row when it was in there.
 function showHints() {
-  const state = shelf.caseState();
-  const hints = [];
-  if (shelves.length > 1) hints.push({ button: ['lb', 'rb'], label: 'Shelf' });
-  if (state !== 'open') hints.push({ button: 'y', label: 'Flip' }, { button: 'x', label: 'Open' });
-  if (state !== 'front') hints.push({ button: 'b', label: 'Back' });
-  const game = shelf.game();
-  hints.push({ button: 'a', label: game && game.all ? 'Browse' : 'Play' });
-  if (game && !game.all) hints.push({ button: 'l3', label: game.fav ? 'Unfavourite' : 'Favourite' }, { button: 'r3', label: 'Hide' });
-  hints.push({ button: 'view', label: 'Profile' }, { button: 'menu', label: game && !game.all ? 'Options' : 'Settings' });
-  setHints(hints);
+  setHints([]);
+  focusTray();
+}
+
+// The row of icons under the title. To add one, add an entry here: a name, how to draw it, and what A does.
+const trayIcons = [
+  { name: 'Profile', draw: (profile) => badge(profile), activate: () => switchProfile() },
+  { name: 'Controllers', draw: () => controller(), activate: () => showControllers() },
+  { name: 'Settings', draw: () => gear(), activate: () => goToSettings() },
+  { name: 'Power', draw: () => power(), activate: () => showPower() },
+];
+let trayFocus = -1;
+
+// A simple outline icon from its shapes, [tag, attributes] each.
+function icon(...shapes) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  const attributes = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
+  for (const [name, value] of Object.entries(attributes)) svg.setAttribute(name, value);
+  for (const [tag, shape] of shapes) {
+    const node = document.createElementNS(ns, tag);
+    for (const [name, value] of Object.entries(shape)) node.setAttribute(name, value);
+    svg.append(node);
+  }
+  return svg;
+}
+
+const controller = () => icon(
+  ['path', { d: 'M6.5 5h11a4.5 4.5 0 0 1 4.4 3.7l.9 6.3a3.2 3.2 0 0 1-5.6 2.6L15.4 15.5H8.6l-1.8 2.1a3.2 3.2 0 0 1-5.6-2.6l.9-6.3A4.5 4.5 0 0 1 6.5 5z' }],
+  ['path', { d: 'M7.5 8.5v4M5.5 10.5h4' }],
+  ['circle', { cx: 15.5, cy: 9.5, r: 1.1, fill: 'currentColor', stroke: 'none' }],
+  ['circle', { cx: 17.5, cy: 11.8, r: 1.1, fill: 'currentColor', stroke: 'none' }],
+);
+
+const gear = () => icon(
+  ['circle', { cx: 12, cy: 12, r: 3 }],
+  ['path', { d: 'M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z' }],
+);
+
+const power = () => icon(
+  ['path', { d: 'M12 3v8' }],
+  ['path', { d: 'M6.3 6.8a8 8 0 1 0 11.4 0' }],
+);
+
+// Connected controllers by name, without the vendor and product numbers the browser adds in brackets.
+function controllerRows() {
+  return [...navigator.getGamepads()].filter(Boolean).map((pad) => ({ label: pad.id.replace(/\s*\(.*\)\s*$/, '') || 'Controller' }));
+}
+
+// Opens a panel from the icon row. B comes back to the icon.
+async function showPanel(options) {
+  if (inPanel) return;
+  inPanel = true;
+  try {
+    await openPanel(options);
+  } finally {
+    inPanel = false;
+    showHints();
+  }
+}
+
+async function showControllers() {
+  const refresh = () => updatePanel(controllerRows());
+  window.addEventListener('gamepadconnected', refresh);
+  window.addEventListener('gamepaddisconnected', refresh);
+  try {
+    await showPanel({ title: 'Controllers', rows: controllerRows(), empty: 'No controllers' });
+  } finally {
+    window.removeEventListener('gamepadconnected', refresh);
+    window.removeEventListener('gamepaddisconnected', refresh);
+  }
+}
+
+function showPower() {
+  return showPanel({
+    title: 'Power',
+    rows: [
+      { label: 'Sleep', run: () => window.tink.power('sleep') },
+      {
+        label: 'Shut down',
+        run: async () => {
+          if (await showDialog({ message: 'Shut down this PC?', confirm: 'Shut down', cancel: 'Not now', sound: 'confirm' })) window.tink.power('shutdown');
+        },
+      },
+      { label: 'Close Tink', run: () => window.tink.power('close') },
+    ],
+  });
+}
+
+// Draws the icons again, for the profile that is current now.
+async function renderTray() {
+  const { profiles, last } = await window.tink.getProfiles();
+  const profile = profiles.find((p) => p.id === last) || profiles[0];
+  tray.replaceChildren(...trayIcons.map((icon) => {
+    const node = document.createElement('button');
+    node.className = 'tray-icon';
+    node.setAttribute('aria-label', icon.name);
+    node.append(icon.draw(profile));
+    return node;
+  }));
+  focusTray();
+}
+
+function focusTray() {
+  if (trayFocus >= 0 && tray.children[trayFocus]) tray.children[trayFocus].focus({ preventScroll: true });
+}
+
+function leaveTray() {
+  trayFocus = -1;
+  if (document.activeElement) document.activeElement.blur();
 }
 
 function openShelf(index, from = 0) {
@@ -97,7 +203,7 @@ async function switchProfile() {
   inPicker = true;
   try {
     if (await chooseProfile({ canCancel: true })) await loadLibrary({ fresh: true });
-    else if (shelves.length) showHints();
+    else showHints();
   } finally {
     inPicker = false;
   }
@@ -175,7 +281,7 @@ async function goToSettings(focusConsole) {
 listenForInput((action) => {
   const dialog = dialogTakesInput(action);
   if (dialog) return dialog.sound;
-  if (settingsOpen() || inSettings || inPicker || inMenu || caseMenuOpen() || infoOpen()) return null;
+  if (settingsOpen() || inSettings || inPicker || inMenu || caseMenuOpen() || infoOpen() || panelOpen() || inPanel) return null;
   if (action === 'view') {
     switchProfile();
     return 'confirm';
@@ -184,10 +290,34 @@ listenForInput((action) => {
     goToSettings();
     return 'confirm';
   }
-  if (action === 'menu') {
+  if (action === 'menu' && trayFocus < 0) {
     if (changing || launching) return null;
     openGameMenu();
     return 'confirm';
+  }
+  if (!ready) return null;
+  if (trayFocus >= 0) {
+    if (action === 'left' || action === 'right') {
+      const next = trayFocus + (action === 'right' ? 1 : -1);
+      if (next < 0 || next >= trayIcons.length) return null;
+      trayFocus = next;
+      focusTray();
+      return 'move';
+    }
+    if (action === 'up' || action === 'b') {
+      leaveTray();
+      return 'move';
+    }
+    if (action === 'a') {
+      trayIcons[trayFocus].activate();
+      return 'confirm';
+    }
+    return null;
+  }
+  if (action === 'down' && (!shelves.length || shelf.caseState() === 'front')) {
+    trayFocus = 0;
+    focusTray();
+    return 'move';
   }
   if (shelves.length === 0) return null;
   if (action === 'left' || action === 'right') {
@@ -196,8 +326,8 @@ listenForInput((action) => {
     showHints();
     return 'move';
   }
-  if (action === 'up' || action === 'lb') return switchShelf(-1) ? 'shelf' : null;
-  if (action === 'down' || action === 'rb') return switchShelf(1) ? 'shelf' : null;
+  if (action === 'lb') return switchShelf(-1) ? 'shelf' : null;
+  if (action === 'rb') return switchShelf(1) ? 'shelf' : null;
   if (action === 'fav' || action === 'hide') {
     if (changing || !shelf.game() || shelf.game().all) return null;
     changeGame(action === 'fav' ? window.tink.toggleFavourite : window.tink.hideGame);
@@ -226,6 +356,8 @@ async function loadLibrary({ fresh = false } = {}) {
   const before = !fresh && shelves[current] && shelves[current].console;
   const selected = shelf.selected();
   const library = await window.tink.getLibrary();
+  renderTray().catch(report);
+  ready = true;
   shelves = library.shelves;
   positions.clear();
   if (shelves.length === 0) {
@@ -233,7 +365,7 @@ async function loadLibrary({ fresh = false } = {}) {
     nav.replaceChildren();
     title.textContent = '';
     showMessage('No games found.');
-    setHints([{ button: 'view', label: 'Profile' }, { button: 'menu', label: 'Settings' }]);
+    showHints();
     return;
   }
   showMessage('');
@@ -262,7 +394,7 @@ const UPDATE_POLL_MS = 15 * 1000;
 // Offers a downloaded update once per start, and only while the shelf is idle (never during play).
 function offerUpdate() {
   const timer = setInterval(async () => {
-    if (launching || inSettings || inPicker || settingsOpen() || document.querySelector('.dialog-scrim')) return;
+    if (launching || inSettings || inPicker || inPanel || settingsOpen() || document.querySelector('.dialog-scrim')) return;
     const version = await window.tink.getUpdate();
     if (!version) return;
     clearInterval(timer);

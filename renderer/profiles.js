@@ -21,7 +21,7 @@ export const profilesOpen = () => active !== null;
 const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
 // A round badge: the picture when there is one, else the first letter on the profile's colour.
-function badge(profile, small = false) {
+export function badge(profile, small = false) {
   const node = element('div', small ? 'badge small' : 'badge');
   node.style.background = `var(--profile-${profile.colour})`;
   if (profile.avatar) {

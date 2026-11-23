@@ -50,7 +50,7 @@ main {
   position: absolute;
   left: var(--space-8);
   right: var(--space-8);
-  bottom: var(--space-6);
+  bottom: calc(var(--space-4) + var(--tray-size) + var(--space-2));
   margin: 0;
   overflow: hidden;
   font-size: var(--text-title);
@@ -58,6 +58,51 @@ main {
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The row of icons under the title */
+
+#tray {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--space-4);
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.tray-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: var(--tray-size);
+  height: var(--tray-size);
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-round);
+  background: var(--surface-raised);
+  color: var(--text);
+  outline: var(--focus-width) solid transparent;
+  outline-offset: var(--focus-offset);
+  transition: outline-color var(--duration-fast) var(--ease-out);
+}
+
+.tray-icon:focus {
+  outline: var(--focus-ring);
+}
+
+.tray-icon .badge {
+  width: 100%;
+  height: 100%;
+  font-size: var(--text-body);
+}
+
+.tray-icon svg {
+  width: 60%;
+  height: 60%;
 }
 
 #message {
@@ -84,6 +129,10 @@ main {
 }
 
 /* Button hints along the bottom edge */
+
+#hints:empty {
+  display: none;
+}
 
 #hints {
   position: relative;
@@ -185,6 +234,7 @@ main {
 
 #setup,
 #settings,
+#panel,
 #profiles {
   position: absolute;
   inset: 0;
@@ -198,18 +248,21 @@ main {
 
 #setup[hidden],
 #settings[hidden],
+#panel[hidden],
 #profiles[hidden] {
   display: none;
 }
 
-#settings {
+#settings,
+#panel {
   gap: var(--space);
   padding-top: var(--space-2);
   padding-bottom: 0;
 }
 
 #setup h1,
-#settings h1 {
+#settings h1,
+#panel h1 {
   margin: 0;
   font-size: var(--text-title);
   font-weight: var(--weight-bold);

@@ -67,7 +67,7 @@ async function main() {
 
   await page.waitForSelector('#shelves .current');
   await sleep(600);
-  assert.ok((await hints()).includes('MENUOptions'), 'the shelf shows an Options hint');
+  assert.strictEqual(await hints(), '', 'the shelf shows no hints');
   await shot('1-shelf-with-settings-hint');
 
   // Play with no emulator: the friendly message, then straight into Settings on that Console.
@@ -185,7 +185,7 @@ async function main() {
   // The GameCube Shelf is gone after the rescan (a real Steam Shelf may remain on a PC that has Steam).
   const names = await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent));
   assert.ok(!names.includes('GameCube'), 'the rescan drops the empty Shelf');
-  assert.ok((await hints()).includes('MENUSettings'));
+  assert.strictEqual(await hints(), '');
 
   // Settings still opens with no games, and S/Menu on a pad do the same.
   await page.evaluate(() => {

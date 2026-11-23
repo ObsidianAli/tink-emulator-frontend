@@ -30,5 +30,6 @@ contextBridge.exposeInMainWorld('tink', {
   checkForUpdates: () => ipcRenderer.invoke('checkForUpdates'),
   applyUpdate: () => ipcRenderer.invoke('applyUpdate'),
   getNotice: () => ipcRenderer.invoke('getNotice'),
+  power: (action) => ipcRenderer.invoke('power', action),
   launch: (id) => ipcRenderer.invoke('launch', id),
 });

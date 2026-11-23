@@ -16,6 +16,7 @@ const { playGame, closeEmulator } = require('./src/launcher');
 const { watchCombo, loadPadReader } = require('./src/pad');
 const { createCovers } = require('./src/covers');
 const { createGameInfo } = require('./src/gameinfo');
+const { powerAction } = require('./src/power');
 const { createUpdater, FINISH_FLAG } = require('./src/update');
 
 const POLL_MS = 2000;
@@ -555,6 +556,7 @@ app.whenReady().then(async () => {
   handle('getCover', (id) => getCover(String(id)));
   handle('getGameInfo', (id) => getGameInfo(String(id)));
   handle('launch', (id) => launch(String(id)));
+  handle('power', (action) => (action === 'close' ? app.quit() : powerAction(String(action))));
   ipcMain.handle('logError', (_event, text) => log('Screen error', String(text).slice(0, 2000)));
   createWindow();
 });

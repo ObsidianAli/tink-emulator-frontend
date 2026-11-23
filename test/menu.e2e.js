@@ -94,9 +94,9 @@ async function main() {
 
   await page.waitForSelector('#shelves .current');
   await sleep(600);
-  assert.ok((await hints()).includes('MENUOptions'));
+  assert.strictEqual(await hints(), '', 'no hints on the shelf');
 
-  // Menu opens the panel, not Settings; B closes it and the hints come back.
+  // Menu opens the panel, not Settings; B closes it.
   await key('s');
   assert.ok(await visible('#case-menu'), 'Menu opens the panel');
   assert.ok(!(await visible('#settings')), 'Menu no longer opens Settings');
@@ -105,7 +105,7 @@ async function main() {
   await shot('1-panel');
   await key('Escape');
   assert.ok(!(await visible('#case-menu')), 'B closes the panel');
-  assert.ok((await hints()).includes('MENUOptions'));
+  assert.strictEqual(await hints(), '', 'no hints on the shelf');
   assert.strictEqual(await title(), 'Luigis Mansion');
 
   // Favourite from the panel, then Unfavourite.
@@ -165,7 +165,7 @@ async function main() {
   await sleep(700);
   const names = await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent));
   assert.ok(names.includes('Steam'), `a Steam shelf: ${names}`);
-  while ((await page.textContent('#shelves .current')) !== 'Steam') await key('ArrowDown');
+  while ((await page.textContent('#shelves .current')) !== 'Steam') await key('PageDown');
   while ((await title()) !== 'Portal 2') await key('ArrowRight');
   await key('s');
   await key('ArrowDown');
