@@ -105,6 +105,7 @@ export async function openSettings({ focusConsole } = {}) {
         link('shelves', 'Shelves', `${shown} of ${state.shelves.length} shown`),
         {
           label: 'Re-download covers',
+          group: true,
           hint: 'Download',
           status: done.has('covers') ? 'Done' : '',
           activate: async () => {
@@ -130,6 +131,7 @@ export async function openSettings({ focusConsole } = {}) {
         },
         {
           label: 'Start in fullscreen',
+          group: true,
           status: state.fullscreen ? 'On' : 'Off',
           hint: 'Switch',
           sound: 'toggle',
@@ -152,7 +154,7 @@ export async function openSettings({ focusConsole } = {}) {
           sound: 'toggle',
           activate: () => (state.hiddenGames ? change(window.tink.showHiddenGames()) : undefined),
         },
-        { label: `Version ${state.version}`, plain: true },
+        { label: `Version ${state.version}`, plain: true, group: true },
         { id: 'update', label: 'Check for updates', status: update, hint: 'Check', activate: checkUpdates },
       ];
     };
@@ -191,10 +193,10 @@ export async function openSettings({ focusConsole } = {}) {
       const focusable = [];
       for (const row of rows) {
         if (row.plain) {
-          list.append(element('p', 'setup-note', row.label));
+          list.append(element('p', row.group ? 'setup-note group-start' : 'setup-note', row.label));
           continue;
         }
-        const node = element(row.key ? 'div' : 'button', 'setup-row');
+        const node = element(row.key ? 'div' : 'button', row.group ? 'setup-row group-start' : 'setup-row');
         if (row.key) node.tabIndex = 0;
         else node.type = 'button';
         const name = element('span', 'setup-name', row.label);
