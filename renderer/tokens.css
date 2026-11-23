@@ -83,6 +83,7 @@
   --duration-ui: 250ms;
   --duration-case: 500ms;
   --duration-case-slow: 600ms;
+  --zoom-screen: 1.04;
 
   /* Sizes of recurring things. */
   --glyph-size: var(--space-4);

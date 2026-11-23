@@ -1,5 +1,6 @@
 // The profile picker: a row of badges, A picks, X edits, "Add" makes a new one. The edit view is one short list
 // (Name, Colour, Picture, Remove); a picture is chosen from a grid of the files in data/avatars.
+// A new profile goes step by step: a picture, then a name, then back to the picker.
 import { element, focusRow } from './dom.js';
 
 const root = document.getElementById('profiles');
@@ -7,6 +8,7 @@ const COLOURS = ['blue', 'green', 'orange', 'red', 'purple', 'teal'];
 const GRID_COLUMNS = 6;
 const PROFILES_MAX = 8;
 let active = null;
+let hideTimer = null;
 
 // Registered before the shelf's handler, so the press that picks a profile isn't also taken by the shelf.
 listenForInput((action) => {
@@ -48,6 +50,7 @@ export async function chooseProfile({ canCancel = false } = {}) {
     let nodes = [];
     let rows = [];
     let typing = false;
+    let creating = false;
 
     const refresh = async () => { data = await window.tink.getProfiles(); };
     const current = () => data.profiles.find((p) => p.id === editing);
@@ -70,7 +73,14 @@ export async function chooseProfile({ canCancel = false } = {}) {
     }
 
     function finish(value) {
-      root.hidden = true;
+      // Fades out over the shelf; the answer is given now, so nothing waits for the fade.
+      root.classList.remove('entering');
+      root.classList.add('leaving');
+      const fade = parseFloat(getComputedStyle(root).getPropertyValue('--duration-ui'));
+      hideTimer = setTimeout(() => {
+        root.hidden = true;
+        root.classList.remove('leaving');
+      }, fade);
       // Still counts as open until every handler has seen this press.
       setTimeout(() => { active = null; }, 0);
       resolve(value);
@@ -167,15 +177,38 @@ export async function chooseProfile({ canCancel = false } = {}) {
       grid.append(...nodes);
       list.append(grid);
       root.replaceChildren(element('div', 'profile-edit'));
+      if (creating) root.firstChild.append(element('p', 'profile-step', 'Choose a picture'));
       root.firstChild.append(list);
+    }
+
+    function renderName() {
+      const profile = current();
+      const input = element('input', 'settings-key profile-name');
+      input.type = 'text';
+      input.maxLength = 16;
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      input.value = profile.name;
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') finishNew(input);
+        else if (event.key === 'Escape') backFromName();
+      });
+      nodes = [input];
+      root.replaceChildren(element('div', 'profile-edit'));
+      root.firstChild.append(badge(profile), element('p', 'profile-step', 'Name'), input);
     }
 
     function render() {
       if (screen === 'pick') renderPick();
       else if (screen === 'edit') renderEdit();
+      else if (screen === 'name') renderName();
       else renderAvatars();
       focus = Math.min(focus, nodes.length - 1);
       focusRow(nodes[focus], false);
+      if (screen === 'name') {
+        nodes[0].focus();
+        nodes[0].select();
+      }
       showHints();
     }
 
@@ -188,6 +221,7 @@ export async function chooseProfile({ canCancel = false } = {}) {
         if (canCancel) hints.push({ button: 'b', label: 'Back' });
         return setHints(hints);
       }
+      if (screen === 'name') return setHints([{ button: 'a', label: 'Done' }, { button: 'b', label: 'Back' }]);
       if (screen === 'edit') return setHints([{ button: 'a', label: rows[focus].hint }, { button: 'b', label: 'Done' }]);
       setHints([{ button: 'a', label: 'Pick' }, { button: 'b', label: 'Back' }]);
     }
@@ -236,7 +270,44 @@ export async function chooseProfile({ canCancel = false } = {}) {
         editing = await window.tink.addProfile();
         await refresh();
       });
-      if (editing) show('edit', 0);
+      if (!editing) return;
+      creating = true;
+      await busy(async () => { avatars = await window.tink.getAvatars(); });
+      if (avatars.length) show('avatars', 0);
+      else show('name');
+    }
+
+    async function setPicture(picked) {
+      await busy(async () => {
+        await window.tink.saveProfile({ id: editing, avatar: picked });
+        await refresh();
+      });
+    }
+
+    async function finishNew(input) {
+      const name = input.value.trim();
+      if (name) await busy(async () => {
+        await window.tink.saveProfile({ id: editing, name });
+        await refresh();
+      });
+      creating = false;
+      show('pick', data.profiles.findIndex((p) => p.id === editing));
+    }
+
+    function backFromName() {
+      if (avatars.length) show('avatars', Math.max(0, avatars.findIndex((a) => a.src === current().avatar) + 1));
+      else cancelNew();
+    }
+
+    // Backing out of the first step drops the profile that was started.
+    async function cancelNew() {
+      await busy(async () => {
+        await window.tink.removeProfile(editing);
+        await refresh();
+      });
+      creating = false;
+      editing = null;
+      show('pick', data.profiles.length);
     }
 
     function move(action, columns) {
@@ -294,20 +365,34 @@ export async function chooseProfile({ canCancel = false } = {}) {
           }
           return null;
         }
+        if (screen === 'name') {
+          if (action === 'a') finishNew(nodes[0]);
+          else if (action === 'b') backFromName();
+          else return null;
+          return action === 'a' ? 'confirm' : 'back';
+        }
         if (action === 'a') {
           const picked = focus === 0 ? null : avatars[focus - 1].file;
+          if (creating) {
+            setPicture(picked).then(() => show('name'));
+            return 'confirm';
+          }
           screen = 'edit';
           focus = 2;
           save({ avatar: picked });
           return 'confirm';
         }
         if (action === 'b') {
-          show('edit', 2);
+          if (creating) cancelNew();
+          else show('edit', 2);
           return 'back';
         }
         return move(action, GRID_COLUMNS);
       },
     };
+    clearTimeout(hideTimer);
+    root.classList.remove('leaving');
+    root.classList.add('entering');
     root.hidden = false;
     render();
   });

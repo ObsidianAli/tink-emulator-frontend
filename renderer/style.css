@@ -204,7 +204,7 @@ main {
 
 #settings {
   gap: var(--space);
-  padding-top: var(--space-3);
+  padding-top: var(--space-2);
   padding-bottom: 0;
 }
 
@@ -318,8 +318,12 @@ main {
   outline-offset: var(--focus-offset);
 }
 
+.setup-row.group-start {
+  margin-top: var(--space-2);
+}
+
 .setup-note {
-  margin: var(--space) 0 var(--space);
+  margin: var(--space) 0 0;
   color: var(--muted);
   font-size: var(--text-small);
 }
@@ -414,4 +418,46 @@ main {
   grid-template-columns: repeat(6, var(--avatar-small));
   justify-content: center;
   gap: var(--space-3);
+}
+
+#settings .settings-key {
+  padding-block: calc(var(--space) / 2);
+}
+
+#settings .setup-note.group-start {
+  margin-top: var(--space-2);
+}
+
+/* The picker fades and zooms in and out over the shelf. */
+
+#profiles.entering {
+  animation: screen-in var(--duration-ui) var(--ease-out) both;
+}
+
+#profiles.leaving {
+  animation: screen-out var(--duration-ui) var(--ease-out) both;
+  pointer-events: none;
+}
+
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: scale(var(--zoom-screen));
+  }
+}
+
+@keyframes screen-out {
+  to {
+    opacity: 0;
+    transform: scale(var(--zoom-screen));
+  }
+}
+
+.profile-step {
+  margin: 0;
+  font-size: var(--text-body);
+}
+
+.profile-name {
+  width: 100%;
 }
