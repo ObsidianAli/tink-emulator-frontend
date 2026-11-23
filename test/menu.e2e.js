@@ -92,7 +92,7 @@ async function main() {
   const title = () => page.textContent('#title');
   const readSettings = () => JSON.parse(fs.readFileSync(path.join(data, 'settings.json'), 'utf8'));
 
-  await page.waitForSelector('#shelves .current');
+  await page.waitForSelector('#title:not(:empty)');
   await sleep(600);
   assert.strictEqual(await hints(), '', 'no hints on the shelf');
 
@@ -163,9 +163,6 @@ async function main() {
   await key('Tab');
   await key('Enter');
   await sleep(700);
-  const names = await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent));
-  assert.ok(names.includes('Steam'), `a Steam shelf: ${names}`);
-  while ((await page.textContent('#shelves .current')) !== 'Steam') await key('PageDown');
   while ((await title()) !== 'Portal 2') await key('ArrowRight');
   await key('s');
   await key('ArrowDown');

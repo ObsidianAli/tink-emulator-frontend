@@ -1,6 +1,7 @@
-// The three.js Shelf: one Console's Cases in a row, the selected one forward and facing the player, the others turned
-// towards it and stacked close behind on each side. The selected Case can be flipped to its Back and opened to show its
-// Disc. Only the Cases near the selection exist at all, and a frame is drawn only while something is moving.
+// The three.js home row: the Games' Cases in a row, the selected one forward and facing the player, the others turned
+// towards it and stacked close behind on each side, and the round All games button as one more place at the end.
+// The selected Case can be flipped to its Back and opened to show its Disc. Only the Cases near the selection exist at
+// all, and a frame is drawn only while something is moving.
 import * as THREE from '../node_modules/three/build/three.module.js';
 import { SHAPES, shapeFor, coverAspect, spineAspect, createCase } from './case.js';
 import { createTextures } from './textures.js';
@@ -29,6 +30,9 @@ const NEXT_STEP = 0.9;
 const DISC_SEATED = 0.03;
 const DISC_SPIN = (Math.PI * 2) / 16000;
 const REST = { flip: 0, lid: 0 };
+// The row is spaced and framed for this shape; each Case is still drawn in its own Console's shape.
+const LAYOUT = SHAPES.dvd;
+const shapeOf = (game) => shapeFor(game.console);
 const SHARP_STEP = 64;
 const SHARP_MAX = 2048;
 
@@ -69,8 +73,9 @@ function studioLight(renderer) {
   return texture;
 }
 
-// onTint(colour) is called with the selected Cover's average colour.
-function createShelf(canvas, { onTint }) {
+// onTint(colour) is called with the selected Cover's average colour. button is the All games button, which this
+// moves along with the row.
+function createShelf(canvas, { onTint, button }) {
   // At two or more device pixels per CSS pixel the edges are already fine, and multisampling a 4K buffer is costly.
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: (window.devicePixelRatio || 1) < 2, alpha: true });
   renderer.setPixelRatio(window.devicePixelRatio || 1);
@@ -94,8 +99,6 @@ function createShelf(canvas, { onTint }) {
   const discTau = durationMs('--duration-case-slow') / 4.6;
 
   let games = [];
-  let shape = SHAPES.dvd;
-  let consoleName = '';
   let selected = 0;
   // The selected Case's poses, one per Y or X press, so B can undo them in order.
   let poses = [];
@@ -103,8 +106,8 @@ function createShelf(canvas, { onTint }) {
   const live = new Map();
   // spare Cases per shape, reused instead of rebuilt
   const pools = new Map();
-  // eased values: which index the row is centred on, and how far it is from resting height
-  const motion = { focus: 0, y: 0 };
+  // eased value: which index the row is centred on
+  const motion = { focus: 0 };
   // index -> { flip, lid, disc, spin } of each live Case, all 0 at rest
   const poseOf = new Map();
   const restPose = () => ({ flip: 0, lid: 0, disc: 0, spin: 0 });
@@ -117,17 +120,18 @@ function createShelf(canvas, { onTint }) {
 
   function visibleHalfCount() {
     const halfWidth = (camera.position.z - BACK) * halfTan() * camera.aspect;
-    return Math.max(1, Math.ceil((halfWidth - NEAR * shape.width) / (STEP * shape.width + shape.depth))) + 1 + SPARE;
+    return Math.max(1, Math.ceil((halfWidth - NEAR * LAYOUT.width) / (STEP * LAYOUT.width + LAYOUT.depth))) + 1 + SPARE;
   }
 
   // How tall the selected Cover is on screen in device pixels, so its sharp texture matches.
   function sharpHeight() {
+    const { height, rim } = shapeOf(games[selected]);
     const view = 2 * (camera.position.z - PULL) * halfTan();
-    const pixels = ((shape.height - shape.rim * 2) / view) * renderer.getDrawingBufferSize(new THREE.Vector2()).y;
+    const pixels = ((height - rim * 2) / view) * renderer.getDrawingBufferSize(new THREE.Vector2()).y;
     return Math.min(SHARP_MAX, Math.ceil(pixels / SHARP_STEP) * SHARP_STEP);
   }
 
-  function takeCase() {
+  function takeCase(shape) {
     const pool = pools.get(shape) || [];
     pools.set(shape, pool);
     return pool.pop() || createCase(shape, colours);
@@ -148,11 +152,12 @@ function createShelf(canvas, { onTint }) {
 
   function coverOf(index) {
     const inUse = new Set([...live.keys()].map((i) => games[i].id));
+    const shape = shapeOf(games[index]);
     return textures.get(games[index], coverAspect(shape), spineAspect(shape), inUse);
   }
 
   function inUseDetails() {
-    return new Set([...detailed, selected].map((i) => games[i].id));
+    return new Set([...detailed, selected].filter((i) => games[i]).map((i) => games[i].id));
   }
 
   // Swaps the selected Case's small Cover for one as sharp as the screen, and puts the small one back on the last.
@@ -168,7 +173,7 @@ function createShelf(canvas, { onTint }) {
     const item = live.get(index);
     sharpIndex = item ? index : -1;
     if (!item) return;
-    textures.getSharp(games[index], coverAspect(shape), sharpHeight(), inUseDetails()).then((made) => {
+    textures.getSharp(games[index], coverAspect(shapeOf(games[index])), sharpHeight(), inUseDetails()).then((made) => {
       if (!made || live.get(index) !== item || sharpIndex !== index) return;
       item.setCover(made.texture);
       requestRender();
@@ -181,7 +186,7 @@ function createShelf(canvas, { onTint }) {
     const item = live.get(index);
     if (!item || detailed.has(index)) return;
     detailed.add(index);
-    textures.getDetails(games[index], coverAspect(shape), sharpHeight(), consoleName, inUseDetails()).then((made) => {
+    textures.getDetails(games[index], coverAspect(shapeOf(games[index])), sharpHeight(), games[index].consoleName, inUseDetails()).then((made) => {
       if (live.get(index) !== item || !detailed.has(index) || !made) return;
       item.setBack(made.back);
       item.setLabel(made.label);
@@ -219,7 +224,7 @@ function createShelf(canvas, { onTint }) {
     }
     for (let index = from; index <= to; index++) {
       if (live.has(index)) continue;
-      const item = takeCase();
+      const item = takeCase(shapeOf(games[index]));
       live.set(index, item);
       poseOf.set(index, restPose());
       row.add(item.group);
@@ -231,17 +236,29 @@ function createShelf(canvas, { onTint }) {
   function place(item, offset) {
     const near = Math.min(1, Math.abs(offset));
     const side = Math.sign(offset);
-    const step = STEP * shape.width + shape.depth;
-    const x = side * (near * NEAR * shape.width + Math.max(0, Math.abs(offset) - 1) * step);
-    item.group.position.set(x, 0, PULL + near * (BACK - PULL));
+    item.group.position.set(slotX(offset), 0, PULL + near * (BACK - PULL));
     item.group.rotation.y = (1 - near) * SELECTED_TURN - side * near * SIDE_TURN;
     item.setDim(near * SIDE_DIM, near);
   }
 
+  function slotX(offset) {
+    const near = Math.min(1, Math.abs(offset));
+    const step = STEP * LAYOUT.width + LAYOUT.depth;
+    return Math.sign(offset) * (near * NEAR * LAYOUT.width + Math.max(0, Math.abs(offset) - 1) * step);
+  }
+
+  const corner = new THREE.Vector3();
+  function placeButton() {
+    const offset = games.length - motion.focus;
+    const near = Math.min(1, Math.abs(offset));
+    corner.set(slotX(offset), LAYOUT.height / 2, PULL + near * (BACK - PULL)).project(camera);
+    button.style.left = `${((corner.x + 1) / 2) * canvas.clientWidth}px`;
+    button.style.top = `${((1 - corner.y) / 2) * canvas.clientHeight}px`;
+  }
+
   function aimCamera() {
-    camera.position.set(0, shape.height * EYE, shape.height * (FRAME / 2 / halfTan()));
-    camera.lookAt(0, shape.height * AIM, BACK);
-    row.position.y = motion.y;
+    camera.position.set(0, LAYOUT.height * EYE, LAYOUT.height * (FRAME / 2 / halfTan()));
+    camera.lookAt(0, LAYOUT.height * AIM, BACK);
   }
 
   const currentPose = () => poses[poses.length - 1] || REST;
@@ -272,7 +289,6 @@ function createShelf(canvas, { onTint }) {
     const ease = easer(tau);
     const easeSlow = easer(discTau);
     motion.focus = ease(motion.focus, selected);
-    motion.y = ease(motion.y, 0);
     let spinning = false;
     for (const [index, item] of live) {
       const isSelected = index === selected;
@@ -297,6 +313,7 @@ function createShelf(canvas, { onTint }) {
     const dt = lastTime === null ? 16 : Math.min(now - lastTime, 50);
     const { moving, spinning } = step(dt);
     aimCamera();
+    placeButton();
     renderer.render(scene, camera);
     if (moving || spinning) {
       lastTime = now;
@@ -329,16 +346,13 @@ function createShelf(canvas, { onTint }) {
     requestRender();
   }
 
-  // Shows another Console's Shelf, { games, console, name }. from: -1 when it comes from above, 1 from below, 0 for no slide.
-  function show(item, index, from = 0) {
+  function show(list, index) {
     for (const i of [...live.keys()]) releaseCase(i);
-    games = item.games;
-    shape = shapeFor(item.console);
-    consoleName = item.name;
+    games = list;
+    button.hidden = !games.length;
     poses = [];
-    selected = Math.max(0, Math.min(index, games.length - 1));
+    selected = Math.max(0, Math.min(index, games.length));
     motion.focus = selected;
-    motion.y = from * shape.height;
     resize();
   }
 
@@ -349,7 +363,7 @@ function createShelf(canvas, { onTint }) {
   }
 
   function select(index) {
-    const next = Math.max(0, Math.min(index, games.length - 1));
+    const next = Math.max(0, Math.min(index, games.length));
     if (next === selected) return false;
     selected = next;
     poses = [];
@@ -366,7 +380,7 @@ function createShelf(canvas, { onTint }) {
   }
 
   function changePose(change) {
-    if (!games.length) return false;
+    if (selected >= games.length) return false;
     change();
     showDetails();
     requestRender();
@@ -408,7 +422,7 @@ function createShelf(canvas, { onTint }) {
   window.addEventListener('resize', resize);
   document.addEventListener('visibilitychange', requestRender);
 
-  return { show, forgetCovers, select, flip, open, back, caseState, selected: () => selected, game: () => games[selected] };
+  return { show, forgetCovers, select, flip, open, back, caseState, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
 }
 
 export { createShelf };

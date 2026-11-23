@@ -72,17 +72,17 @@ function getEmulatedGames(settings) {
   return games;
 }
 
-// One Shelf per Console that has Games, in preset order with Steam last, each sorted by Title.
-function groupShelves(games) {
+// One entry per Console that has Games, in preset order with Steam last, each sorted by Title.
+function groupConsoles(games) {
   const order = [...Object.keys(CONSOLES), 'steam'];
-  const shelves = new Map();
+  const found = new Map();
   for (const game of games) {
-    if (!shelves.has(game.console)) shelves.set(game.console, { console: game.console, name: game.consoleName, games: [] });
-    shelves.get(game.console).games.push(game);
+    if (!found.has(game.console)) found.set(game.console, { console: game.console, name: game.consoleName, games: [] });
+    found.get(game.console).games.push(game);
   }
-  return [...shelves.values()]
+  return [...found.values()]
     .sort((a, b) => order.indexOf(a.console) - order.indexOf(b.console))
-    .map((shelf) => ({ ...shelf, games: shelf.games.sort((a, b) => a.title.localeCompare(b.title, 'en', { numeric: true })) }));
+    .map((item) => ({ ...item, games: item.games.sort((a, b) => a.title.localeCompare(b.title, 'en', { numeric: true })) }));
 }
 
-module.exports = { getEmulatedGames, groupShelves };
+module.exports = { getEmulatedGames, groupConsoles };

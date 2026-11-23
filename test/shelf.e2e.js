@@ -1,5 +1,6 @@
-// Runs Tink in Electron with a made-up library of a few dozen Games per Shelf, drives the Shelf with the keyboard and a
-// simulated pad, measures frame times while scrolling and while a Case flips and opens, and saves screenshots.
+// Runs Tink in Electron with a made-up library of a few dozen Games per Console, drives the home row and the All games
+// screen with the keyboard, measures frame times while a Case flips and opens, checks that a played Game leads the
+// row, and saves screenshots.
 // Usage: node test/shelf.e2e.js [screenshot folder]
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -12,7 +13,7 @@ const outDir = path.resolve(process.argv[2] || path.join(__dirname, '..', 'out',
 const WORDS = ['Star', 'Moon', 'Pixel', 'Deep', 'Castle', 'Sky', 'Quiet', 'Neon', 'Iron', 'Lost', 'Wild', 'Paper',
   'Garden', 'Knights', 'Racer', 'Forge', 'Woods', 'Drift', 'Coast', 'Tower', 'Harbor', 'Planet', 'River', 'Storm'];
 
-// Folders of empty game files: a 40-Game PS2 Shelf and smaller ones for the other Case shapes.
+// Folders of empty game files: 40 PS2 Games and fewer for the other Case shapes.
 function makeLibrary(root) {
   const counts = { ps2: 40, gamecube: 24, snes: 24, gba: 16, switch: 12, ps1: 12, nes: 12 };
   const extensions = { ps2: '.iso', gamecube: '.rvz', snes: '.sfc', gba: '.gba', switch: '.nsp', ps1: '.chd', nes: '.nes' };
@@ -151,7 +152,6 @@ async function main() {
   fs.mkdirSync(userData);
   fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify(makeLibrary(path.join(root, 'games'))));
   seedCovers(userData, path.join(root, 'games'));
-  // A picture the user dropped into data/avatars, which is not square.
   fs.mkdirSync(path.join(userData, 'avatars'));
   fs.writeFileSync(path.join(userData, 'avatars', 'sam.png'), fakeCover(3));
 
@@ -169,113 +169,45 @@ async function main() {
     await page.screenshot({ path: path.join(outDir, `${name}.png`) });
   };
   const title = () => page.textContent('#title');
+  const gridTitle = () => page.textContent('#grid-title');
+  const sortName = () => page.textContent('#grid-sort');
   const hints = () => page.$$eval('#hints .hint', (els) => els.map((el) => el.textContent).join(' '));
-
-  // Y flips, X opens, then B undoes every step, with a screenshot and the hints at each one.
-  const caseSteps = async (prefix) => {
-    const seen = [`front: ${await hints()}`];
-    await page.keyboard.press('f');
-    await shot(`${prefix}-back`);
-    seen.push(`back: ${await hints()}`);
-    await page.keyboard.press(' ');
-    await sleep(450);
-    await page.screenshot({ path: path.join(outDir, `${prefix}-lid-open.png`) });
-    await shot(`${prefix}-disc-out`);
-    seen.push(`open: ${await hints()}`);
-    for (const step of ['closed', 'flipped', 'front-again']) {
-      await page.keyboard.press('Escape');
-      await shot(`${prefix}-${step}`);
-      seen.push(`${step}: ${await hints()}`);
-    }
-    console.log(`${prefix} hints:`, seen.join(' | '));
-  };
-
-  // Page Up/Down until the named Shelf is current.
-  const goTo = async (name) => {
-    const target = shelfNames.indexOf(name);
-    const now = shelfNames.indexOf(await page.textContent('#shelves .current'));
-    const key = target > now ? 'PageDown' : 'PageUp';
-    for (let i = 0; i < Math.abs(target - now); i++) await page.keyboard.press(key);
-  };
-
   const readSettings = () => JSON.parse(fs.readFileSync(path.join(userData, 'settings.json'), 'utf8'));
   const key = async (name) => {
     await page.keyboard.press(name);
     await sleep(350);
   };
-  const currentShelf = () => page.textContent('#shelves .current');
+  const buttonSelected = () => page.$eval('#all-games', (el) => el.classList.contains('selected'));
+  const visibleWindow = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((w) => w.isVisible() && w.isFocusable()));
 
-  // History after a play, a second profile with a picture, Favourites, hiding, and the picker's two ways in.
-  async function profileSteps() {
-    const [first] = readSettings().profiles;
-    assert.deepStrictEqual(first.recent, ['switch2:Waiting Game.js'], 'a played game goes into the history');
-    assert.ok(first.name && first.id, 'old settings got a profile');
-    await key('Tab');
-    await key('ArrowRight');
-    await key('Enter');
-    await shot('profiles-new-picture');
-    await key('ArrowRight');
-    await key('Enter');
-    await shot('profiles-new-name');
-    await page.keyboard.type('Sam');
-    await key('Enter');
-    assert.strictEqual(readSettings().profiles[1].name, 'Sam');
-    assert.strictEqual(readSettings().profiles[1].avatar, 'sam.png');
-    await shot('profiles-picker');
-    assert.strictEqual(await page.$$eval('.profile img', (images) => images.length), 1, 'the picture shows on the badge');
-    await key('ArrowLeft');
-    await key('Enter');
-    await sleep(500);
-    assert.strictEqual(await currentShelf(), shelfNames[0], 'a new profile starts on the first shelf');
-    assert.ok(!shelfNames.includes('Recent'), 'there is no Recent shelf');
-    const liked = await title();
-    await key('l');
-    assert.deepStrictEqual(readSettings().profiles[0].favourites.length, 1);
-    await sleep(600);
-    await key('PageUp');
-    assert.strictEqual(await currentShelf(), 'Favourites');
-    assert.strictEqual(await title(), liked);
-    await shot('shelf-favourites');
-    await key('h');
-    assert.strictEqual(readSettings().profiles[0].hiddenGames.length, 1);
-    assert.ok(!(await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent))).includes('Favourites'), 'a hidden game leaves Favourites');
-    // Sam has their own shelves.
-    await key('Tab');
-    await key('ArrowRight');
-    await key('Enter');
-    await sleep(500);
-    assert.ok(!(await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent))).includes('Favourites'), 'another profile has no Favourites yet');
-  }
+  const caseSteps = async (prefix) => {
+    await page.keyboard.press('f');
+    await shot(`${prefix}-back`);
+    await page.keyboard.press(' ');
+    await sleep(450);
+    await shot(`${prefix}-disc-out`);
+    for (const step of ['closed', 'flipped', 'front-again']) {
+      await page.keyboard.press('Escape');
+      await shot(`${prefix}-${step}`);
+    }
+  };
 
-  await page.waitForSelector('#shelves .current');
-  const shelfNames = await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent));
-  console.log('shelves:', shelfNames.join(', '));
-  await shot('shelf-gamecube');
+  await page.waitForSelector('#title:not(:empty)');
+  assert.strictEqual(await title(), 'Aardvark Game', 'a profile that has played nothing sees games A to Z');
+  assert.strictEqual(await page.$('#shelves'), null, 'no shelf names');
+  assert.ok(!(await buttonSelected()));
+  await shot('home-row');
   await caseSteps('case-art');
-
-  // Open from the front, then move away: the Case should close and the next one stay at rest.
-  await page.keyboard.press(' ');
-  await sleep(1500);
-  const open = await frameTimes(page, async () => {
-    await sleep(1000);
-  });
-  console.log('Disc out and turning, one second:', JSON.stringify(open));
-  console.log('Disc turning, drawn:', JSON.stringify(await drawing(page, 2000)));
-  await page.keyboard.press('ArrowRight');
-  await shot('case-reset-after-move');
-  console.log('after moving on, hints:', await hints());
 
   const flipping = await frameTimes(page, async () => {
     await page.keyboard.press('f');
     await sleep(700);
     await page.keyboard.press(' ');
     await sleep(1500);
-    await page.keyboard.press('Escape');
-    await sleep(800);
-    await page.keyboard.press('Escape');
-    await sleep(800);
-    await page.keyboard.press('Escape');
-    await sleep(800);
+    for (let i = 0; i < 3; i++) {
+      await page.keyboard.press('Escape');
+      await sleep(800);
+    }
   });
   console.log('flip, open and back again:', JSON.stringify(flipping));
   const settled = await frameTimes(page, () => sleep(1000));
@@ -283,95 +215,154 @@ async function main() {
   console.log('at rest, drawn:', JSON.stringify(await drawing(page, 1000)));
   await page.screenshot({ path: path.join(outDir, 'sharp-cover.png'), clip: await coverClip(page) });
 
-  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight');
-  await shot('shelf-moved');
-  // Halfway through a move, which has to be as sharp as at rest.
-  await page.keyboard.press('ArrowRight');
-  await sleep(110);
-  await page.screenshot({ path: path.join(outDir, 'shelf-mid-move.png') });
-
-  // Down to the PS2 Shelf and scroll it the way a held direction does.
-  await goTo('PS2');
-  await shot('shelf-ps2');
+  // Along the row to the end: twelve Games, then the All games button.
   const held = await frameTimes(page, async () => {
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 12; i++) {
       await page.keyboard.press('ArrowRight');
       await sleep(120);
     }
   });
-  console.log('PS2, 30 steps one every 120 ms:', JSON.stringify(held));
-  const fast = await frameTimes(page, async () => {
-    for (let i = 0; i < 30; i++) await page.keyboard.press('ArrowLeft');
-    await sleep(800);
-  });
-  console.log('PS2, 30 steps back as fast as keys arrive:', JSON.stringify(fast));
-  const idle = await frameTimes(page, () => sleep(1000));
-  console.log('idle second:', JSON.stringify(idle));
-  const counts = await page.evaluate(() => performance.memory && Math.round(performance.memory.usedJSHeapSize / 1e6));
-  console.log('JS heap MB:', counts, 'title now:', await title());
-  await shot('shelf-ps2-far');
-  await caseSteps('case-plain');
-  await page.screenshot({ path: path.join(outDir, 'sharp-plain.png'), clip: await coverClip(page) });
+  console.log('12 steps along the row, one every 120 ms:', JSON.stringify(held));
+  await sleep(500);
+  assert.strictEqual(await title(), 'All games');
+  assert.ok(await buttonSelected(), 'the button is selected at the end of the row');
+  await shot('home-row-end');
+  const box = await page.$eval('#all-games', (el) => el.getBoundingClientRect().toJSON());
+  const view = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+  assert.ok(Math.abs(box.x + box.width / 2 - view.width / 2) < 4, 'the button is in the middle when selected');
+  assert.ok(Math.abs(box.width - 96) < 1, `the button is 96px, was ${box.width}`);
+  assert.strictEqual(await page.$$eval('#all-games svg rect', (rects) => rects.length), 4, 'a 2x2 blocks icon');
+  assert.strictEqual(await page.$eval('#all-games', (el) => el.textContent.trim()), '', 'nothing is written on the button');
+  assert.strictEqual(await hints(), '');
+  await key('ArrowRight');
+  assert.strictEqual(await title(), 'All games', 'the button is the last place');
+  await key('ArrowDown');
+  assert.ok(!(await buttonSelected()), 'down leaves the button for the icon row');
+  await key('ArrowUp');
+  assert.ok(await buttonSelected());
 
-  // Flip and open 20 Cases in a row; the generated Backs and Discs must not pile up.
-  for (let i = 0; i < 20; i++) {
-    await page.keyboard.press('f');
-    await sleep(60);
-    await page.keyboard.press(' ');
-    await sleep(60);
-    await page.keyboard.press('ArrowRight');
+  // The All games screen.
+  await key('Enter');
+  const total = 40 + 24 + 24 + 16 + 12 + 12 + 12 + 2;
+  assert.strictEqual(await page.$$eval('#grid-list .tile', (tiles) => tiles.length), total, 'every game is in the grid');
+  assert.strictEqual(await sortName(), 'Last played');
+  assert.strictEqual(await hints(), 'APlay YSort BBack');
+  assert.strictEqual(await page.$eval('#shelf', (el) => getComputedStyle(el).visibility), 'hidden');
+  assert.strictEqual(await gridTitle(), 'Aardvark Game');
+  await sleep(500);
+  await shot('all-games');
+  assert.strictEqual(await page.$eval('#grid-list', (el) => getComputedStyle(el).gridTemplateColumns.split(' ').length), 6);
+  await key('ArrowDown');
+  const below = await gridTitle();
+  await key('ArrowUp');
+  await key('ArrowRight');
+  await key('ArrowLeft');
+  assert.strictEqual(await gridTitle(), 'Aardvark Game');
+  await key('ArrowDown');
+  assert.strictEqual(await gridTitle(), below);
+  for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowDown');
+  await sleep(500);
+  await shot('all-games-scrolled');
+  assert.ok(await page.$eval('#grid-list .tile.focused', (el) => {
+    const tile = el.getBoundingClientRect();
+    const list = el.parentElement.getBoundingClientRect();
+    return tile.top >= list.top && tile.bottom <= list.bottom;
+  }), 'the focused game is scrolled into view');
+
+  // Y goes through the sorts, and the profile keeps the last one.
+  const sorts = [];
+  for (let i = 0; i < 4; i++) {
+    await key('f');
+    sorts.push(await sortName());
   }
-  await sleep(1500);
-  const after = await page.evaluate(() => performance.memory && Math.round(performance.memory.usedJSHeapSize / 1e6));
-  console.log('JS heap MB after opening 20 Cases:', after);
+  assert.deepStrictEqual(sorts, ['A–Z', 'Console', 'Favourites', 'Last played']);
+  await key('f');
+  assert.strictEqual(readSettings().profiles[0].sort, 'az');
 
-  for (const name of ['SNES', 'Game Boy Advance', 'NES', 'PS1', 'Switch', 'Steam'].filter((n) => shelfNames.includes(n))) {
-    await goTo(name);
-    await page.keyboard.press('ArrowRight');
-    await shot(`shelf-${name.toLowerCase().replace(/\s+/g, '-')}`);
-  }
+  // Menu opens the same panel, and B closes it.
+  await key('s');
+  assert.strictEqual(await page.$$eval('#case-menu button', (els) => els.map((el) => el.textContent).join()), 'Favourite,Hide,Game info');
+  await key('Escape');
+  assert.strictEqual(await hints(), 'APlay YSort BBack');
 
-  // A simulated pad: RB moves to the next Shelf, the D-pad moves along it.
-  await page.evaluate(() => {
-    const pad = { buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0] };
-    window.__pad = pad;
-    navigator.getGamepads = () => [pad];
-  });
-  const press = async (button) => {
-    await page.evaluate((b) => { window.__pad.buttons[b].pressed = true; }, button);
-    await sleep(80);
-    await page.evaluate((b) => { window.__pad.buttons[b].pressed = false; }, button);
-    await sleep(80);
-  };
-  const before = await page.textContent('#shelves .current');
-  await press(4);
-  await press(15);
-  await press(15);
-  console.log('pad: LB moved from', before, 'to', await page.textContent('#shelves .current'), '/', await title());
-  await shot('shelf-pad');
-
-  // Play the Switch 2 stub: Tink should hide, then come back when it exits.
-  await goTo('Switch 2');
-  assert.strictEqual(await title(), 'Aardvark Game', 'never-played games keep their order');
-  await page.keyboard.press('ArrowRight');
-  await sleep(350);
-  assert.strictEqual(await title(), 'Waiting Game');
+  // Play a Game from the grid.
+  while ((await gridTitle()) !== 'Waiting Game') await page.keyboard.press('ArrowRight');
+  await sleep(300);
   await page.keyboard.press('Enter');
   await sleep(500);
-  const hidden = !(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((w) => w.isVisible() && w.isFocusable())));
+  const hidden = !(await visibleWindow());
   await sleep(2500);
-  const back = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((w) => w.isVisible() && w.isFocusable()));
-  console.log('play: hidden while running', hidden, '/ back after exit', back);
-  await shot('shelf-after-play');
-  assert.strictEqual(await title(), 'Waiting Game', 'the shelf under the cursor is not reshuffled by a play');
-  await key('PageUp');
-  await key('PageDown');
-  assert.strictEqual(await currentShelf(), 'Switch 2');
-  assert.strictEqual(await title(), 'Waiting Game', 'the played game leads its shelf the next time it is drawn');
+  console.log('play: hidden while running', hidden, '/ back after exit', await visibleWindow());
+  assert.ok(await page.$('#grid:not([hidden])'), 'the grid is still open after a play');
+  assert.strictEqual(await gridTitle(), 'Waiting Game', 'the cursor stays on the played game');
+  assert.deepStrictEqual(readSettings().profiles[0].recent, ['switch2:Waiting Game.js']);
 
-  await profileSteps();
+  // Back to the row on the button, and the played Game leads the row.
+  await key('Escape');
+  assert.strictEqual(await title(), 'All games');
+  assert.ok(await buttonSelected());
+  for (let i = 0; i < 11; i++) await page.keyboard.press('ArrowLeft');
+  await sleep(500);
+  assert.strictEqual(await title(), 'Aardvark Game', 'the row has twelve games');
+  await key('ArrowLeft');
+  assert.strictEqual(await title(), 'Waiting Game', 'the played game is at the front of the row');
+  await key('ArrowLeft');
+  assert.strictEqual(await title(), 'Waiting Game', 'nothing comes before it');
+  await shot('home-after-play');
+
+  // Play from the row: it leads the row the moment Tink is back, with the cursor on it.
+  await key('ArrowRight');
+  assert.strictEqual(await title(), 'Aardvark Game');
+  await page.keyboard.press('Enter');
+  await sleep(3000);
+  assert.strictEqual(await title(), 'Aardvark Game', 'the cursor stays on the played game');
+  await key('ArrowLeft');
+  assert.strictEqual(await title(), 'Aardvark Game', 'the played game leads the row at once');
+  await key('ArrowRight');
+  assert.strictEqual(await title(), 'Waiting Game');
+
+  // Profiles: history, favourites, hiding and the sort belong to one profile.
+  const [first] = readSettings().profiles;
+  assert.deepStrictEqual(first.recent, ['switch2:Aardvark Game.js', 'switch2:Waiting Game.js']);
+  assert.ok(first.name && first.id, 'old settings got a profile');
+  await key('Tab');
+  await key('ArrowRight');
+  await key('Enter');
+  await shot('profiles-new-picture');
+  await key('ArrowRight');
+  await key('Enter');
+  await shot('profiles-new-name');
+  await page.keyboard.type('Sam');
+  await key('Enter');
+  assert.strictEqual(readSettings().profiles[1].name, 'Sam');
+  assert.strictEqual(readSettings().profiles[1].avatar, 'sam.png');
+  await shot('profiles-picker');
+  assert.strictEqual(await page.$$eval('.profile img', (images) => images.length), 1, 'the picture shows on the badge');
+  await key('ArrowLeft');
+  await key('Enter');
+  await sleep(500);
+  assert.strictEqual(await title(), 'Aardvark Game', 'a profile opens on its last played game');
+  await key('l');
+  assert.strictEqual(readSettings().profiles[0].favourites.length, 1);
+  await sleep(600);
+  assert.strictEqual(await title(), 'Aardvark Game', 'favouriting keeps the cursor');
+  await key('h');
+  assert.strictEqual(readSettings().profiles[0].hiddenGames.length, 1);
+  await sleep(600);
+  assert.notStrictEqual(await title(), 'Aardvark Game', 'a hidden game leaves the row');
+  await key('Tab');
+  await key('ArrowRight');
+  await key('Enter');
+  await sleep(500);
+  assert.strictEqual(await title(), 'Aardvark Game', 'another profile has its own history and hidden games');
+  for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowRight');
+  await sleep(500);
+  await key('Enter');
+  assert.strictEqual(await sortName(), 'Last played', 'another profile has its own sort');
+  await key('Escape');
 
   console.log('errors:', errors.length ? errors : 'none');
+  assert.deepStrictEqual(errors, [], 'no page errors');
   await app.close();
   fs.rmSync(root, { recursive: true, force: true });
 }

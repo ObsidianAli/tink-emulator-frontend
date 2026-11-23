@@ -1,9 +1,12 @@
-// The shelf screen: LB/RB (Page Up/Down) switch Shelves, Left/Right move along one, A (Enter) plays,
-// Y (F) flips the selected Case, X (Space) opens it and B (Esc) undoes either. L3 (L) favourites the Game, R3 (H) hides
-// it, View (Tab) goes back to the profile picker. Menu (S) opens the Game's panel: Favourite, Hide and Game info.
-// Down moves into the row of icons under the title (profile, Controllers, Settings, Power), Left/Right move along it,
-// A opens one and Up or B goes back to the shelf. Comma opens Settings; with no games on the Shelf, Menu does too.
+// The home screen: one row of the Games played last. Left/Right move along it to the All games button at the end,
+// A (Enter) plays, Y (F) flips the selected Case, X (Space) opens it and B (Esc) undoes either. L3 (L) favourites
+// the Game, R3 (H) hides it, View (Tab) goes back to the profile picker. Menu (S) opens the Game's panel: Favourite,
+// Hide and Game info. Down moves into the row of icons under the title (profile, Controllers, Settings, Power),
+// Left/Right move along it, A opens one and Up or B goes back to the row. Comma opens Settings; with no Game under the
+// cursor, Menu does too. A on the All games button opens the grid of every Game: arrows move, A plays, Menu opens the
+// panel, Y changes the sort and B goes back to the row.
 import { createShelf } from './shelf.js';
+import { grid } from './grid.js';
 import { runSetup } from './setup.js';
 import { openSettings, settingsOpen } from './settings.js';
 import { openCaseMenu, caseMenuOpen } from './casemenu.js';
@@ -11,15 +14,18 @@ import { openInfo, infoOpen } from './info.js';
 import { chooseProfile, badge } from './profiles.js';
 import { openPanel, updatePanel, panelOpen } from './panel.js';
 
-const nav = document.getElementById('shelves');
+const main = document.querySelector('main');
+const allGamesButton = document.getElementById('all-games');
 const title = document.getElementById('title');
 const message = document.getElementById('message');
 const tray = document.getElementById('tray');
 
-let shelves = [];
-let current = 0;
-// The selected Game on each Shelf, so coming back lands where you left.
-const positions = new Map();
+// The Games on the home row, and every Game in the order the grid shows them.
+let row = [];
+let games = [];
+let sort = 'recent';
+let inGrid = false;
+let sorting = false;
 let launching = false;
 let inSettings = false;
 let inPicker = false;
@@ -28,8 +34,6 @@ let inPanel = false;
 let ready = false;
 let changing = false;
 let inMenu = false;
-// True after a Game was played: the Shelves are ordered again when the player moves to another Shelf.
-let stale = false;
 
 // Anything unexpected is logged in full and the player only sees a plain message, once per kind of failure.
 const reported = new Set();
@@ -45,33 +49,21 @@ function report(reason) {
 window.addEventListener('error', (event) => report(event.error || event.message));
 window.addEventListener('unhandledrejection', (event) => report(event.reason));
 
-const shelf = createShelf(document.getElementById('shelf'), {
-  onTint: (colour) => document.body.style.setProperty('--tint', colour),
-});
-
 function showMessage(text) {
   message.textContent = text;
   message.hidden = !text;
 }
 
-function renderNav() {
-  nav.replaceChildren(...shelves.map((item, index) => {
-    const name = document.createElement('span');
-    name.className = index === current ? 'current' : '';
-    name.textContent = item.name;
-    return name;
-  }));
-  nav.children[current].scrollIntoView({ inline: 'center', block: 'nearest' });
-}
+const focusedGame = () => (inGrid ? grid.game() : shelf.game());
 
 function showTitle() {
   const game = shelf.game();
-  title.textContent = game ? game.title : '';
+  title.textContent = shelf.onButton() ? 'All games' : game ? game.title : '';
+  allGamesButton.classList.toggle('selected', shelf.onButton() && trayFocus < 0);
 }
 
-// The shelf has no button hints; this just puts focus back on the icon row when it was in there.
 function showHints() {
-  setHints([]);
+  setHints(inGrid ? [{ button: 'a', label: 'Play' }, { button: 'y', label: 'Sort' }, { button: 'b', label: 'Back' }] : []);
   focusTray();
 }
 
@@ -114,6 +106,19 @@ const power = () => icon(
   ['path', { d: 'M12 3v8' }],
   ['path', { d: 'M6.3 6.8a8 8 0 1 0 11.4 0' }],
 );
+
+const blocks = () => icon(
+  ['rect', { x: 3, y: 3, width: 8, height: 8, rx: 2.4 }],
+  ['rect', { x: 13, y: 3, width: 8, height: 8, rx: 2.4 }],
+  ['rect', { x: 3, y: 13, width: 8, height: 8, rx: 2.4 }],
+  ['rect', { x: 13, y: 13, width: 8, height: 8, rx: 2.4 }],
+);
+allGamesButton.append(blocks());
+
+const shelf = createShelf(document.getElementById('shelf'), {
+  onTint: (colour) => document.body.style.setProperty('--tint', colour),
+  button: allGamesButton,
+});
 
 // Connected controllers by name, without the vendor and product numbers the browser adds in brackets.
 function controllerRows() {
@@ -181,41 +186,10 @@ function focusTray() {
 function leaveTray() {
   trayFocus = -1;
   if (document.activeElement) document.activeElement.blur();
-}
-
-function openShelf(index, from = 0) {
-  positions.set(current, shelf.selected());
-  current = index;
-  shelf.show(shelves[current], positions.get(current) || 0, from);
-  renderNav();
   showTitle();
-  showHints();
 }
 
-function switchShelf(step) {
-  if (current + step < 0 || current + step >= shelves.length) return false;
-  if (!stale) {
-    openShelf(current + step, step);
-    return true;
-  }
-  // The Shelf the player is on keeps its order until they leave it.
-  stale = false;
-  const here = shelves[current].console;
-  window.tink.getLibrary().then((library) => {
-    const index = library.shelves.findIndex((item) => item.console === here);
-    const next = index + step;
-    if (index < 0 || next < 0 || next >= library.shelves.length) return loadLibrary();
-    shelves = library.shelves;
-    positions.clear();
-    current = index;
-    openShelf(next, step);
-    positions.delete(index);
-    return null;
-  }).catch(report);
-  return true;
-}
-
-// Switches profile from the shelf; B on the picker comes back to the same shelf.
+// Switches profile; B on the picker comes back to where the player was.
 async function switchProfile() {
   if (inPicker || launching) return;
   inPicker = true;
@@ -227,22 +201,21 @@ async function switchProfile() {
   }
 }
 
-// Favourites or hides the selected Game, then shows the Shelves again where they were.
 async function changeGame(change) {
-  const game = shelf.game();
+  const game = focusedGame();
   if (changing || !game) return;
   changing = true;
   try {
     await change(game.id);
-    await loadLibrary();
+    showLibrary(await window.tink.refreshLibrary());
   } finally {
     changing = false;
   }
 }
 
-// The panel beside the selected Case. The Shelf stays where it is, whatever is picked.
+// The panel beside the selected Case. The row stays where it is, whatever is picked.
 async function openGameMenu() {
-  const game = shelf.game();
+  const game = focusedGame();
   if (inMenu || changing || launching || !game) return;
   inMenu = true;
   try {
@@ -257,13 +230,13 @@ async function openGameMenu() {
 }
 
 async function play() {
-  const game = shelf.game();
+  const game = focusedGame();
   if (launching || !game) return;
   launching = true;
   try {
     const result = await window.tink.launch(game.id);
     if (result && result.error) await explain(result);
-    else stale = true;
+    else showLibrary(await window.tink.refreshLibrary(), { played: true });
   } finally {
     launching = false;
   }
@@ -288,6 +261,7 @@ async function goToSettings(focusConsole) {
   try {
     if (await openSettings({ focusConsole })) {
       shelf.forgetCovers();
+      grid.forgetCovers();
       await loadLibrary();
     }
     else showHints();
@@ -305,7 +279,7 @@ listenForInput((action) => {
     switchProfile();
     return 'confirm';
   }
-  if (action === 'settings' || (action === 'menu' && (shelves.length === 0 || !shelf.game()))) {
+  if (action === 'settings' || (action === 'menu' && !focusedGame())) {
     goToSettings();
     return 'confirm';
   }
@@ -333,26 +307,30 @@ listenForInput((action) => {
     }
     return null;
   }
-  if (action === 'down' && (!shelves.length || shelf.caseState() === 'front')) {
+  if (inGrid) return gridAction(action);
+  if (action === 'down' && (!row.length || shelf.caseState() === 'front')) {
     trayFocus = 0;
+    showTitle();
     focusTray();
     return 'move';
   }
-  if (shelves.length === 0) return null;
+  if (row.length === 0) return null;
   if (action === 'left' || action === 'right') {
     if (!shelf.select(shelf.selected() + (action === 'right' ? 1 : -1))) return null;
     showTitle();
     showHints();
     return 'move';
   }
-  if (action === 'lb') return switchShelf(-1) ? 'shelf' : null;
-  if (action === 'rb') return switchShelf(1) ? 'shelf' : null;
   if (action === 'fav' || action === 'hide') {
     if (changing || !shelf.game()) return null;
     changeGame(action === 'fav' ? window.tink.toggleFavourite : window.tink.hideGame);
     return 'toggle';
   }
   if (action === 'a') {
+    if (shelf.onButton()) {
+      openGrid();
+      return 'confirm';
+    }
     if (launching || !shelf.game()) return null;
     play();
     return 'launch';
@@ -363,33 +341,93 @@ listenForInput((action) => {
   return { y: 'flip', x: 'open', b: 'back' }[action];
 });
 
-// Reads the library again and shows it, staying on the same Shelf and Game when they're still there.
-// fresh starts from the first Shelf instead, for a newly chosen profile.
-async function loadLibrary({ fresh = false } = {}) {
-  const before = !fresh && shelves[current] && shelves[current].console;
+function gridAction(action) {
+  if (['left', 'right', 'up', 'down'].includes(action)) return grid.move(action) ? 'move' : null;
+  if (action === 'fav' || action === 'hide') {
+    if (changing || !grid.game()) return null;
+    changeGame(action === 'fav' ? window.tink.toggleFavourite : window.tink.hideGame);
+    return 'toggle';
+  }
+  if (action === 'a') {
+    if (launching || !grid.game()) return null;
+    play();
+    return 'launch';
+  }
+  if (action === 'y') {
+    changeSort();
+    return 'list';
+  }
+  if (action === 'b') {
+    closeGrid();
+    return 'back';
+  }
+  return null;
+}
+
+function openGrid() {
+  inGrid = true;
+  main.classList.add('grid-open');
+  grid.set(games, sort, null, 0);
+  grid.open(true);
+  showHints();
+}
+
+function closeGrid() {
+  inGrid = false;
+  main.classList.remove('grid-open');
+  grid.open(false);
+  showTitle();
+  showHints();
+}
+
+async function changeSort() {
+  if (sorting) return;
+  sorting = true;
+  try {
+    const library = await window.tink.setSort(grid.nextSort(sort));
+    games = library.games;
+    sort = library.sort;
+    const game = grid.game();
+    grid.set(games, sort, game && game.id);
+  } finally {
+    sorting = false;
+  }
+}
+
+// The row starts at the front for a new profile or a Game just played, and otherwise keeps its place.
+function showLibrary(library, { fresh = false, played = false } = {}) {
+  const wasButton = shelf.onButton();
   const selected = shelf.selected();
   const selectedId = shelf.game() && shelf.game().id;
-  const library = await window.tink.getLibrary();
-  renderTray().catch(report);
-  ready = true;
-  shelves = library.shelves;
-  positions.clear();
-  if (shelves.length === 0) {
-    shelf.show({ console: '', name: '', games: [] }, 0);
-    nav.replaceChildren();
+  const gridId = grid.game() && grid.game().id;
+  row = library.row;
+  games = library.games;
+  sort = library.sort;
+  if (fresh || games.length === 0) closeGrid();
+  if (games.length === 0) {
+    shelf.show([], 0);
     title.textContent = '';
     showMessage('No games found.');
     showHints();
     return;
   }
   showMessage('');
-  const found = shelves.findIndex((item) => item.console === before);
-  current = Math.max(0, found);
-  const same = found >= 0 ? shelves[current].games.findIndex((game) => game.id === selectedId) : -1;
-  shelf.show(shelves[current], same >= 0 ? same : found >= 0 ? selected : 0);
-  renderNav();
+  const found = row.findIndex((game) => game.id === selectedId);
+  let place = Math.min(selected, wasButton ? row.length : row.length - 1);
+  if (fresh) place = 0;
+  else if (played && !inGrid) place = 0;
+  else if (found >= 0) place = found;
+  shelf.show(row, place);
+  if (inGrid) grid.set(games, sort, gridId);
   showTitle();
   showHints();
+}
+
+async function loadLibrary({ fresh = false } = {}) {
+  const library = await window.tink.getLibrary();
+  renderTray().catch(report);
+  ready = true;
+  showLibrary(library, { fresh });
 }
 
 const NOTICE_MS = 4000;
@@ -406,7 +444,7 @@ async function showNotice() {
 
 const UPDATE_POLL_MS = 15 * 1000;
 
-// Offers a downloaded update once per start, and only while the shelf is idle (never during play).
+// Offers a downloaded update once per start, and only while Tink is idle (never during play).
 function offerUpdate() {
   const timer = setInterval(async () => {
     if (launching || inSettings || inPicker || inPanel || settingsOpen() || document.querySelector('.dialog-scrim')) return;

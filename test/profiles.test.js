@@ -7,10 +7,6 @@ const os = require('node:os');
 const path = require('node:path');
 
 const game = (console, name) => ({ id: `${console}:D:\${name}`, key: `${console}:${name}`, console, title: name });
-const shelves = [
-  { console: 'gamecube', name: 'GameCube', games: [game('gamecube', 'Luigi'), game('gamecube', 'Wind Waker')] },
-  { console: 'steam', name: 'Steam', games: [{ id: 'steam:620', key: 'steam:620', console: 'steam', title: 'Portal 2' }] },
-];
 const fresh = () => {
   const settings = { consoles: {} };
   p.ensureProfiles(settings);
@@ -23,7 +19,7 @@ test('old settings get one profile with nothing hidden, and the rest is kept', (
   assert.strictEqual(settings.profiles.length, 1);
   const [profile] = settings.profiles;
   assert.deepStrictEqual({ ...profile, id: undefined }, {
-    id: undefined, name: 'Player', colour: 'blue', avatar: null, recent: [], favourites: [], hiddenConsoles: [], hiddenGames: [],
+    id: undefined, name: 'Player', colour: 'blue', avatar: null, recent: [], favourites: [], hiddenConsoles: [], hiddenGames: [], sort: 'recent',
   });
   assert.ok(profile.id);
   assert.strictEqual(settings.lastProfile, profile.id);
@@ -51,21 +47,38 @@ test('recent lists the newest first, without repeats, up to the limit', () => {
   assert.strictEqual(new Set(profile.recent).size, p.RECENT_MAX);
 });
 
-test('every shelf starts with what the profile played last, the rest keep their order', () => {
+const lib = (names) => names.map((n) => game('gamecube', n));
+const consoles = [
+  { console: 'gamecube', name: 'GameCube', games: lib(['Beta', 'Delta']) },
+  { console: 'snes', name: 'SNES', games: [game('snes', 'Alpha'), game('snes', 'Gamma')] },
+];
+const titles = (list) => list.map((g) => g.title);
+
+test('the row starts with what the profile played last, then unplayed games A to Z', () => {
   const profile = fresh().profiles[0];
-  p.recordPlay(profile, 'gamecube:Wind Waker');
-  p.recordPlay(profile, 'steam:620');
-  p.recordPlay(profile, 'gamecube:Wind Waker');
-  const built = p.buildShelves(shelves, profile);
-  assert.deepStrictEqual(built.map((s) => s.console), ['gamecube', 'steam']);
-  assert.deepStrictEqual(built[0].games.map((g) => g.title), ['Wind Waker', 'Luigi']);
+  const games = p.visibleGames(consoles, profile);
+  assert.deepStrictEqual(titles(p.homeRow(games, profile)), ['Alpha', 'Beta', 'Delta', 'Gamma']);
+  p.recordPlay(profile, 'gamecube:Delta');
+  p.recordPlay(profile, 'snes:Gamma');
+  p.recordPlay(profile, 'gamecube:Delta');
+  assert.deepStrictEqual(titles(p.homeRow(games, profile)), ['Delta', 'Gamma', 'Alpha', 'Beta']);
 });
 
-test('one profile\'s play history does not order another profile\'s shelves', () => {
+test('the row holds twelve games at most', () => {
+  const profile = fresh().profiles[0];
+  const many = [{ console: 'ps2', name: 'PS2', games: Array.from({ length: 20 }, (_, i) => game('ps2', `G${String(i).padStart(2, '0')}`)) }];
+  const games = p.visibleGames(many, profile);
+  p.recordPlay(profile, 'ps2:G19');
+  const row = p.homeRow(games, profile);
+  assert.strictEqual(row.length, p.ROW_MAX);
+  assert.deepStrictEqual(titles(row.slice(0, 3)), ['G19', 'G00', 'G01']);
+});
+
+test("one profile's play history does not order another profile's row", () => {
   const settings = fresh();
   const other = p.addProfile(settings);
-  p.recordPlay(settings.profiles[0], 'gamecube:Wind Waker');
-  assert.deepStrictEqual(p.buildShelves(shelves, other)[0].games.map((g) => g.title), ['Luigi', 'Wind Waker']);
+  p.recordPlay(settings.profiles[0], 'snes:Gamma');
+  assert.deepStrictEqual(titles(p.homeRow(p.visibleGames(consoles, other), other)), ['Alpha', 'Beta', 'Delta', 'Gamma']);
 });
 
 test('sorting by history ignores unknown keys and leaves never-played games in place', () => {
@@ -74,30 +87,47 @@ test('sorting by history ignores unknown keys and leaves never-played games in p
   assert.deepStrictEqual(p.sortByHistory(list, ['d', 'gone', 'b']).map((g) => g.key), ['d', 'b', 'a', 'c']);
 });
 
-test('Favourites follows the history too, and there is no Recent shelf', () => {
+test('the All games orders: last played, A to Z, console, favourites first', () => {
   const profile = fresh().profiles[0];
-  p.toggleFavourite(profile, 'gamecube:Luigi');
-  p.toggleFavourite(profile, 'gamecube:Wind Waker');
-  p.recordPlay(profile, 'gamecube:Wind Waker');
-  const built = p.buildShelves(shelves, profile);
-  assert.deepStrictEqual(built.map((s) => s.console), ['favourites', 'gamecube', 'steam']);
-  assert.deepStrictEqual(built[0].games.map((g) => g.title), ['Wind Waker', 'Luigi']);
-  assert.strictEqual(p.realId(built[0].games[0].id), built[1].games[0].id);
+  const games = p.visibleGames(consoles, profile);
+  p.recordPlay(profile, 'snes:Gamma');
+  p.recordPlay(profile, 'gamecube:Beta');
+  p.toggleFavourite(profile, 'gamecube:Delta');
+  p.toggleFavourite(profile, 'snes:Gamma');
+  assert.deepStrictEqual(titles(p.sortGames(games, 'recent', profile)), ['Beta', 'Gamma', 'Alpha', 'Delta']);
+  assert.deepStrictEqual(titles(p.sortGames(games, 'az', profile)), ['Alpha', 'Beta', 'Delta', 'Gamma']);
+  assert.deepStrictEqual(titles(p.sortGames(games, 'console', profile)), ['Beta', 'Delta', 'Alpha', 'Gamma']);
+  assert.deepStrictEqual(titles(p.sortGames(games, 'favourites', profile)), ['Gamma', 'Delta', 'Beta', 'Alpha']);
 });
 
-test('hidden games and shelves disappear everywhere, and come back', () => {
+test('a profile remembers its sort, and an unknown one falls back to last played', () => {
+  const settings = fresh();
+  assert.strictEqual(settings.profiles[0].sort, 'recent');
+  settings.profiles[0].sort = 'az';
+  p.ensureProfiles(settings);
+  assert.strictEqual(settings.profiles[0].sort, 'az');
+  settings.profiles[0].sort = 'sideways';
+  p.ensureProfiles(settings);
+  assert.strictEqual(settings.profiles[0].sort, 'recent');
+});
+
+test('hidden games and consoles leave the list, and come back', () => {
   const profile = fresh().profiles[0];
-  p.recordPlay(profile, 'gamecube:Luigi');
-  p.toggleFavourite(profile, 'steam:620');
-  p.hideGame(profile, 'gamecube:Luigi');
-  p.toggleConsole(profile, 'steam');
-  let built = p.buildShelves(shelves, profile);
-  assert.deepStrictEqual(built.map((s) => s.console), ['gamecube']);
-  assert.deepStrictEqual(built[0].games.map((g) => g.title), ['Wind Waker']);
+  p.hideGame(profile, 'gamecube:Beta');
+  p.toggleConsole(profile, 'snes');
+  assert.deepStrictEqual(titles(p.visibleGames(consoles, profile)), ['Delta']);
   p.showAllGames(profile);
-  p.toggleConsole(profile, 'steam');
-  built = p.buildShelves(shelves, profile);
-  assert.deepStrictEqual(built.map((s) => s.console), ['favourites', 'gamecube', 'steam']);
+  p.toggleConsole(profile, 'snes');
+  assert.strictEqual(p.visibleGames(consoles, profile).length, 4);
+});
+
+test('the settings view lists consoles with whether this profile hides them', () => {
+  const profile = fresh().profiles[0];
+  p.toggleConsole(profile, 'snes');
+  assert.deepStrictEqual(p.settingsView(profile, consoles).consoleList, [
+    { id: 'gamecube', name: 'GameCube', hidden: false },
+    { id: 'snes', name: 'SNES', hidden: true },
+  ]);
 });
 
 test('favourites toggle on and off', () => {

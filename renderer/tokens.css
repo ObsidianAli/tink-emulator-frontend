@@ -97,6 +97,16 @@
   --info-cover-height: 44vh;
   --info-shot-height: 22vh;
   --tray-size: calc(var(--space) * 8);
+  --all-games-size: calc(var(--space) * 12);
+  --grid-columns: 6;
+  --grid-top: calc(var(--space) * 13);
+  --tile-width: calc(var(--space) * 18);
+  --tile-height: calc(var(--tile-width) * 4 / 3);
+  --tile-dim: 0.7;
+  --tile-zoom: 1.08;
+  --cover-radius: calc(var(--space) / 2);
+  --shadow-tile: 0 8px 20px rgba(0, 0, 0, 0.35);
+  --shadow-tile-focus: 0 20px 40px rgba(0, 0, 0, 0.5);
 
   /* Layers. */
   --layer-dialog: 10;

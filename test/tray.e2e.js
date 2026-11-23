@@ -52,7 +52,7 @@ async function main() {
   const visible = (selector) => page.$(`${selector}:not([hidden])`).then(Boolean);
   const hints = () => page.$$eval('#hints .hint', (els) => els.length);
 
-  await page.waitForSelector('#shelves .current');
+  await page.waitForSelector('#title:not(:empty)');
   await sleep(600);
   assert.strictEqual(await hints(), 0, 'the shelf has no hints');
   assert.deepStrictEqual(
@@ -73,10 +73,6 @@ async function main() {
   assert.strictEqual(await focusedIcon(), 'Controllers');
   await key('ArrowUp');
   assert.strictEqual(await focusedIcon(), null);
-  assert.strictEqual(await page.textContent('#title'), title);
-
-  // Page Down still switches shelves, with no shelf to go to when there is only one.
-  await key('PageDown');
   assert.strictEqual(await page.textContent('#title'), title);
 
   // A on the profile icon opens the picker, B comes back to the icon.
