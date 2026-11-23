@@ -15,6 +15,7 @@ const { createLog } = require('./src/log');
 const { playGame, closeEmulator } = require('./src/launcher');
 const { watchCombo, loadPadReader } = require('./src/pad');
 const { createCovers } = require('./src/covers');
+const { createGameInfo } = require('./src/gameinfo');
 const { createUpdater, FINISH_FLAG } = require('./src/update');
 
 const POLL_MS = 2000;
@@ -187,6 +188,14 @@ async function getCover(id) {
   } catch {
     return { plain: { colour: coverColour(game.console) } };
   }
+}
+
+// What the Game info page shows besides the Cover: the Console's name, and for a Steam game its overview and screenshots.
+async function getGameInfo(id) {
+  const game = lookup(id);
+  if (!game) return null;
+  const details = game.console === 'steam' ? await createGameInfo({ dir: path.join(DATA_DIR, 'info') }).get(game.appId) : null;
+  return { consoleName: game.consoleName, overview: details ? details.overview : '', screenshots: details ? details.screenshots : [] };
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -544,6 +553,7 @@ app.whenReady().then(async () => {
   handle('showHiddenGames', () => { changeActive(profiles.showAllGames); return getSettings(); });
   handle('getLibrary', getLibrary);
   handle('getCover', (id) => getCover(String(id)));
+  handle('getGameInfo', (id) => getGameInfo(String(id)));
   handle('launch', (id) => launch(String(id)));
   ipcMain.handle('logError', (_event, text) => log('Screen error', String(text).slice(0, 2000)));
   createWindow();

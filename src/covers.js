@@ -211,4 +211,4 @@ function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.
   return { getCover, redownload };
 }
 
-module.exports = { createCovers };
+module.exports = { createCovers, download, writeAtomic, Rejected };

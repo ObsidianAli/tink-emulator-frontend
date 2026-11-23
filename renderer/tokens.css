@@ -92,6 +92,10 @@
   --button-min-width: calc(var(--space) * 20);
   --avatar-size: calc(var(--space) * 16);
   --avatar-small: calc(var(--space) * 9);
+  --menu-width: calc(var(--space) * 28);
+  --menu-offset: 22vh;
+  --info-cover-height: 44vh;
+  --info-shot-height: 22vh;
 
   /* Layers. */
   --layer-dialog: 10;

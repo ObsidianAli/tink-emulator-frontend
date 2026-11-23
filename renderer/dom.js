@@ -8,8 +8,8 @@ export function element(tag, className, text) {
 
 // The last two folders, since the end of a path is the part that tells folders apart.
 export function shortPath(folder) {
-  const parts = folder.split(/[\/]/).filter(Boolean);
-  return parts.length > 2 ? `…\${parts.slice(-2).join('\')}` : folder;
+  const parts = folder.split(/[\\/]/).filter(Boolean);
+  return parts.length > 2 ? `…\\${parts.slice(-2).join('\\')}` : folder;
 }
 
 const scrolling = new WeakMap();

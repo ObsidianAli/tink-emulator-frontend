@@ -67,7 +67,7 @@ async function main() {
 
   await page.waitForSelector('#shelves .current');
   await sleep(600);
-  assert.ok((await hints()).includes('MENUSettings'), 'the shelf shows a Settings hint');
+  assert.ok((await hints()).includes('MENUOptions'), 'the shelf shows an Options hint');
   await shot('1-shelf-with-settings-hint');
 
   // Play with no emulator: the friendly message, then straight into Settings on that Console.
