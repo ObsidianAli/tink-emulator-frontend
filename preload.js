@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('tink', {
   showHiddenGames: () => ipcRenderer.invoke('showHiddenGames'),
   getLibrary: () => ipcRenderer.invoke('getLibrary'),
   getCover: (id) => ipcRenderer.invoke('getCover', id),
+  getGameInfo: (id) => ipcRenderer.invoke('getGameInfo', id),
   getUpdate: () => ipcRenderer.invoke('getUpdate'),
   checkForUpdates: () => ipcRenderer.invoke('checkForUpdates'),
   applyUpdate: () => ipcRenderer.invoke('applyUpdate'),

@@ -415,3 +415,108 @@ main {
   justify-content: center;
   gap: var(--space-3);
 }
+
+/* The panel beside the selected Case */
+
+#case-menu {
+  position: absolute;
+  top: 50%;
+  left: calc(50% + var(--menu-offset));
+  z-index: var(--layer-dialog);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  box-sizing: border-box;
+  width: var(--menu-width);
+  padding: var(--space);
+  border-radius: var(--radius-large);
+  background: var(--surface-raised);
+  transform: translateY(-50%);
+}
+
+#case-menu[hidden],
+#info[hidden] {
+  display: none;
+}
+
+/* The Game info page */
+
+#info {
+  position: absolute;
+  inset: 0;
+  z-index: var(--layer-dialog);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-6);
+  box-sizing: border-box;
+  padding: var(--space-6) var(--space-8);
+  background: var(--bg);
+}
+
+.info-top {
+  display: flex;
+  gap: var(--space-6);
+  min-height: 0;
+}
+
+.info-cover {
+  flex: none;
+  height: var(--info-cover-height);
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+
+.info-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.info-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.info-text h1 {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+}
+
+.info-console {
+  margin: 0;
+  color: var(--muted);
+}
+
+.info-overview {
+  margin: 0;
+  overflow: hidden;
+  white-space: pre-line;
+}
+
+.info-shots {
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
+  padding: var(--space);
+  overflow: hidden;
+}
+
+.info-shot {
+  flex: none;
+  height: var(--info-shot-height);
+  border-radius: var(--radius);
+  outline: var(--focus-width) solid transparent;
+  outline-offset: var(--focus-offset);
+  transition: outline-color var(--duration-fast) var(--ease-out);
+}
+
+.info-shot.current {
+  outline: var(--focus-ring);
+}

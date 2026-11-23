@@ -1,9 +1,12 @@
 // The shelf screen: LB/RB (Up/Down) switch Shelves, Left/Right move along one, A (Enter) plays,
 // Y (F) flips the selected Case, X (Space) opens it and B (Esc) undoes either. L3 (L) favourites the Game, R3 (H) hides
-// it, View (Tab) goes back to the profile picker. Menu (S) opens Settings.
+// it, View (Tab) goes back to the profile picker. Menu (S) opens the Game's panel: Favourite, Hide and Game info.
+// Comma opens Settings; with no games on the Shelf, Menu does too.
 import { createShelf } from './shelf.js';
 import { runSetup } from './setup.js';
 import { openSettings, settingsOpen } from './settings.js';
+import { openCaseMenu, caseMenuOpen } from './casemenu.js';
+import { openInfo, infoOpen } from './info.js';
 import { chooseProfile } from './profiles.js';
 
 const nav = document.getElementById('shelves');
@@ -18,6 +21,7 @@ let launching = false;
 let inSettings = false;
 let inPicker = false;
 let changing = false;
+let inMenu = false;
 
 // Anything unexpected is logged in full and the player only sees a plain message, once per kind of failure.
 const reported = new Set();
@@ -67,7 +71,7 @@ function showHints() {
   const game = shelf.game();
   hints.push({ button: 'a', label: game && game.all ? 'Browse' : 'Play' });
   if (game && !game.all) hints.push({ button: 'l3', label: game.fav ? 'Unfavourite' : 'Favourite' }, { button: 'r3', label: 'Hide' });
-  hints.push({ button: 'view', label: 'Profile' }, { button: 'menu', label: 'Settings' });
+  hints.push({ button: 'view', label: 'Profile' }, { button: 'menu', label: game && !game.all ? 'Options' : 'Settings' });
   setHints(hints);
 }
 
@@ -109,6 +113,22 @@ async function changeGame(change) {
     await loadLibrary();
   } finally {
     changing = false;
+  }
+}
+
+// The panel beside the selected Case. The Shelf stays where it is, whatever is picked.
+async function openGameMenu() {
+  const game = shelf.game();
+  if (inMenu || changing || launching || !game || game.all) return;
+  inMenu = true;
+  try {
+    const choice = await openCaseMenu({ fav: game.fav });
+    if (choice === 'fav') await changeGame(window.tink.toggleFavourite);
+    else if (choice === 'hide') await changeGame(window.tink.hideGame);
+    else if (choice === 'info') await openInfo(game);
+  } finally {
+    inMenu = false;
+    showHints();
   }
 }
 
@@ -155,13 +175,18 @@ async function goToSettings(focusConsole) {
 listenForInput((action) => {
   const dialog = dialogTakesInput(action);
   if (dialog) return dialog.sound;
-  if (settingsOpen() || inSettings || inPicker) return null;
+  if (settingsOpen() || inSettings || inPicker || inMenu || caseMenuOpen() || infoOpen()) return null;
   if (action === 'view') {
     switchProfile();
     return 'confirm';
   }
-  if (action === 'menu') {
+  if (action === 'settings' || (action === 'menu' && (shelves.length === 0 || !shelf.game() || shelf.game().all))) {
     goToSettings();
+    return 'confirm';
+  }
+  if (action === 'menu') {
+    if (changing || launching) return null;
+    openGameMenu();
     return 'confirm';
   }
   if (shelves.length === 0) return null;
