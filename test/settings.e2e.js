@@ -65,9 +65,9 @@ async function main() {
   const readSettings = () => JSON.parse(fs.readFileSync(path.join(data, 'settings.json'), 'utf8'));
   const isFullscreen = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFullScreen());
 
-  await page.waitForSelector('#shelves .current');
+  await page.waitForSelector('#title:not(:empty)');
   await sleep(600);
-  assert.ok((await hints()).includes('MENUSettings'), 'the shelf shows a Settings hint');
+  assert.strictEqual(await hints(), '', 'the shelf shows no hints');
   await shot('1-shelf-with-settings-hint');
 
   // Play with no emulator: the friendly message, then straight into Settings on that Console.
@@ -115,12 +115,12 @@ async function main() {
   await key('Escape');
   assert.ok((await focusedRow()).startsWith('Games folders'));
 
-  // Shelves sub-list.
+  // Consoles sub-list.
   await key('ArrowDown');
   await key('Enter');
-  assert.strictEqual(await page.textContent('#settings h1'), 'Shelves');
+  assert.strictEqual(await page.textContent('#settings h1'), 'Consoles');
   await key('Escape');
-  assert.ok((await focusedRow()).startsWith('Shelves'));
+  assert.ok((await focusedRow()).startsWith('Consoles'));
   await key('ArrowDown');
 
   // Covers: re-download and the key.
@@ -166,13 +166,13 @@ async function main() {
   await sleep(300);
   assert.ok((await focusedRow()).endsWith('Up to date'), await focusedRow());
 
-  // Closing reloads the Shelf. One game file goes missing meanwhile.
+  // Closing reloads the row. One game file goes missing meanwhile.
   fs.rmSync(path.join(games, 'Luigis Mansion (USA).rvz'));
   await key('Escape');
   assert.ok(!(await settingsOpen()), 'B closes Settings');
   await sleep(600);
   assert.strictEqual(await page.textContent('#title'), 'Wind Waker');
-  console.log('shelf reloaded, title:', await page.textContent('#title'));
+  console.log('row reloaded, title:', await page.textContent('#title'));
   await shot('15-shelf-after-settings');
 
   // A game that vanishes after the scan: delete it, then play.
@@ -182,10 +182,8 @@ async function main() {
   await shot('16-error-file-missing');
   await key('Enter');
   await sleep(600);
-  // The GameCube Shelf is gone after the rescan (a real Steam Shelf may remain on a PC that has Steam).
-  const names = await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent));
-  assert.ok(!names.includes('GameCube'), 'the rescan drops the empty Shelf');
-  assert.ok((await hints()).includes('MENUSettings'));
+  assert.notStrictEqual(await page.textContent('#title'), 'Wind Waker', 'the rescan drops the missing game');
+  assert.strictEqual(await hints(), '');
 
   // Settings still opens with no games, and S/Menu on a pad do the same.
   await page.evaluate(() => {

@@ -1,5 +1,4 @@
 // The button hints along the bottom edge. setHints([{ button: 'a', label: 'Play' }]) replaces them.
-// button can also be a list, like ['lb', 'rb'], for one label shared by two buttons.
 const hintsBar = document.getElementById('hints');
 let currentHints = [];
 

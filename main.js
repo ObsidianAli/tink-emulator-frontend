@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const steam = require('./src/steam');
 const { CONSOLES, EMULATORS, STEAM, coverColour, launchSpec } = require('./src/presets');
-const { getEmulatedGames, groupShelves } = require('./src/library');
+const { getEmulatedGames, groupConsoles } = require('./src/library');
 const { detectEmulators, defaultSearchDirs } = require('./src/detect');
 const { loadSettings, saveSettings } = require('./src/settings');
 const setup = require('./src/setup');
@@ -15,6 +15,8 @@ const { createLog } = require('./src/log');
 const { playGame, closeEmulator } = require('./src/launcher');
 const { watchCombo, loadPadReader } = require('./src/pad');
 const { createCovers } = require('./src/covers');
+const { createGameInfo } = require('./src/gameinfo');
+const { powerAction } = require('./src/power');
 const { createUpdater, FINISH_FLAG } = require('./src/update');
 
 const POLL_MS = 2000;
@@ -22,7 +24,7 @@ const POLL_MS = 2000;
 // Generous, because a first launch can wait on an update or a Steam login.
 const START_TIMEOUT_MS = 5 * 60 * 1000;
 const HINT_MS = 3000;
-// Let the shelf load first; the update check is not urgent.
+// Let the home screen load first; the update check is not urgent.
 const UPDATE_CHECK_DELAY_MS = 10 * 1000;
 
 // An update is finished by the staged copy (Tink.new) started with the flag; its "Tink folder" is the real one.
@@ -55,8 +57,8 @@ process.on('unhandledRejection', (reason) => log('Unhandled rejection', reason))
 let win = null;
 // The games last sent to the UI. Launches are looked up here, so the UI never passes a path or exe.
 let gamesById = new Map();
-// Every Console's Shelf, before a profile hides anything. Settings lists these.
-let allShelves = [];
+// Every Console that has games, before a profile hides anything. Settings lists these.
+let allConsoles = [];
 let settings = { consoles: {} };
 let emulators = {};
 const settingsFile = () => path.join(DATA_DIR, 'settings.json');
@@ -110,18 +112,26 @@ async function getLibrary() {
   }));
   const games = [...getEmulatedGames(settings), ...steamGames];
   gamesById = new Map(games.map((game) => [game.id, game]));
-  allShelves = groupShelves(games);
+  allConsoles = groupConsoles(games);
+  return currentLibrary();
+}
+
+// What the UI shows for the current profile, from the games already found: the home row, and every game in the
+// order the profile chose for the All games screen.
+function currentLibrary() {
   const current = loadSettings(settingsFile());
   profiles.ensureProfiles(current);
   const profile = profiles.activeProfile(current);
-  const shelves = profiles.buildShelves(allShelves, profile).map((shelf) => ({
-    ...shelf,
-    games: shelf.games.map(({ id, key, title, all }) => ({ id, title, all, fav: profile.favourites.includes(key) })),
-  }));
-  return { shelves };
+  const visible = profiles.visibleGames(allConsoles, profile);
+  const show = ({ id, key, title, console, consoleName }) => ({ id, title, console, consoleName, fav: profile.favourites.includes(key) });
+  return {
+    row: profiles.homeRow(visible, profile).map(show),
+    games: profiles.sortGames(visible, profile.sort, profile).map(show),
+    sort: profile.sort,
+  };
 }
 
-const lookup = (id) => gamesById.get(profiles.realId(id));
+const lookup = (id) => gamesById.get(id);
 
 const AVATAR_TYPES = /\.(png|jpe?g)$/i;
 const AVATAR_MAX = 60;
@@ -172,7 +182,7 @@ function changeProfiles(change) {
   return result;
 }
 
-// Changes to the profile in use, like favourites and hidden shelves.
+// Changes to the profile in use, like favourites and hidden consoles.
 const changeActive = (change) => changeProfiles((current) => change(profiles.activeProfile(current)));
 
 // A Game's Cover, as a data URL or a Plain cover colour. The UI itself never goes online.
@@ -187,6 +197,14 @@ async function getCover(id) {
   } catch {
     return { plain: { colour: coverColour(game.console) } };
   }
+}
+
+// What the Game info page shows besides the Cover: the Console's name, and for a Steam game its overview and screenshots.
+async function getGameInfo(id) {
+  const game = lookup(id);
+  if (!game) return null;
+  const details = game.console === 'steam' ? await createGameInfo({ dir: path.join(DATA_DIR, 'info') }).get(game.appId) : null;
+  return { consoleName: game.consoleName, overview: details ? details.overview : '', screenshots: details ? details.screenshots : [] };
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -382,7 +400,7 @@ function getSettings() {
   profiles.ensureProfiles(current);
   return {
     ...options.buildSettings(current, detect(), app.getVersion()),
-    ...profiles.settingsView(profiles.activeProfile(current), allShelves),
+    ...profiles.settingsView(profiles.activeProfile(current), allConsoles),
   };
 }
 
@@ -403,7 +421,7 @@ function setFullscreen(on) {
 const setSteamKey = (key) => changeSettings((current) => options.setSteamKey(current, key));
 const findAutomatically = (id) => changeSettings((current) => options.clearEmulator(current, id));
 
-// Forgets every cached Cover and remembered miss, and turns Covers on. The Shelf fetches them again as it loads.
+// Forgets every cached Cover and remembered miss, and turns Covers on. The UI fetches them again as it loads.
 async function redownloadCovers() {
   const current = loadSettings(settingsFile());
   current.covers = true;
@@ -540,11 +558,18 @@ app.whenReady().then(async () => {
     const game = lookup(String(id));
     if (game) profiles.hideGame(profile, game.key);
   }));
-  handle('toggleShelf', (id) => { changeActive((profile) => profiles.toggleConsole(profile, String(id))); return getSettings(); });
+  handle('toggleConsole', (id) => { changeActive((profile) => profiles.toggleConsole(profile, String(id))); return getSettings(); });
+  handle('setSort', (sort) => {
+    changeActive((profile) => { if (profiles.SORTS.includes(sort)) profile.sort = sort; });
+    return currentLibrary();
+  });
   handle('showHiddenGames', () => { changeActive(profiles.showAllGames); return getSettings(); });
   handle('getLibrary', getLibrary);
+  handle('refreshLibrary', currentLibrary);
   handle('getCover', (id) => getCover(String(id)));
+  handle('getGameInfo', (id) => getGameInfo(String(id)));
   handle('launch', (id) => launch(String(id)));
+  handle('power', (action) => (action === 'close' ? app.quit() : powerAction(String(action))));
   ipcMain.handle('logError', (_event, text) => log('Screen error', String(text).slice(0, 2000)));
   createWindow();
 });

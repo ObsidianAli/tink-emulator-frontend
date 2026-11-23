@@ -31,26 +31,12 @@ main {
   height: 100%;
 }
 
-#shelves {
-  position: relative;
-  display: flex;
-  gap: var(--space-4);
-  padding: var(--space-6) var(--space-8) 0;
-  overflow: hidden;
-  white-space: nowrap;
-  color: var(--muted);
-}
-
-#shelves .current {
-  color: var(--text);
-  font-weight: var(--weight-bold);
-}
-
-#title {
+#title,
+#grid-title {
   position: absolute;
   left: var(--space-8);
   right: var(--space-8);
-  bottom: var(--space-6);
+  bottom: calc(var(--space-4) + var(--tray-size) + var(--space-2));
   margin: 0;
   overflow: hidden;
   font-size: var(--text-title);
@@ -58,6 +44,163 @@ main {
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+#grid-title {
+  bottom: var(--space-6);
+}
+
+/* The row of icons under the title */
+
+#tray {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--space-4);
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.tray-icon,
+#all-games {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: var(--tray-size);
+  height: var(--tray-size);
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-round);
+  background: var(--surface-raised);
+  color: var(--text);
+  outline: var(--focus-width) solid transparent;
+  outline-offset: var(--focus-offset);
+  transition: outline-color var(--duration-fast) var(--ease-out);
+}
+
+.tray-icon:focus {
+  outline: var(--focus-ring);
+}
+
+.tray-icon .badge {
+  width: 100%;
+  height: 100%;
+  font-size: var(--text-body);
+}
+
+.tray-icon svg,
+#all-games svg {
+  width: 60%;
+  height: 60%;
+}
+
+/* The round All games button at the end of the row; the row's code moves it. */
+
+#all-games {
+  position: absolute;
+  width: var(--all-games-size);
+  height: var(--all-games-size);
+  transform: translate(-50%, -50%);
+}
+
+#all-games[hidden] {
+  display: none;
+}
+
+#all-games.selected {
+  outline: var(--focus-ring);
+}
+
+/* The All games screen covers the row while it is open. */
+
+main.grid-open #shelf,
+main.grid-open #title,
+main.grid-open #tray,
+main.grid-open #all-games {
+  visibility: hidden;
+}
+
+#grid {
+  position: absolute;
+  inset: 0;
+}
+
+#grid[hidden] {
+  display: none;
+}
+
+#grid-sort {
+  margin: 0;
+  padding: var(--space-6) var(--space-8) 0;
+  font-weight: var(--weight-bold);
+}
+
+#grid-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--grid-top) - var(--space-3));
+  display: grid;
+  grid-template-columns: repeat(var(--grid-columns), var(--tile-width));
+  grid-auto-rows: var(--tile-height);
+  gap: var(--space-3);
+  align-content: start;
+  justify-content: center;
+  box-sizing: border-box;
+  height: calc(var(--tile-height) * 2 + var(--space-3) * 3);
+  padding: var(--space-3) 0;
+  overflow-y: auto;
+  scroll-padding: var(--space-3) 0;
+  scrollbar-width: none;
+}
+
+.tile {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--cover-radius);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-tile);
+  opacity: var(--tile-dim);
+  outline: var(--focus-width) solid transparent;
+  outline-offset: var(--focus-offset);
+  transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out), outline-color var(--duration-fast) var(--ease-out);
+}
+
+.tile.focused {
+  z-index: 1;
+  box-shadow: var(--shadow-tile-focus);
+  opacity: 1;
+  outline: var(--focus-ring);
+  transform: scale(var(--tile-zoom));
+}
+
+.tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tile img.whole {
+  background: var(--surface);
+  object-fit: contain;
+}
+
+.tile-plain {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: var(--space);
+  font-size: var(--text-small);
+  font-weight: var(--weight-bold);
+  text-align: center;
 }
 
 #message {
@@ -84,6 +227,10 @@ main {
 }
 
 /* Button hints along the bottom edge */
+
+#hints:empty {
+  display: none;
+}
 
 #hints {
   position: relative;
@@ -185,6 +332,7 @@ main {
 
 #setup,
 #settings,
+#panel,
 #profiles {
   position: absolute;
   inset: 0;
@@ -198,18 +346,21 @@ main {
 
 #setup[hidden],
 #settings[hidden],
+#panel[hidden],
 #profiles[hidden] {
   display: none;
 }
 
-#settings {
+#settings,
+#panel {
   gap: var(--space);
-  padding-top: var(--space-3);
+  padding-top: var(--space-2);
   padding-bottom: 0;
 }
 
 #setup h1,
-#settings h1 {
+#settings h1,
+#panel h1 {
   margin: 0;
   font-size: var(--text-title);
   font-weight: var(--weight-bold);
@@ -318,8 +469,12 @@ main {
   outline-offset: var(--focus-offset);
 }
 
+.setup-row.group-start {
+  margin-top: var(--space-2);
+}
+
 .setup-note {
-  margin: var(--space) 0 var(--space);
+  margin: var(--space) 0 0;
   color: var(--muted);
   font-size: var(--text-small);
 }
@@ -414,4 +569,151 @@ main {
   grid-template-columns: repeat(6, var(--avatar-small));
   justify-content: center;
   gap: var(--space-3);
+}
+
+#settings .settings-key {
+  padding-block: calc(var(--space) / 2);
+}
+
+#settings .setup-note.group-start {
+  margin-top: var(--space-2);
+}
+
+/* The picker fades and zooms in and out over the shelf. */
+
+#profiles.entering {
+  animation: screen-in var(--duration-ui) var(--ease-out) both;
+}
+
+#profiles.leaving {
+  animation: screen-out var(--duration-ui) var(--ease-out) both;
+  pointer-events: none;
+}
+
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: scale(var(--zoom-screen));
+  }
+}
+
+@keyframes screen-out {
+  to {
+    opacity: 0;
+    transform: scale(var(--zoom-screen));
+  }
+}
+
+.profile-step {
+  margin: 0;
+  font-size: var(--text-body);
+}
+
+.profile-name {
+  width: 100%;
+}
+
+/* The panel beside the selected Case */
+
+#case-menu {
+  position: absolute;
+  top: 50%;
+  left: calc(50% + var(--menu-offset));
+  z-index: var(--layer-dialog);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  box-sizing: border-box;
+  width: var(--menu-width);
+  padding: var(--space);
+  border-radius: var(--radius-large);
+  background: var(--surface-raised);
+  transform: translateY(-50%);
+}
+
+#case-menu[hidden],
+#info[hidden] {
+  display: none;
+}
+
+/* The Game info page */
+
+#info {
+  position: absolute;
+  inset: 0;
+  z-index: var(--layer-dialog);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-6);
+  box-sizing: border-box;
+  padding: var(--space-6) var(--space-8);
+  background: var(--bg);
+}
+
+.info-top {
+  display: flex;
+  gap: var(--space-6);
+  min-height: 0;
+}
+
+.info-cover {
+  flex: none;
+  height: var(--info-cover-height);
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+
+.info-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.info-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.info-text h1 {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+}
+
+.info-console {
+  margin: 0;
+  color: var(--muted);
+}
+
+.info-overview {
+  margin: 0;
+  overflow: hidden;
+  white-space: pre-line;
+}
+
+.info-shots {
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
+  padding: var(--space);
+  overflow: hidden;
+}
+
+.info-shot {
+  flex: none;
+  height: var(--info-shot-height);
+  border-radius: var(--radius);
+  outline: var(--focus-width) solid transparent;
+  outline-offset: var(--focus-offset);
+  transition: outline-color var(--duration-fast) var(--ease-out);
+}
+
+.info-shot.current {
+  outline: var(--focus-ring);
 }

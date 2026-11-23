@@ -129,10 +129,8 @@ async function main() {
   const saved = () => JSON.parse(fs.readFileSync(path.join(userData, 'settings.json'), 'utf8'));
   assert.strictEqual(saved().setupDone, false, 'half-way settings are marked unfinished');
   await key('Enter');
-  await page.waitForSelector('#shelves .current');
-  await shot('shelf-after-setup');
-  const shelves = await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent));
-  console.log('shelves after setup:', shelves.join(', '));
+  await page.waitForSelector('#title:not(:empty)');
+  await shot('home-after-setup');
   const done = saved();
   console.log('saved settings:', JSON.stringify(done));
   assert.strictEqual(done.setupDone, true);
@@ -145,9 +143,9 @@ async function main() {
 
   // Second start: no setup, straight to the shelf.
   ({ app, page } = await launch(root, userData));
-  await page.waitForSelector('#shelves .current');
+  await page.waitForSelector('#title:not(:empty)');
   assert.strictEqual(await page.$('#setup:not([hidden])'), null, 'setup is gone on the next start');
-  console.log('second start: shelf opens without setup');
+  console.log('second start: home opens without setup');
   await app.close();
 
   // Settings from before setup existed, with a games folder: no setup either.
@@ -155,9 +153,9 @@ async function main() {
   fs.mkdirSync(oldUser);
   fs.writeFileSync(path.join(oldUser, 'settings.json'), JSON.stringify({ consoles: { snes: { folder: snes } } }));
   ({ app, page } = await launch(root, oldUser));
-  await page.waitForSelector('#shelves .current');
+  await page.waitForSelector('#title:not(:empty)');
   assert.strictEqual(await page.$('#setup:not([hidden])'), null);
-  console.log('existing settings: shelf opens without setup');
+  console.log('existing settings: home opens without setup');
   await app.close();
 
   // Controller only, "Not now": the pad drives setup from start to finish.
@@ -186,7 +184,7 @@ async function main() {
   await press(0);
   await press(13);
   await press(0);
-  await page.waitForSelector('#shelves');
+  await page.waitForSelector('#message:not([hidden])');
   const padSaved = JSON.parse(fs.readFileSync(path.join(padUser, 'settings.json'), 'utf8'));
   console.log('pad run saved:', JSON.stringify(padSaved));
   assert.deepStrictEqual([padSaved.covers, padSaved.setupDone], [false, true]);

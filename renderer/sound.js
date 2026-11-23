@@ -1,5 +1,5 @@
 // UI sounds, synthesized with Web Audio so there are no audio files. playSound('move') plays one by name.
-const MIN_GAP_MS = { move: 140, list: 140, shelf: 140 };
+const MIN_GAP_MS = { move: 140, list: 140 };
 const DEFAULT_GAP_MS = 50;
 
 // A held direction repeats faster than a blip is worth hearing, so a sound repeating too soon is dropped.
@@ -12,7 +12,6 @@ function soundDue(name, now, lastPlayed) {
 const SOUNDS = {
   move: [[0, 1175, 0.06, 0.5, 'sine', 1100]],
   list: [[0, 740, 0.05, 0.4, 'sine']],
-  shelf: [[0, 659, 0.07, 0.5, 'sine'], [0.06, 880, 0.08, 0.5, 'sine']],
   confirm: [[0, 784, 0.07, 0.6, 'sine'], [0.06, 1175, 0.1, 0.6, 'sine']],
   back: [[0, 880, 0.07, 0.5, 'sine'], [0.06, 587, 0.1, 0.5, 'sine']],
   flip: [[0, 500, 0.11, 0.5, 'sine', 900], [0, 250, 0.11, 0.3, 'triangle', 450]],

@@ -1,13 +1,14 @@
 // Profiles live in settings.json as
-// "profiles": [{ id, name, colour, avatar, recent: [gameKey], favourites: [gameKey], hiddenConsoles: [], hiddenGames: [] }]
+// "profiles": [{ id, name, colour, avatar, recent: [gameKey], favourites: [gameKey], hiddenConsoles: [], hiddenGames: [], sort }]
 // plus "lastProfile". A game key is "<console>:<file name>" or "steam:<appid>", so it survives a rescan or a moved folder.
 const crypto = require('node:crypto');
 
 const COLOURS = ['blue', 'green', 'orange', 'red', 'purple', 'teal'];
-const RECENT_MAX = 12;
+const RECENT_MAX = 200;
 const NAME_MAX = 16;
 const PROFILES_MAX = 8;
-const ALL_GAMES = { id: 'all', key: 'all', title: 'All games', console: 'all', all: true };
+const SORTS = ['recent', 'az', 'console', 'favourites'];
+const ROW_MAX = 12;
 
 const cleanName = (name) => (typeof name === 'string' ? name.trim().slice(0, NAME_MAX) : '');
 const strings = (list) => (Array.isArray(list) ? list.filter((item) => typeof item === 'string') : []);
@@ -22,6 +23,7 @@ function normalise(profile) {
     favourites: strings(profile.favourites),
     hiddenConsoles: strings(profile.hiddenConsoles),
     hiddenGames: strings(profile.hiddenGames),
+    sort: SORTS.includes(profile.sort) ? profile.sort : SORTS[0],
   };
 }
 
@@ -88,37 +90,43 @@ function toggleConsole(profile, id) {
   profile.hiddenConsoles = hidden ? profile.hiddenConsoles.filter((c) => c !== id) : [...profile.hiddenConsoles, id];
 }
 
-// The Shelves one profile sees: Recent (newest first, ending in the "All games" tile), Favourites, then every
-// Console's Shelf, minus hidden Consoles and Games. Recent and Favourites hold copies of the Games under their own
-// ids, so each Shelf keeps its own Cover textures.
-function buildShelves(shelves, profile) {
-  const visible = shelves
-    .filter((shelf) => !profile.hiddenConsoles.includes(shelf.console))
-    .map((shelf) => ({ ...shelf, games: shelf.games.filter((game) => !profile.hiddenGames.includes(game.key)) }))
-    .filter((shelf) => shelf.games.length);
-  const byKey = new Map(visible.flatMap((shelf) => shelf.games).map((game) => [game.key, game]));
-  const collect = (prefix, keys) => keys.filter((key) => byKey.has(key)).map((key) => ({ ...byKey.get(key), id: `${prefix}/${byKey.get(key).id}` }));
-  const recent = collect('recent', profile.recent);
-  const favourites = collect('favourites', profile.favourites);
-  return [
-    ...(recent.length ? [{ console: 'recent', name: 'Recent', games: [...recent, ALL_GAMES] }] : []),
-    ...(favourites.length ? [{ console: 'favourites', name: 'Favourites', games: favourites }] : []),
-    ...visible,
-  ];
+// Games played before come first, the one played last at the front; the rest stay in the order they had.
+function sortByHistory(games, recent) {
+  const rank = new Map(recent.map((key, index) => [key, index]));
+  const played = games.filter((game) => rank.has(game.key)).sort((a, b) => rank.get(a.key) - rank.get(b.key));
+  return [...played, ...games.filter((game) => !rank.has(game.key))];
 }
 
-// Recent and Favourites ids point back at the real Game.
-const realId = (id) => id.replace(/^(recent|favourites)\//, '');
+function visibleGames(consoles, profile) {
+  return consoles
+    .filter((item) => !profile.hiddenConsoles.includes(item.console))
+    .flatMap((item) => item.games)
+    .filter((game) => !profile.hiddenGames.includes(game.key));
+}
+
+const byTitle = (a, b) => a.title.localeCompare(b.title, 'en', { numeric: true });
+
+function sortGames(games, sort, profile) {
+  const recent = sortByHistory([...games].sort(byTitle), profile.recent);
+  if (sort === 'az') return [...games].sort(byTitle);
+  if (sort === 'console') return games;
+  if (sort === 'favourites') {
+    return [...recent.filter((g) => profile.favourites.includes(g.key)), ...recent.filter((g) => !profile.favourites.includes(g.key))];
+  }
+  return recent;
+}
+
+const homeRow = (games, profile) => sortGames(games, 'recent', profile).slice(0, ROW_MAX);
 
 // What the Settings screen needs about the profile: its Consoles and how many Games are hidden.
-function settingsView(profile, shelves) {
+function settingsView(profile, consoles) {
   return {
-    shelves: shelves.map((shelf) => ({ id: shelf.console, name: shelf.name, hidden: profile.hiddenConsoles.includes(shelf.console) })),
+    consoleList: consoles.map((item) => ({ id: item.console, name: item.name, hidden: profile.hiddenConsoles.includes(item.console) })),
     hiddenGames: profile.hiddenGames.length,
   };
 }
 
 module.exports = {
-  COLOURS, RECENT_MAX, PROFILES_MAX, ensureProfiles, activeProfile, addProfile, editProfile, removeProfile, recordPlay, toggleFavourite,
-  hideGame, showAllGames, toggleConsole, buildShelves, realId, settingsView,
+  COLOURS, RECENT_MAX, PROFILES_MAX, SORTS, ROW_MAX, ensureProfiles, activeProfile, addProfile, editProfile, removeProfile, recordPlay, toggleFavourite,
+  hideGame, showAllGames, toggleConsole, visibleGames, sortGames, homeRow, sortByHistory, settingsView,
 };

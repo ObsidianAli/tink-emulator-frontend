@@ -1,5 +1,5 @@
 // Keyboard and controller input in the app, turned into a few named actions:
-// up, down, left, right, a, b, x, y, lb, rb, menu, view, fav, hide.
+// up, down, left, right, a, b, x, y, menu, view, fav, hide, settings (comma).
 
 const KEY_ACTIONS = {
   ArrowUp: 'up',
@@ -18,10 +18,11 @@ const KEY_ACTIONS = {
   L: 'fav',
   h: 'hide',
   H: 'hide',
+  ',': 'settings',
 };
 
 // Standard gamepad layout button numbers.
-const PAD_ACTIONS = { 0: 'a', 1: 'b', 2: 'x', 3: 'y', 4: 'lb', 5: 'rb', 8: 'view', 9: 'menu', 10: 'fav', 11: 'hide', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
+const PAD_ACTIONS = { 0: 'a', 1: 'b', 2: 'x', 3: 'y', 8: 'view', 9: 'menu', 10: 'fav', 11: 'hide', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
 const DIRECTIONS = new Set(['up', 'down', 'left', 'right']);
 const STICK_DEADZONE = 0.5;
 const REPEAT_DELAY_MS = 400;
