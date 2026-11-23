@@ -28,6 +28,8 @@ let inPanel = false;
 let ready = false;
 let changing = false;
 let inMenu = false;
+// True after a Game was played: the Shelves are ordered again when the player moves to another Shelf.
+let stale = false;
 
 // Anything unexpected is logged in full and the player only sees a plain message, once per kind of failure.
 const reported = new Set();
@@ -191,9 +193,25 @@ function openShelf(index, from = 0) {
 }
 
 function switchShelf(step) {
-  const next = current + step;
-  if (next < 0 || next >= shelves.length) return false;
-  openShelf(next, step);
+  if (current + step < 0 || current + step >= shelves.length) return false;
+  if (!stale) {
+    openShelf(current + step, step);
+    return true;
+  }
+  // The Shelf the player is on keeps its order until they leave it.
+  stale = false;
+  const here = shelves[current].console;
+  window.tink.getLibrary().then((library) => {
+    const index = library.shelves.findIndex((item) => item.console === here);
+    const next = index + step;
+    if (index < 0 || next < 0 || next >= library.shelves.length) return loadLibrary();
+    shelves = library.shelves;
+    positions.clear();
+    current = index;
+    openShelf(next, step);
+    positions.delete(index);
+    return null;
+  }).catch(report);
   return true;
 }
 
@@ -212,7 +230,7 @@ async function switchProfile() {
 // Favourites or hides the selected Game, then shows the Shelves again where they were.
 async function changeGame(change) {
   const game = shelf.game();
-  if (changing || !game || game.all) return;
+  if (changing || !game) return;
   changing = true;
   try {
     await change(game.id);
@@ -225,7 +243,7 @@ async function changeGame(change) {
 // The panel beside the selected Case. The Shelf stays where it is, whatever is picked.
 async function openGameMenu() {
   const game = shelf.game();
-  if (inMenu || changing || launching || !game || game.all) return;
+  if (inMenu || changing || launching || !game) return;
   inMenu = true;
   try {
     const choice = await openCaseMenu({ fav: game.fav });
@@ -245,6 +263,7 @@ async function play() {
   try {
     const result = await window.tink.launch(game.id);
     if (result && result.error) await explain(result);
+    else stale = true;
   } finally {
     launching = false;
   }
@@ -286,7 +305,7 @@ listenForInput((action) => {
     switchProfile();
     return 'confirm';
   }
-  if (action === 'settings' || (action === 'menu' && (shelves.length === 0 || !shelf.game() || shelf.game().all))) {
+  if (action === 'settings' || (action === 'menu' && (shelves.length === 0 || !shelf.game()))) {
     goToSettings();
     return 'confirm';
   }
@@ -329,17 +348,11 @@ listenForInput((action) => {
   if (action === 'lb') return switchShelf(-1) ? 'shelf' : null;
   if (action === 'rb') return switchShelf(1) ? 'shelf' : null;
   if (action === 'fav' || action === 'hide') {
-    if (changing || !shelf.game() || shelf.game().all) return null;
+    if (changing || !shelf.game()) return null;
     changeGame(action === 'fav' ? window.tink.toggleFavourite : window.tink.hideGame);
     return 'toggle';
   }
   if (action === 'a') {
-    if (shelf.game() && shelf.game().all) {
-      const first = shelves.findIndex((item) => item.console !== 'recent' && item.console !== 'favourites');
-      if (first < 0) return null;
-      openShelf(first, 1);
-      return 'shelf';
-    }
     if (launching || !shelf.game()) return null;
     play();
     return 'launch';
@@ -355,6 +368,7 @@ listenForInput((action) => {
 async function loadLibrary({ fresh = false } = {}) {
   const before = !fresh && shelves[current] && shelves[current].console;
   const selected = shelf.selected();
+  const selectedId = shelf.game() && shelf.game().id;
   const library = await window.tink.getLibrary();
   renderTray().catch(report);
   ready = true;
@@ -371,7 +385,8 @@ async function loadLibrary({ fresh = false } = {}) {
   showMessage('');
   const found = shelves.findIndex((item) => item.console === before);
   current = Math.max(0, found);
-  shelf.show(shelves[current], found >= 0 ? selected : 0);
+  const same = found >= 0 ? shelves[current].games.findIndex((game) => game.id === selectedId) : -1;
+  shelf.show(shelves[current], same >= 0 ? same : found >= 0 ? selected : 0);
   renderNav();
   showTitle();
   showHints();

@@ -44,28 +44,45 @@ test('a missing last profile falls back to the first', () => {
 
 test('recent lists the newest first, without repeats, up to the limit', () => {
   const [profile] = fresh().profiles;
-  for (let i = 0; i < 15; i++) p.recordPlay(profile, `k${i}`);
+  for (let i = 0; i < p.RECENT_MAX + 3; i++) p.recordPlay(profile, `k${i}`);
   p.recordPlay(profile, 'k10');
   assert.strictEqual(profile.recent.length, p.RECENT_MAX);
-  assert.deepStrictEqual(profile.recent.slice(0, 3), ['k10', 'k14', 'k13']);
+  assert.deepStrictEqual(profile.recent.slice(0, 3), ['k10', `k${p.RECENT_MAX + 2}`, `k${p.RECENT_MAX + 1}`]);
   assert.strictEqual(new Set(profile.recent).size, p.RECENT_MAX);
 });
 
-test('the Recent shelf ends with the All games tile, and Favourites follows it', () => {
+test('every shelf starts with what the profile played last, the rest keep their order', () => {
   const profile = fresh().profiles[0];
-  p.recordPlay(profile, 'gamecube:Luigi');
+  p.recordPlay(profile, 'gamecube:Wind Waker');
   p.recordPlay(profile, 'steam:620');
-  p.toggleFavourite(profile, 'gamecube:Wind Waker');
+  p.recordPlay(profile, 'gamecube:Wind Waker');
   const built = p.buildShelves(shelves, profile);
-  assert.deepStrictEqual(built.map((s) => s.console), ['recent', 'favourites', 'gamecube', 'steam']);
-  assert.deepStrictEqual(built[0].games.map((g) => g.title), ['Portal 2', 'Luigi', 'All games']);
-  assert.strictEqual(p.realId(built[0].games[0].id), 'steam:620');
-  assert.deepStrictEqual(built[1].games.map((g) => g.title), ['Wind Waker']);
+  assert.deepStrictEqual(built.map((s) => s.console), ['gamecube', 'steam']);
+  assert.deepStrictEqual(built[0].games.map((g) => g.title), ['Wind Waker', 'Luigi']);
 });
 
-test('empty Recent and Favourites shelves do not show', () => {
-  const built = p.buildShelves(shelves, fresh().profiles[0]);
-  assert.deepStrictEqual(built.map((s) => s.console), ['gamecube', 'steam']);
+test('one profile\'s play history does not order another profile\'s shelves', () => {
+  const settings = fresh();
+  const other = p.addProfile(settings);
+  p.recordPlay(settings.profiles[0], 'gamecube:Wind Waker');
+  assert.deepStrictEqual(p.buildShelves(shelves, other)[0].games.map((g) => g.title), ['Luigi', 'Wind Waker']);
+});
+
+test('sorting by history ignores unknown keys and leaves never-played games in place', () => {
+  const list = ['a', 'b', 'c', 'd'].map((key) => ({ key }));
+  assert.deepStrictEqual(p.sortByHistory(list, []).map((g) => g.key), ['a', 'b', 'c', 'd']);
+  assert.deepStrictEqual(p.sortByHistory(list, ['d', 'gone', 'b']).map((g) => g.key), ['d', 'b', 'a', 'c']);
+});
+
+test('Favourites follows the history too, and there is no Recent shelf', () => {
+  const profile = fresh().profiles[0];
+  p.toggleFavourite(profile, 'gamecube:Luigi');
+  p.toggleFavourite(profile, 'gamecube:Wind Waker');
+  p.recordPlay(profile, 'gamecube:Wind Waker');
+  const built = p.buildShelves(shelves, profile);
+  assert.deepStrictEqual(built.map((s) => s.console), ['favourites', 'gamecube', 'steam']);
+  assert.deepStrictEqual(built[0].games.map((g) => g.title), ['Wind Waker', 'Luigi']);
+  assert.strictEqual(p.realId(built[0].games[0].id), built[1].games[0].id);
 });
 
 test('hidden games and shelves disappear everywhere, and come back', () => {
@@ -80,7 +97,7 @@ test('hidden games and shelves disappear everywhere, and come back', () => {
   p.showAllGames(profile);
   p.toggleConsole(profile, 'steam');
   built = p.buildShelves(shelves, profile);
-  assert.deepStrictEqual(built.map((s) => s.console), ['recent', 'favourites', 'gamecube', 'steam']);
+  assert.deepStrictEqual(built.map((s) => s.console), ['favourites', 'gamecube', 'steam']);
 });
 
 test('favourites toggle on and off', () => {

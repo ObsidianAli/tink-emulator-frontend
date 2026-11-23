@@ -118,7 +118,7 @@ async function getLibrary() {
   const profile = profiles.activeProfile(current);
   const shelves = profiles.buildShelves(allShelves, profile).map((shelf) => ({
     ...shelf,
-    games: shelf.games.map(({ id, key, title, all }) => ({ id, title, all, fav: profile.favourites.includes(key) })),
+    games: shelf.games.map(({ id, key, title }) => ({ id, title, fav: profile.favourites.includes(key) })),
   }));
   return { shelves };
 }

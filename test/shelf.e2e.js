@@ -30,6 +30,7 @@ function makeLibrary(root) {
   const waiter = path.join(root, 'switch2');
   fs.mkdirSync(waiter);
   fs.writeFileSync(path.join(waiter, 'Waiting Game.js'), 'setTimeout(() => {}, 1500);\n');
+  fs.writeFileSync(path.join(waiter, 'Aardvark Game.js'), 'setTimeout(() => {}, 1500);\n');
   consoles.switch2 = { folder: waiter, exe: process.execPath };
   return { consoles, covers: false };
 }
@@ -204,10 +205,10 @@ async function main() {
   };
   const currentShelf = () => page.textContent('#shelves .current');
 
-  // Recent after a play, a second profile with a picture, Favourites, hiding, and the picker's two ways in.
+  // History after a play, a second profile with a picture, Favourites, hiding, and the picker's two ways in.
   async function profileSteps() {
     const [first] = readSettings().profiles;
-    assert.deepStrictEqual(first.recent, ['switch2:Waiting Game.js'], 'a played game goes into Recent');
+    assert.deepStrictEqual(first.recent, ['switch2:Waiting Game.js'], 'a played game goes into the history');
     assert.ok(first.name && first.id, 'old settings got a profile');
     await key('Tab');
     await key('ArrowRight');
@@ -225,13 +226,8 @@ async function main() {
     await key('ArrowLeft');
     await key('Enter');
     await sleep(500);
-    assert.strictEqual(await currentShelf(), 'Recent');
-    await key('ArrowRight');
-    assert.strictEqual(await title(), 'All games');
-    await shot('shelf-recent');
-    await key('Enter');
-    const first2 = await currentShelf();
-    assert.notStrictEqual(first2, 'Recent', 'All games jumps to the first Console shelf');
+    assert.strictEqual(await currentShelf(), shelfNames[0], 'a new profile starts on the first shelf');
+    assert.ok(!shelfNames.includes('Recent'), 'there is no Recent shelf');
     const liked = await title();
     await key('l');
     assert.deepStrictEqual(readSettings().profiles[0].favourites.length, 1);
@@ -248,7 +244,7 @@ async function main() {
     await key('ArrowRight');
     await key('Enter');
     await sleep(500);
-    assert.ok(!(await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent))).includes('Recent'), 'another profile has no Recent');
+    assert.ok(!(await page.$$eval('#shelves span', (spans) => spans.map((s) => s.textContent))).includes('Favourites'), 'another profile has no Favourites yet');
   }
 
   await page.waitForSelector('#shelves .current');
@@ -356,6 +352,10 @@ async function main() {
 
   // Play the Switch 2 stub: Tink should hide, then come back when it exits.
   await goTo('Switch 2');
+  assert.strictEqual(await title(), 'Aardvark Game', 'never-played games keep their order');
+  await page.keyboard.press('ArrowRight');
+  await sleep(350);
+  assert.strictEqual(await title(), 'Waiting Game');
   await page.keyboard.press('Enter');
   await sleep(500);
   const hidden = !(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((w) => w.isVisible() && w.isFocusable())));
@@ -363,6 +363,11 @@ async function main() {
   const back = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((w) => w.isVisible() && w.isFocusable()));
   console.log('play: hidden while running', hidden, '/ back after exit', back);
   await shot('shelf-after-play');
+  assert.strictEqual(await title(), 'Waiting Game', 'the shelf under the cursor is not reshuffled by a play');
+  await key('PageUp');
+  await key('PageDown');
+  assert.strictEqual(await currentShelf(), 'Switch 2');
+  assert.strictEqual(await title(), 'Waiting Game', 'the played game leads its shelf the next time it is drawn');
 
   await profileSteps();
 
