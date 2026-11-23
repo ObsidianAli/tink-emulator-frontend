@@ -189,11 +189,11 @@ async function main() {
     console.log(`${prefix} hints:`, seen.join(' | '));
   };
 
-  // Up/Down until the named Shelf is current.
+  // Page Up/Down until the named Shelf is current.
   const goTo = async (name) => {
     const target = shelfNames.indexOf(name);
     const now = shelfNames.indexOf(await page.textContent('#shelves .current'));
-    const key = target > now ? 'ArrowDown' : 'ArrowUp';
+    const key = target > now ? 'PageDown' : 'PageUp';
     for (let i = 0; i < Math.abs(target - now); i++) await page.keyboard.press(key);
   };
 
@@ -240,7 +240,8 @@ async function main() {
     const liked = await title();
     await key('l');
     assert.deepStrictEqual(readSettings().profiles[0].favourites.length, 1);
-    await key('ArrowUp');
+    await sleep(600);
+    await key('PageUp');
     assert.strictEqual(await currentShelf(), 'Favourites');
     assert.strictEqual(await title(), liked);
     await shot('shelf-favourites');

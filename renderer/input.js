@@ -1,5 +1,5 @@
 // Keyboard and controller input in the app, turned into a few named actions:
-// up, down, left, right, a, b, x, y, lb, rb, menu, view, fav, hide.
+// up, down, left, right, a, b, x, y, lb, rb (Page Up, Page Down), menu, view, fav, hide.
 
 const KEY_ACTIONS = {
   ArrowUp: 'up',
@@ -14,6 +14,8 @@ const KEY_ACTIONS = {
   s: 'menu',
   S: 'menu',
   Tab: 'view',
+  PageUp: 'lb',
+  PageDown: 'rb',
   l: 'fav',
   L: 'fav',
   h: 'hide',

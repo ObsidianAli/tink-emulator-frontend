@@ -91,6 +91,7 @@
   --button-min-width: calc(var(--space) * 20);
   --avatar-size: calc(var(--space) * 16);
   --avatar-small: calc(var(--space) * 9);
+  --tray-size: calc(var(--space) * 8);
 
   /* Layers. */
   --layer-dialog: 10;
