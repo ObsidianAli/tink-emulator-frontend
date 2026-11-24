@@ -40,7 +40,6 @@ function advance(t, ms) {
   for (let i = 0; i < ms; i += 10) t.mock.timers.tick(10);
 }
 
-// A pad reader driven by the test: set held to press and release the combo.
 function fakePad() {
   const pad = { held: false, reads: 0 };
   pad.read = () => {

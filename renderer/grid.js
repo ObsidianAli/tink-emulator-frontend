@@ -1,10 +1,7 @@
-// The All games screen: every Game as a Cover in a grid. move() takes an arrow, and game() is the Game under the cursor.
-// Covers are fetched only as they scroll into view, then kept.
-import { element } from './dom.js';
+import { element, scrollToNode } from './dom.js';
 
 const SORT_NAMES = { recent: 'Last played', az: 'A–Z', console: 'Console', favourites: 'Favourites' };
 const SORTS = Object.keys(SORT_NAMES);
-// Covers closer than this to the tile's shape are cropped to fill it; others are shown whole.
 const CROP_LIMIT = 0.25;
 const TILE_ASPECT = 3 / 4;
 
@@ -44,7 +41,6 @@ async function fillCover(tile, game) {
       tile.replaceChildren(img);
       return;
     } catch {
-      // a broken cached file: a plain cover instead
     }
   }
   const plain = element('div', 'tile-plain', game.title);
@@ -77,7 +73,11 @@ function focus(next, scroll = true) {
   }
   tile.classList.add('focused');
   title.textContent = tile.game.title;
-  if (scroll) tile.scrollIntoView({ block: 'nearest' });
+  if (scroll) reveal(tile, true);
+}
+
+function reveal(tile, smooth) {
+  scrollToNode(list, tile, smooth, parseFloat(getComputedStyle(list).paddingTop));
 }
 
 function set(next, sort, id, otherwise = index) {
@@ -87,7 +87,7 @@ function set(next, sort, id, otherwise = index) {
   const found = games.findIndex((game) => game.id === id);
   index = 0;
   focus(found >= 0 ? found : Math.min(otherwise, games.length - 1), false);
-  if (tiles[index]) tiles[index].scrollIntoView({ block: 'nearest' });
+  if (tiles[index]) reveal(tiles[index], false);
 }
 
 function move(action) {

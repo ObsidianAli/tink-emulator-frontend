@@ -1,4 +1,3 @@
-// Stands in for an emulator in tests: writes the arguments it got, waits a moment, then exits.
 const fs = require('node:fs');
 
 const [outFile, ...args] = process.argv.slice(2);

@@ -16,12 +16,51 @@ body {
   transition: --tint var(--duration-case) var(--ease-out);
 }
 
-/* The shelf screen */
+/* Otherwise the old profile's tint would ease into the new one under the black. */
+body:has(#blackout.black) {
+  transition: none;
+}
+
+#blackout {
+  position: fixed;
+  inset: 0;
+  z-index: var(--layer-blackout);
+  background: var(--black);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-from-black) var(--ease-fade);
+}
+
+#blackout.black {
+  opacity: 1;
+  transition-duration: var(--duration-to-black);
+}
 
 main {
   position: relative;
   flex: 1;
   min-height: 0;
+  transition: opacity var(--duration-screen-in) var(--ease-screen), scale var(--duration-screen-in) var(--ease-screen);
+}
+
+main.screen-out {
+  opacity: 0;
+  transition: opacity var(--duration-screen-out) var(--ease-fade);
+}
+
+main.screen-hold {
+  opacity: 0;
+  scale: var(--screen-zoom);
+  transition: none;
+}
+
+main.screen-hold * {
+  transition: none !important;
+}
+
+/* The screens draw no background of their own, so the app background shows through and what is under them is hidden instead. */
+main:has(> :is(#settings, #profiles, #info):not([hidden])) > :is(#shelf, #title, #clock, #tray, #all-games, #message, #notice) {
+  visibility: hidden;
 }
 
 #shelf {
@@ -31,12 +70,42 @@ main {
   height: 100%;
 }
 
-#title,
+#title {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: var(--title-home-width);
+  margin: 0;
+  overflow: hidden;
+  color: var(--title-home-colour);
+  font-size: var(--title-home-size);
+  font-weight: var(--weight-regular);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  translate: -50% calc(-100% - var(--title-home-gap));
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+main.tray-focused #title {
+  opacity: 0;
+}
+
+#clock {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--home-margin);
+  margin: 0;
+  color: var(--clock-colour);
+  font-size: var(--clock-size);
+  font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
 #grid-title {
   position: absolute;
   left: var(--space-8);
   right: var(--space-8);
-  bottom: calc(var(--space-4) + var(--tray-size) + var(--space-2));
+  bottom: calc(var(--space-6) + var(--hints-height));
   margin: 0;
   overflow: hidden;
   font-size: var(--text-title);
@@ -45,12 +114,6 @@ main {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-#grid-title {
-  bottom: var(--space-6);
-}
-
-/* The row of icons under the title */
 
 #tray {
   position: absolute;
@@ -71,18 +134,51 @@ main {
   width: var(--tray-size);
   height: var(--tray-size);
   padding: 0;
-  overflow: hidden;
   border: 0;
   border-radius: var(--radius-round);
   background: var(--surface-raised);
   color: var(--text);
-  outline: var(--focus-width) solid transparent;
-  outline-offset: var(--focus-offset);
-  transition: outline-color var(--duration-fast) var(--ease-out);
+  outline: none;
 }
 
-.tray-icon:focus {
-  outline: var(--focus-ring);
+.tray-icon {
+  position: relative;
+}
+
+.focus-glow {
+  position: absolute;
+  inset: calc(-1 * (var(--focus-gap) + var(--focus-line)));
+  border-radius: inherit;
+  box-shadow: 0 0 var(--focus-glow-size) var(--focus-glow), inset 0 0 var(--focus-glow-size) var(--focus-glow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--focus-fade) linear;
+}
+
+.focus-glow > span {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: var(--focus-line) solid transparent;
+  border-radius: inherit;
+  background: linear-gradient(to right, var(--focus-from), var(--focus-to)) border-box;
+  mask: linear-gradient(black, black) padding-box, linear-gradient(black, black);
+  mask-composite: exclude;
+}
+
+.tray-icon:focus .focus-glow,
+#all-games.selected .focus-glow {
+  opacity: 1;
+  animation: focus-breath calc(var(--focus-period) / 2) var(--focus-ease) infinite alternate;
+}
+
+@keyframes focus-breath {
+  from {
+    filter: opacity(var(--focus-breath-low));
+  }
+  to {
+    filter: opacity(1);
+  }
 }
 
 .tray-icon .badge {
@@ -97,8 +193,6 @@ main {
   height: 60%;
 }
 
-/* The round All games button at the end of the row; the row's code moves it. */
-
 #all-games {
   position: absolute;
   width: var(--all-games-size);
@@ -110,14 +204,9 @@ main {
   display: none;
 }
 
-#all-games.selected {
-  outline: var(--focus-ring);
-}
-
-/* The All games screen covers the row while it is open. */
-
 main.grid-open #shelf,
 main.grid-open #title,
+main.grid-open #clock,
 main.grid-open #tray,
 main.grid-open #all-games {
   visibility: hidden;
@@ -142,7 +231,7 @@ main.grid-open #all-games {
   position: absolute;
   left: 0;
   right: 0;
-  top: calc(var(--grid-top) - var(--space-3));
+  top: calc(var(--grid-top) - var(--grid-fade));
   display: grid;
   grid-template-columns: repeat(var(--grid-columns), var(--tile-width));
   grid-auto-rows: var(--tile-height);
@@ -150,11 +239,11 @@ main.grid-open #all-games {
   align-content: start;
   justify-content: center;
   box-sizing: border-box;
-  height: calc(var(--tile-height) * 2 + var(--space-3) * 3);
-  padding: var(--space-3) 0;
+  height: calc(var(--tile-height) * 2 + var(--space-3) + var(--grid-fade) * 2);
+  padding: var(--grid-fade) 0;
   overflow-y: auto;
-  scroll-padding: var(--space-3) 0;
   scrollbar-width: none;
+  mask-image: linear-gradient(to bottom, transparent, black calc(var(--grid-fade) - var(--space-2)), black calc(100% - var(--grid-fade) + var(--space-2)), transparent);
 }
 
 .tile {
@@ -226,20 +315,21 @@ main.grid-open #all-games {
   display: none;
 }
 
-/* Button hints along the bottom edge */
-
 #hints:empty {
   display: none;
 }
 
 #hints {
-  position: relative;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: var(--layer-hints);
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: var(--space-4);
-  flex: none;
+  box-sizing: border-box;
   height: var(--hints-height);
   padding: 0 var(--space-8);
   border-top: var(--line-width) solid var(--line);
@@ -252,7 +342,6 @@ main.grid-open #all-games {
   gap: var(--space);
 }
 
-/* A self-made face-button glyph: a plain circle with the letter. */
 .glyph {
   display: inline-flex;
   align-items: center;
@@ -267,8 +356,6 @@ main.grid-open #all-games {
   font-weight: var(--weight-bold);
 }
 
-/* The friendly error dialog */
-
 .dialog-scrim {
   position: fixed;
   inset: 0;
@@ -278,11 +365,15 @@ main.grid-open #all-games {
   justify-content: center;
   background: var(--scrim);
   opacity: 0;
-  transition: opacity var(--duration-ui) var(--ease-out);
+  transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 .dialog-scrim.open {
   opacity: 1;
+}
+
+.dialog-scrim:not(.open) {
+  pointer-events: none;
 }
 
 .dialog {
@@ -292,12 +383,12 @@ main.grid-open #all-games {
   padding: var(--space-6);
   border-radius: var(--radius-large);
   background: var(--surface-raised);
-  transform: translateY(var(--space-2));
-  transition: transform var(--duration-ui) var(--ease-out);
+  scale: var(--scale-overlay);
+  transition: scale var(--duration-fast) var(--ease-out);
 }
 
 .dialog-scrim.open .dialog {
-  transform: none;
+  scale: 1;
 }
 
 .dialog p {
@@ -328,8 +419,6 @@ main.grid-open #all-games {
   outline: var(--focus-ring);
 }
 
-/* First-run setup, and Settings, which uses the same list */
-
 #setup,
 #settings,
 #panel,
@@ -340,7 +429,11 @@ main.grid-open #all-games {
   flex-direction: column;
   gap: var(--space-2);
   box-sizing: border-box;
-  padding: var(--space-6) var(--space-8) var(--space-3);
+  padding: var(--space-6) var(--space-8) calc(var(--space-3) + var(--hints-height));
+}
+
+#setup,
+#panel {
   background: var(--bg);
 }
 
@@ -355,7 +448,7 @@ main.grid-open #all-games {
 #panel {
   gap: var(--space);
   padding-top: var(--space-2);
-  padding-bottom: 0;
+  padding-bottom: var(--hints-height);
 }
 
 #setup h1,
@@ -479,8 +572,6 @@ main.grid-open #all-games {
   font-size: var(--text-small);
 }
 
-/* The profile picker and its edit view */
-
 #profiles {
   align-items: center;
   z-index: var(--layer-dialog);
@@ -579,31 +670,6 @@ main.grid-open #all-games {
   margin-top: var(--space-2);
 }
 
-/* The picker fades and zooms in and out over the shelf. */
-
-#profiles.entering {
-  animation: screen-in var(--duration-ui) var(--ease-out) both;
-}
-
-#profiles.leaving {
-  animation: screen-out var(--duration-ui) var(--ease-out) both;
-  pointer-events: none;
-}
-
-@keyframes screen-in {
-  from {
-    opacity: 0;
-    transform: scale(var(--zoom-screen));
-  }
-}
-
-@keyframes screen-out {
-  to {
-    opacity: 0;
-    transform: scale(var(--zoom-screen));
-  }
-}
-
 .profile-step {
   margin: 0;
   font-size: var(--text-body);
@@ -612,8 +678,6 @@ main.grid-open #all-games {
 .profile-name {
   width: 100%;
 }
-
-/* The panel beside the selected Case */
 
 #case-menu {
   position: absolute;
@@ -629,14 +693,49 @@ main.grid-open #all-games {
   border-radius: var(--radius-large);
   background: var(--surface-raised);
   transform: translateY(-50%);
+  opacity: 0;
+  scale: var(--scale-overlay);
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-out), scale var(--duration-fast) var(--ease-out);
+}
+
+#case-menu.open {
+  opacity: 1;
+  scale: 1;
+  pointer-events: auto;
+}
+
+.menu-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: var(--layer-dialog);
+  background: var(--scrim);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.menu-scrim.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+html.settling *,
+html.settling *::before,
+html.settling *::after {
+  transition: none !important;
+}
+
+#case-menu.anchored {
+  top: auto;
+  margin-bottom: var(--space-2);
+  transform: none;
 }
 
 #case-menu[hidden],
 #info[hidden] {
   display: none;
 }
-
-/* The Game info page */
 
 #info {
   position: absolute;
@@ -647,8 +746,7 @@ main.grid-open #all-games {
   justify-content: center;
   gap: var(--space-6);
   box-sizing: border-box;
-  padding: var(--space-6) var(--space-8);
-  background: var(--bg);
+  padding: var(--space-6) var(--space-8) calc(var(--space-6) + var(--hints-height));
 }
 
 .info-top {

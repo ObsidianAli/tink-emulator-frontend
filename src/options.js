@@ -1,14 +1,11 @@
-// The logic behind the Settings screen: what it lists, and how each change is stored.
 const { CONSOLES, EMULATORS, isConsole, isEmulator } = require('./presets');
 const { resolveEmulator } = require('./setup');
 const { isFile } = require('./detect');
 
-// Start in fullscreen is on unless it was turned off.
 const wantsFullscreen = (settings) => settings.fullscreen !== false;
 
 const steamKey = (settings) => (typeof settings.steamGridDbKey === 'string' ? settings.steamGridDbKey.trim() : '');
 
-// One entry per Console. The key itself never goes to the screen, only whether there is one.
 function buildSettings(settings, detected, version) {
   const consoles = Object.entries(CONSOLES).map(([id, preset]) => {
     const entry = settings.consoles[id] || {};
@@ -37,7 +34,6 @@ function buildSettings(settings, detected, version) {
   };
 }
 
-// "Find automatically": forgets a picked exe so detection decides again.
 function clearEmulator(settings, id) {
   if (isConsole(id) && !CONSOLES[id].emulator) {
     if (settings.consoles[id]) delete settings.consoles[id].exe;

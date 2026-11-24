@@ -1,18 +1,13 @@
-// The home screen: one row of the Games played last. Left/Right move along it to the All games button at the end,
-// A (Enter) plays, Y (F) flips the selected Case, X (Space) opens it and B (Esc) undoes either. L3 (L) favourites
-// the Game, R3 (H) hides it, View (Tab) goes back to the profile picker. Menu (S) opens the Game's panel: Favourite,
-// Hide and Game info. Down moves into the row of icons under the title (profile, Controllers, Settings, Power),
-// Left/Right move along it, A opens one and Up or B goes back to the row. Comma opens Settings; with no Game under the
-// cursor, Menu does too. A on the All games button opens the grid of every Game: arrows move, A plays, Menu opens the
-// panel, Y changes the sort and B goes back to the row.
 import { createShelf } from './shelf.js';
 import { grid } from './grid.js';
 import { runSetup } from './setup.js';
-import { openSettings, settingsOpen } from './settings.js';
-import { openCaseMenu, caseMenuOpen } from './casemenu.js';
+import { openSettings, hideSettings, settingsOpen } from './settings.js';
+import { openCaseMenu, openMenu, caseMenuOpen } from './casemenu.js';
 import { openInfo, infoOpen } from './info.js';
-import { chooseProfile, badge } from './profiles.js';
+import { chooseProfile, closeProfiles, badge } from './profiles.js';
+import { transition, screen, changingScreen } from './transition.js';
 import { openPanel, updatePanel, panelOpen } from './panel.js';
+import './clock.js';
 
 const main = document.querySelector('main');
 const allGamesButton = document.getElementById('all-games');
@@ -20,7 +15,6 @@ const title = document.getElementById('title');
 const message = document.getElementById('message');
 const tray = document.getElementById('tray');
 
-// The Games on the home row, and every Game in the order the grid shows them.
 let row = [];
 let games = [];
 let sort = 'recent';
@@ -35,7 +29,6 @@ let ready = false;
 let changing = false;
 let inMenu = false;
 
-// Anything unexpected is logged in full and the player only sees a plain message, once per kind of failure.
 const reported = new Set();
 function report(reason) {
   const text = String((reason && reason.stack) || reason);
@@ -60,6 +53,8 @@ function showTitle() {
   const game = shelf.game();
   title.textContent = shelf.onButton() ? 'All games' : game ? game.title : '';
   allGamesButton.classList.toggle('selected', shelf.onButton() && trayFocus < 0);
+  main.classList.toggle('tray-focused', trayFocus >= 0);
+  shelf.showRing(trayFocus < 0);
 }
 
 function showHints() {
@@ -67,7 +62,6 @@ function showHints() {
   focusTray();
 }
 
-// The row of icons under the title. To add one, add an entry here: a name, how to draw it, and what A does.
 const trayIcons = [
   { name: 'Profile', draw: (profile) => badge(profile), activate: () => switchProfile() },
   { name: 'Controllers', draw: () => controller(), activate: () => showControllers() },
@@ -76,7 +70,6 @@ const trayIcons = [
 ];
 let trayFocus = -1;
 
-// A simple outline icon from its shapes, [tag, attributes] each.
 function icon(...shapes) {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
@@ -113,19 +106,26 @@ const blocks = () => icon(
   ['rect', { x: 3, y: 13, width: 8, height: 8, rx: 2.4 }],
   ['rect', { x: 13, y: 13, width: 8, height: 8, rx: 2.4 }],
 );
-allGamesButton.append(blocks());
+
+function focusGlow() {
+  const glow = document.createElement('span');
+  glow.className = 'focus-glow';
+  glow.append(document.createElement('span'));
+  return glow;
+}
+
+allGamesButton.append(blocks(), focusGlow());
 
 const shelf = createShelf(document.getElementById('shelf'), {
   onTint: (colour) => document.body.style.setProperty('--tint', colour),
   button: allGamesButton,
+  title,
 });
 
-// Connected controllers by name, without the vendor and product numbers the browser adds in brackets.
 function controllerRows() {
   return [...navigator.getGamepads()].filter(Boolean).map((pad) => ({ label: pad.id.replace(/\s*\(.*\)\s*$/, '') || 'Controller' }));
 }
 
-// Opens a panel from the icon row. B comes back to the icon.
 async function showPanel(options) {
   if (inPanel) return;
   inPanel = true;
@@ -149,23 +149,36 @@ async function showControllers() {
   }
 }
 
-function showPower() {
-  return showPanel({
-    title: 'Power',
-    rows: [
-      { label: 'Sleep', run: () => window.tink.power('sleep') },
-      {
-        label: 'Shut down',
-        run: async () => {
-          if (await showDialog({ message: 'Shut down this PC?', confirm: 'Shut down', cancel: 'Not now', sound: 'confirm' })) window.tink.power('shutdown');
-        },
-      },
-      { label: 'Close Tink', run: () => window.tink.power('close') },
-    ],
-  });
+async function showPower() {
+  if (inMenu) return;
+  inMenu = true;
+  let choice;
+  try {
+    choice = await openMenu({
+      choices: [
+        { id: 'sleep', label: 'Sleep' },
+        { id: 'shutdown', label: 'Shut down' },
+        { id: 'close', label: 'Close Tink' },
+      ],
+      anchor: tray.children[trayFocus],
+    });
+  } finally {
+    inMenu = false;
+    showHints();
+  }
+  if (choice === 'shutdown') {
+    inMenu = true;
+    try {
+      if (await showDialog({ message: 'Shut down this PC?', confirm: 'Shut down', cancel: 'Not now', sound: 'confirm' })) window.tink.power('shutdown');
+    } finally {
+      inMenu = false;
+      showHints();
+    }
+  } else if (choice) {
+    window.tink.power(choice);
+  }
 }
 
-// Draws the icons again, for the profile that is current now.
 async function renderTray() {
   const { profiles, last } = await window.tink.getProfiles();
   const profile = profiles.find((p) => p.id === last) || profiles[0];
@@ -173,7 +186,13 @@ async function renderTray() {
     const node = document.createElement('button');
     node.className = 'tray-icon';
     node.setAttribute('aria-label', icon.name);
-    node.append(icon.draw(profile));
+    node.append(icon.draw(profile), focusGlow());
+    node.addEventListener('click', () => {
+      if (!ready || inMenu || inPicker || inPanel || inSettings || launching || settingsOpen() || document.querySelector('.dialog-scrim')) return;
+      trayFocus = trayIcons.indexOf(icon);
+      showTitle();
+      icon.activate();
+    });
     return node;
   }));
   focusTray();
@@ -189,13 +208,17 @@ function leaveTray() {
   showTitle();
 }
 
-// Switches profile; B on the picker comes back to where the player was.
 async function switchProfile() {
   if (inPicker || launching) return;
   inPicker = true;
   try {
-    if (await chooseProfile({ canCancel: true })) await loadLibrary({ fresh: true });
-    else showHints();
+    if (await chooseProfile({ canCancel: true, stay: true })) {
+      await screen(async () => {
+        closeProfiles();
+        await loadLibrary({ fresh: true });
+        await shelf.ready();
+      });
+    } else showHints();
   } finally {
     inPicker = false;
   }
@@ -213,7 +236,6 @@ async function changeGame(change) {
   }
 }
 
-// The panel beside the selected Case. The row stays where it is, whatever is picked.
 async function openGameMenu() {
   const game = focusedGame();
   if (inMenu || changing || launching || !game) return;
@@ -234,15 +256,20 @@ async function play() {
   if (launching || !game) return;
   launching = true;
   try {
-    const result = await window.tink.launch(game.id);
+    let result;
+    // Black before the window hides, so the old row is never what shows when Tink comes back.
+    await transition(async () => {
+      result = await window.tink.launch(game.id);
+      if (result && result.error) return;
+      showLibrary(await window.tink.refreshLibrary(), { played: true });
+      await shelf.ready();
+    });
     if (result && result.error) await explain(result);
-    else showLibrary(await window.tink.refreshLibrary(), { played: true });
   } finally {
     launching = false;
   }
 }
 
-// A launch failure in plain words, with a way to fix it when there is one.
 async function explain({ error, fix, console }) {
   if (fix === 'settings') {
     const ok = await showDialog({ message: error, confirm: 'Open Settings', cancel: 'Not now' });
@@ -259,22 +286,24 @@ async function goToSettings(focusConsole) {
   if (inSettings) return;
   inSettings = true;
   try {
-    if (await openSettings({ focusConsole })) {
-      shelf.forgetCovers();
-      grid.forgetCovers();
-      await loadLibrary();
-    }
-    else showHints();
+    const changed = await openSettings({ focusConsole });
+    await screen(async () => {
+      hideSettings();
+      if (changed) {
+        shelf.forgetCovers();
+        grid.forgetCovers();
+        await loadLibrary();
+      } else showHints();
+    });
   } finally {
     inSettings = false;
   }
 }
 
-// Returns the name of the sound the action made, if any.
 listenForInput((action) => {
   const dialog = dialogTakesInput(action);
   if (dialog) return dialog.sound;
-  if (settingsOpen() || inSettings || inPicker || inMenu || caseMenuOpen() || infoOpen() || panelOpen() || inPanel) return null;
+  if (changingScreen() || settingsOpen() || inSettings || inPicker || inMenu || caseMenuOpen() || infoOpen() || panelOpen() || inPanel) return null;
   if (action === 'view') {
     switchProfile();
     return 'confirm';
@@ -365,20 +394,24 @@ function gridAction(action) {
 }
 
 function openGrid() {
-  inGrid = true;
-  main.classList.add('grid-open');
-  grid.set(games, sort, null, 0);
-  grid.open(true);
-  showHints();
+  screen(() => {
+    inGrid = true;
+    main.classList.add('grid-open');
+    grid.set(games, sort, null, 0);
+    grid.open(true);
+    showHints();
+  });
 }
 
-function closeGrid() {
+function leaveGrid() {
   inGrid = false;
   main.classList.remove('grid-open');
   grid.open(false);
   showTitle();
   showHints();
 }
+
+const closeGrid = () => screen(leaveGrid);
 
 async function changeSort() {
   if (sorting) return;
@@ -394,7 +427,6 @@ async function changeSort() {
   }
 }
 
-// The row starts at the front for a new profile or a Game just played, and otherwise keeps its place.
 function showLibrary(library, { fresh = false, played = false } = {}) {
   const wasButton = shelf.onButton();
   const selected = shelf.selected();
@@ -403,7 +435,7 @@ function showLibrary(library, { fresh = false, played = false } = {}) {
   row = library.row;
   games = library.games;
   sort = library.sort;
-  if (fresh || games.length === 0) closeGrid();
+  if (fresh || games.length === 0) leaveGrid();
   if (games.length === 0) {
     shelf.show([], 0);
     title.textContent = '';
@@ -424,15 +456,13 @@ function showLibrary(library, { fresh = false, played = false } = {}) {
 }
 
 async function loadLibrary({ fresh = false } = {}) {
-  const library = await window.tink.getLibrary();
-  renderTray().catch(report);
+  const [library] = await Promise.all([window.tink.getLibrary(), renderTray().catch(report)]);
   ready = true;
   showLibrary(library, { fresh });
 }
 
 const NOTICE_MS = 4000;
 
-// A short note, like "Updated to 0.2.0", that goes away on its own.
 async function showNotice() {
   const text = await window.tink.getNotice();
   if (!text) return;
@@ -444,7 +474,6 @@ async function showNotice() {
 
 const UPDATE_POLL_MS = 15 * 1000;
 
-// Offers a downloaded update once per start, and only while Tink is idle (never during play).
 function offerUpdate() {
   const timer = setInterval(async () => {
     if (launching || inSettings || inPicker || inPanel || settingsOpen() || document.querySelector('.dialog-scrim')) return;
@@ -461,11 +490,15 @@ async function start() {
   if (setup.needed) await runSetup(setup);
   inPicker = true;
   try {
-    await chooseProfile();
+    await chooseProfile({ stay: true });
   } finally {
     inPicker = false;
   }
-  await loadLibrary();
+  await screen(async () => {
+    closeProfiles();
+    await loadLibrary();
+    await shelf.ready();
+  });
   showNotice().catch(() => {});
   offerUpdate();
 }

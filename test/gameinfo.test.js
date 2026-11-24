@@ -24,7 +24,6 @@ const answer = {
   },
 };
 
-// A fake network: known URLs answer, everything else is a 404. Every request is logged.
 function fakeNet(routes) {
   const requests = [];
   const fetch = async (url) => {

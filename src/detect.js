@@ -1,9 +1,7 @@
-// Finds installed emulators. Looks in a few known places and one folder level inside them, never a whole drive.
 const fs = require('node:fs');
 const path = require('node:path');
 const { EMULATORS } = require('./presets');
 
-// Where emulators usually live: beside Tink, Program Files, AppData and RetroArch's usual folders.
 function defaultSearchDirs(env, tinkDir) {
   const dirs = [
     tinkDir,
@@ -36,7 +34,6 @@ function subfolders(dir) {
   }
 }
 
-// The exe of every emulator found, e.g. { dolphin: "C:\\Program Files\\Dolphin\\Dolphin.exe" }.
 function detectEmulators(searchDirs) {
   const found = {};
   for (const dir of searchDirs) {

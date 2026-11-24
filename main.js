@@ -1,4 +1,3 @@
-// Tink's main process: the window, and the named things the UI can ask for.
 const { app, BrowserWindow, ipcMain, shell, screen, dialog, nativeImage } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -20,19 +19,16 @@ const { powerAction } = require('./src/power');
 const { createUpdater, FINISH_FLAG } = require('./src/update');
 
 const POLL_MS = 2000;
-// How long to wait for Steam to actually start the game before giving up and showing Tink again.
-// Generous, because a first launch can wait on an update or a Steam login.
+// Generous: a first launch can wait on an update or a Steam login.
 const START_TIMEOUT_MS = 5 * 60 * 1000;
 const HINT_MS = 3000;
-// Let the home screen load first; the update check is not urgent.
 const UPDATE_CHECK_DELAY_MS = 10 * 1000;
 
-// An update is finished by the staged copy (Tink.new) started with the flag; its "Tink folder" is the real one.
 const FINISHING = process.argv.includes(FINISH_FLAG) && /\.new$/i.test(path.dirname(process.execPath));
 // The portable exe unpacks to a temp folder, so "beside Tink" means beside the exe the user started.
 const TINK_DIR = process.env.PORTABLE_EXECUTABLE_DIR
   || (FINISHING ? path.dirname(process.execPath).slice(0, -'.new'.length) : path.dirname(process.execPath));
-// Finishing an update must not be turned away by the Tink that is still shutting down. Source runs (tests) skip the lock.
+// A finishing update must not be turned away by the old Tink still shutting down; source runs (tests) skip the lock.
 const SECOND_INSTANCE = app.isPackaged && !FINISHING && !app.requestSingleInstanceLock();
 if (SECOND_INSTANCE) app.quit();
 
@@ -50,14 +46,11 @@ try {
   log('Could not move the old settings over', error);
 }
 
-// Details go to the log, never to the screen.
 process.on('uncaughtException', (error) => log('Uncaught error', error));
 process.on('unhandledRejection', (reason) => log('Unhandled rejection', reason));
 
 let win = null;
-// The games last sent to the UI. Launches are looked up here, so the UI never passes a path or exe.
 let gamesById = new Map();
-// Every Console that has games, before a profile hides anything. Settings lists these.
 let allConsoles = [];
 let settings = { consoles: {} };
 let emulators = {};
@@ -106,7 +99,6 @@ async function getLibrary() {
     id: `steam:${game.appId}`,
     console: 'steam',
     consoleName: STEAM.name,
-    // Steam Covers are cached by app id.
     fileName: game.appId,
     key: `steam:${game.appId}`,
   }));
@@ -116,8 +108,6 @@ async function getLibrary() {
   return currentLibrary();
 }
 
-// What the UI shows for the current profile, from the games already found: the home row, and every game in the
-// order the profile chose for the All games screen.
 function currentLibrary() {
   const current = loadSettings(settingsFile());
   profiles.ensureProfiles(current);
@@ -138,13 +128,11 @@ const AVATAR_MAX = 60;
 const AVATAR_SIZE = 256;
 const avatarDir = () => path.join(DATA_DIR, 'avatars');
 
-// The picture files the user dropped into data/avatars.
 function listAvatars() {
   fs.mkdirSync(avatarDir(), { recursive: true });
   return fs.readdirSync(avatarDir()).filter((name) => AVATAR_TYPES.test(name)).sort().slice(0, AVATAR_MAX);
 }
 
-// A picture cropped square and shrunk, as a data URL; the circle is drawn by the UI.
 function avatarSrc(file) {
   const image = nativeImage.createFromPath(path.join(avatarDir(), file));
   if (image.isEmpty()) return null;
@@ -173,7 +161,6 @@ function getAvatars() {
   return listAvatars().map((file) => ({ file, src: avatarSrc(file) })).filter((avatar) => avatar.src);
 }
 
-// Applies one change to the saved settings and returns what it returned.
 function changeProfiles(change) {
   const current = loadSettings(settingsFile());
   profiles.ensureProfiles(current);
@@ -182,10 +169,8 @@ function changeProfiles(change) {
   return result;
 }
 
-// Changes to the profile in use, like favourites and hidden consoles.
 const changeActive = (change) => changeProfiles((current) => change(profiles.activeProfile(current)));
 
-// A Game's Cover, as a data URL or a Plain cover colour. The UI itself never goes online.
 async function getCover(id) {
   const game = lookup(id);
   if (!game || !covers) return null;
@@ -199,7 +184,6 @@ async function getCover(id) {
   }
 }
 
-// What the Game info page shows besides the Cover: the Console's name, and for a Steam game its overview and screenshots.
 async function getGameInfo(id) {
   const game = lookup(id);
   if (!game) return null;
@@ -209,7 +193,6 @@ async function getGameInfo(id) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Waits until Steam reports a game running, then until it reports none.
 // Any running game counts as started, since some games start through a launcher with another id.
 // A failed registry read is ignored rather than taken as "the game ended".
 async function waitForGameToEnd() {
@@ -224,7 +207,7 @@ async function waitForGameToEnd() {
     } else if (await steam.isSteamRunning()) {
       started = true;
     } else if (started) {
-      // Steam itself is gone (it crashed), so the game id is stale and nothing is left to wait for.
+      // Steam crashed, so the game id is stale and nothing is left to wait for.
       return;
     }
   }
@@ -238,7 +221,6 @@ function showTink() {
   win.setAlwaysOnTop(false);
 }
 
-// A small note over the game for a few seconds. It can't take focus or clicks, so the game keeps them.
 function showHint() {
   const { workArea } = screen.getPrimaryDisplay();
   const width = 720;
@@ -268,7 +250,6 @@ function showHint() {
   return close;
 }
 
-// Loaded on the first game, so a missing XInput is logged once.
 let padReader;
 function getPadReader() {
   if (padReader === undefined) {
@@ -278,7 +259,6 @@ function getPadReader() {
   return padReader;
 }
 
-// While an emulated game runs: show the hint, and close the game when Select + Start is held.
 function whilePlaying(child) {
   const closeHint = showHint();
   const reader = getPadReader();
@@ -294,8 +274,6 @@ function whilePlaying(child) {
   };
 }
 
-// Starts the game through Steam, hides Tink, and shows it again once Steam says the game has ended.
-// While it runs, holding Select + Start closes the game's own processes, and Steam then reports it ended.
 async function launchSteam(game) {
   const { appId } = game;
   if (!/^\d+$/.test(String(appId))) return;
@@ -317,7 +295,6 @@ async function launchSteam(game) {
   }
 }
 
-// The exe the user set for this console, else the detected one.
 function emulatorExe(game) {
   const chosen = settings.consoles[game.console] && settings.consoles[game.console].exe;
   if (chosen) return chosen;
@@ -329,7 +306,6 @@ function detect() {
   return detectEmulators(defaultSearchDirs(process.env, TINK_DIR));
 }
 
-// What the setup screens need. Cheap when setup isn't due, so every start can ask.
 async function getSetup() {
   const current = loadSettings(settingsFile());
   if (!setup.needsSetup(current)) return { needed: false };
@@ -340,22 +316,19 @@ async function setupState(current) {
   return setup.buildSetup(current, detect(), Boolean(await steam.findSteamDir()));
 }
 
-// Shows a native picker. The renderer only says which emulator or Console; paths never come from it.
+// The renderer only says which emulator or Console; paths never come from it.
 async function pick(properties, filters) {
   const result = await dialog.showOpenDialog(win, { properties, filters });
   return result.canceled || !result.filePaths[0] ? null : result.filePaths[0];
 }
 
-// Each setup change is applied to the saved file, then the fresh setup state goes back to the UI.
-// Returns null when the user cancels the picker, or { error } for a pick that can't be used.
 async function changeSetup(change) {
   const current = loadSettings(settingsFile());
   const inSetup = setup.needsSetup(current);
   const error = await change(current);
   if (error === null) return null;
   if (error) return { error };
-  // Marks setup as started, so quitting halfway doesn't count as finished once a folder is saved.
-  // Changes made later in Settings leave it alone.
+  // Marks setup as started so quitting halfway doesn't count as finished.
   if (inSetup && current.setupDone === undefined) current.setupDone = false;
   saveSettings(settingsFile(), current);
   return { state: await setupState(current) };
@@ -394,7 +367,7 @@ function finishSetup(wantsCovers) {
   saveSettings(settingsFile(), current);
 }
 
-// What the Settings screen shows. The SteamGridDB key stays here; the UI only learns whether there is one.
+// The SteamGridDB key stays here; the UI only learns whether there is one.
 function getSettings() {
   const current = loadSettings(settingsFile());
   profiles.ensureProfiles(current);
@@ -404,7 +377,6 @@ function getSettings() {
   };
 }
 
-// Applies one change to the saved settings, then sends back the fresh Settings state.
 function changeSettings(change) {
   const current = loadSettings(settingsFile());
   change(current);
@@ -421,7 +393,6 @@ function setFullscreen(on) {
 const setSteamKey = (key) => changeSettings((current) => options.setSteamKey(current, key));
 const findAutomatically = (id) => changeSettings((current) => options.clearEmulator(current, id));
 
-// Forgets every cached Cover and remembered miss, and turns Covers on. The UI fetches them again as it loads.
 async function redownloadCovers() {
   const current = loadSettings(settingsFile());
   current.covers = true;
@@ -430,7 +401,6 @@ async function redownloadCovers() {
   await (covers || makeCovers()).redownload();
 }
 
-// Starts an emulated game. Returns { error, fix, console } for the UI if it can't; fix is "settings" or "rescan".
 async function launchEmulated(game) {
   const emulator = CONSOLES[game.console].emulator;
   const name = emulator ? EMULATORS[emulator].label : `The ${game.consoleName} emulator`;
@@ -464,7 +434,6 @@ async function launch(id) {
   return launchEmulated(game);
 }
 
-// Every call goes through here: a failure is logged in full, and the UI only gets a plain error.
 function handle(name, fn) {
   ipcMain.handle(name, async (_event, ...args) => {
     try {
@@ -476,8 +445,7 @@ function handle(name, fn) {
   });
 }
 
-// Only an installed Tink folder can replace itself; the portable bridge exe can't. TINK_UPDATE_URL is honoured only
-// for a local http://127.0.0.1 server (tests).
+// Only an installed Tink folder can replace itself, not the portable exe. TINK_UPDATE_URL is honoured only for local http://127.0.0.1 (tests).
 function makeUpdater() {
   if (!app.isPackaged || process.env.PORTABLE_EXECUTABLE_FILE) return null;
   const local = (process.env.TINK_UPDATE_URL || '').startsWith('http://127.0.0.1');

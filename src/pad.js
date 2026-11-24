@@ -1,6 +1,3 @@
-// Watches for Select + Start held on an Xbox-style pad while a game runs.
-// The window can't read the pad once an emulator has focus, so the main process asks XInput directly.
-
 const HOLD_MS = 2000;
 const POLL_MS = 50;
 const PADS = 4;
@@ -9,7 +6,6 @@ const COMBO = 0x0030;
 // Older Windows only has the second one.
 const DLLS = ['xinput1_4.dll', 'xinput9_1_0.dll'];
 
-// Opens one XInput dll. Returns a function giving a pad's buttons, or null when that pad isn't connected.
 function openXInput(dll) {
   const koffi = require('koffi');
   const State = koffi.struct({
@@ -30,7 +26,6 @@ function openXInput(dll) {
   };
 }
 
-// True when any pad has both buttons down.
 function comboDown(getButtons) {
   for (let i = 0; i < PADS; i++) {
     const buttons = getButtons(i);
@@ -39,7 +34,6 @@ function comboDown(getButtons) {
   return false;
 }
 
-// Returns { dll, read } where read() says if the combo is down, or null when no XInput dll loads.
 function loadPadReader({ open = openXInput } = {}) {
   for (const dll of DLLS) {
     try {
@@ -50,7 +44,6 @@ function loadPadReader({ open = openXInput } = {}) {
   return null;
 }
 
-// Calls onHold once both buttons have stayed down for holdMs. Releasing early starts the count again.
 function holdTimer(holdMs, onHold) {
   let timer = null;
   return (down) => {
@@ -63,7 +56,6 @@ function holdTimer(holdMs, onHold) {
   };
 }
 
-// Polls read() until the returned function is called. onFail(error) hears if reading the pad breaks.
 function watchCombo(onHold, { read, holdMs = HOLD_MS, pollMs = POLL_MS, onFail = () => {} }) {
   let stopped = false;
   const update = holdTimer(holdMs, () => {

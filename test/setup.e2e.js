@@ -1,6 +1,3 @@
-// Runs first-run setup in Electron with a throwaway user-data folder and stubbed file pickers, driving it with
-// the keyboard and a simulated pad, and saves a screenshot of every screen and state.
-// Usage: node test/setup.e2e.js [screenshot folder]
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -26,7 +23,6 @@ async function launch(root, userData) {
   const page = await app.firstWindow();
   page.errors = [];
   page.on('pageerror', (error) => page.errors.push(error.message));
-  // Replaces the native pickers: each call answers with whatever the test last set (or cancels).
   await app.evaluate(({ dialog }) => {
     dialog.showOpenDialog = async () => {
       const next = globalThis.nextPick;
@@ -76,7 +72,6 @@ async function main() {
   console.log('screen 1:', await title(), '| focus:', await focused(), '| hints:', await hints());
   await shot('1-emulators-found-and-missing');
 
-  // Down to Eden (missing, 3rd row), try a file that isn't a program, then pick the real one.
   await down(2);
   await pick(notExe);
   await key('Enter');
@@ -88,7 +83,6 @@ async function main() {
   console.log('after picking Eden:', (await page.textContent('.setup-row:nth-child(3)')));
   await shot('1-eden-picked');
 
-  // Switch 2 and PS5 have no auto-detect.
   await down(5);
   await pick(stub);
   await key('Enter');
@@ -107,13 +101,11 @@ async function main() {
   await key('Enter');
   console.log('hints on a Console with a folder:', await hints());
   await shot('2-folders-picked');
-  // X clears: pick then clear the SNES folder, then pick it again.
   await key(' ');
   assert.ok(!(await page.textContent('.setup-row:nth-child(11)')).includes(snes), 'X clears the folder');
   await pick(snes);
   await key('Enter');
 
-  // B goes back to screen 1 and forward again keeping the choices.
   await key('Escape');
   console.log('back on:', await title());
   await down(20);
@@ -141,14 +133,12 @@ async function main() {
   console.log('errors:', page.errors.length ? page.errors : 'none');
   await app.close();
 
-  // Second start: no setup, straight to the shelf.
   ({ app, page } = await launch(root, userData));
   await page.waitForSelector('#title:not(:empty)');
   assert.strictEqual(await page.$('#setup:not([hidden])'), null, 'setup is gone on the next start');
   console.log('second start: home opens without setup');
   await app.close();
 
-  // Settings from before setup existed, with a games folder: no setup either.
   const oldUser = path.join(root, 'old-user');
   fs.mkdirSync(oldUser);
   fs.writeFileSync(path.join(oldUser, 'settings.json'), JSON.stringify({ consoles: { snes: { folder: snes } } }));
@@ -158,7 +148,6 @@ async function main() {
   console.log('existing settings: home opens without setup');
   await app.close();
 
-  // Controller only, "Not now": the pad drives setup from start to finish.
   const padUser = path.join(root, 'pad-user');
   ({ app, page, pick } = await launch(root, padUser));
   await page.waitForSelector('#setup h1');

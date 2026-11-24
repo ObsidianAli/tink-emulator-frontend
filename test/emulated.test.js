@@ -9,7 +9,6 @@ const { detectEmulators, defaultSearchDirs } = require('../src/detect');
 const { launchSpec, CONSOLES } = require('../src/presets');
 const { playGame } = require('../src/launcher');
 
-// Builds a folder tree from a list of relative paths. A path ending in "/" is an empty folder.
 function makeTree(paths) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tink-games-'));
   for (const rel of paths) {
@@ -112,7 +111,6 @@ test('emulators are found in a search folder or one level inside it', () => {
   assert.strictEqual(found.dolphin, path.join(root, 'Programs', 'Dolphin-x64', 'Dolphin.exe'));
   assert.strictEqual(found.retroarch, path.join(root, 'Programs', 'RetroArch', 'retroarch.exe'));
   assert.strictEqual(found.cemu, path.join(root, 'Tink', 'Cemu', 'Cemu.exe'));
-  // Two levels down is too deep: detection never walks a whole tree.
   assert.strictEqual(found.pcsx2, undefined);
 });
 

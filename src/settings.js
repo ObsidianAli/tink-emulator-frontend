@@ -1,6 +1,3 @@
-// Tink's settings file:
-// { "consoles": { "gamecube": { "folder": "D:\Games\GameCube" }, "ps5": { "folder": "...", "exe": "..." } },
-//   "emulators": { "dolphin": "C:\...\Dolphin.exe" }, "covers": true, "setupDone": true }
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -9,7 +6,6 @@ function loadSettings(file) {
     const settings = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (settings && typeof settings.consoles === 'object' && settings.consoles) return settings;
   } catch {
-    // missing or broken file: start empty
   }
   return { consoles: {} };
 }

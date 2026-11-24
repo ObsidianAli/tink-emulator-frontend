@@ -1,4 +1,3 @@
-// Small helpers shared by the setup and Settings screens.
 export function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -6,7 +5,6 @@ export function element(tag, className, text) {
   return node;
 }
 
-// The last two folders, since the end of a path is the part that tells folders apart.
 export function shortPath(folder) {
   const parts = folder.split(/[\\/]/).filter(Boolean);
   return parts.length > 2 ? `…\\${parts.slice(-2).join('\\')}` : folder;
@@ -14,15 +12,19 @@ export function shortPath(folder) {
 
 const scrolling = new WeakMap();
 
-// Focuses a row without the browser's own jump, then scrolls its list just enough to show the whole row plus a margin.
-// smooth is false when a screen is drawn fresh, so it opens already in place.
 export function focusRow(node, smooth = true) {
   node.focus({ preventScroll: true });
   const list = node.closest('.setup-list');
-  if (!list) return;
+  if (list) scrollToNode(list, node, smooth);
+}
+
+export function scrollToNode(list, node, smooth = true, margin = parseFloat(getComputedStyle(list).getPropertyValue('--space')) * 2) {
   const style = getComputedStyle(list);
-  const margin = parseFloat(style.getPropertyValue('--space')) * 2;
-  const top = node.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+  if (!list.clientHeight) return;
+  // Layout position, so a focused tile that is scaled up doesn't skew the target.
+  const top = node.offsetParent === list
+    ? node.offsetTop
+    : node.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
   const bottom = top + node.offsetHeight;
   let target = list.scrollTop;
   if (top - margin < target) target = top - margin;
@@ -43,3 +45,13 @@ export function focusRow(node, smooth = true) {
   };
   scrolling.set(list, requestAnimationFrame(step));
 }
+
+// A screen that appears with its row already focused would otherwise fade the highlight in.
+const root = document.documentElement;
+function settle() {
+  root.classList.add('settling');
+  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('settling')));
+}
+new MutationObserver((changes) => {
+  if (changes.some(({ target }) => !target.hidden && target.matches('section'))) settle();
+}).observe(document.querySelector('main'), { attributes: true, attributeFilter: ['hidden'], subtree: true });

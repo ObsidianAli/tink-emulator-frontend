@@ -1,6 +1,5 @@
-// The Settings screen: a short top list; Emulators, Games folders and Consoles open sub-lists. Up/Down move, A changes
-// the focused row, X is the row's second action (Find automatically, Skip, Clear), B goes back or closes. Mouse clicks work too.
 import { element, focusRow, shortPath } from './dom.js';
+import { screen } from './transition.js';
 
 const root = document.getElementById('settings');
 let active = null;
@@ -13,8 +12,10 @@ listenForInput((action) => {
 
 export const settingsOpen = () => active !== null;
 
-// Resolves true when something changed that the Shelf needs to reload for.
-// focusConsole puts the cursor on that Console's emulator row.
+export function hideSettings() {
+  root.hidden = true;
+}
+
 export async function openSettings({ focusConsole } = {}) {
   let state = await window.tink.getSettings();
   return new Promise((resolve) => {
@@ -245,14 +246,14 @@ export async function openSettings({ focusConsole } = {}) {
     }
 
     function close() {
-      root.hidden = true;
+      active.busy = true;
       // Still counts as open until every handler has seen this press.
       setTimeout(() => { active = null; }, 0);
       resolve(changed);
     }
 
     active = {
-      busy: false,
+      busy: true,
       handle(action) {
         if (typing) {
           const input = nodes[focus].querySelector('input');
@@ -294,11 +295,14 @@ export async function openSettings({ focusConsole } = {}) {
         return null;
       },
     };
-    root.hidden = false;
-    if (focusConsole) {
-      view = 'emulators';
-      pendingFocus = (row) => row.console === focusConsole;
-    }
-    render();
+    screen(() => {
+      root.hidden = false;
+      if (focusConsole) {
+        view = 'emulators';
+        pendingFocus = (row) => row.console === focusConsole;
+      }
+      render();
+      active.busy = false;
+    });
   });
 }

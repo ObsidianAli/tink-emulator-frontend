@@ -9,7 +9,7 @@ test('a sound is due the first time', () => {
 test('a held direction does not play every repeat', () => {
   const last = new Map([['move', 1000]]);
   assert.strictEqual(soundDue('move', 1060, last), false);
-  assert.strictEqual(soundDue('move', 1140, last), true);
+  assert.strictEqual(soundDue('move', 1100, last), true);
 });
 
 test('other sounds only wait a short moment', () => {

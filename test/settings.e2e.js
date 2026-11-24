@@ -1,6 +1,3 @@
-// Runs Tink in Electron with a throwaway data folder and stubbed file pickers, opens Settings from the Shelf,
-// checks the friendly errors, and saves a screenshot of each screen and state.
-// Usage: node test/settings.e2e.js [screenshot folder]
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -70,7 +67,6 @@ async function main() {
   assert.strictEqual(await hints(), '', 'the shelf shows no hints');
   await shot('1-shelf-with-settings-hint');
 
-  // Play with no emulator: the friendly message, then straight into Settings on that Console.
   await key('Enter');
   assert.strictEqual(await dialogText(), "Dolphin isn't set up.");
   console.log('error 1:', await dialogText(), '| hints:', await hints());
@@ -83,21 +79,18 @@ async function main() {
   assert.strictEqual(await page.textContent('#settings h1'), 'Emulators');
   await shot('3-settings-on-gamecube-emulator');
 
-  // Pick the emulator with A.
   await pick(dolphin);
   await key('Enter');
   assert.strictEqual(readSettings().emulators.dolphin, dolphin);
   console.log('after pick:', await focusedRow());
   await shot('4-emulator-chosen');
 
-  // X on that row is Find automatically: the pick is forgotten and detection decides (nothing found here).
   await key(' ');
   assert.strictEqual(readSettings().emulators.dolphin, undefined);
   console.log('after Find automatically:', await focusedRow());
   await pick(dolphin);
   await key('Enter');
 
-  // B goes back to the top level with the cursor on Emulators, which fits without scrolling.
   await key('Escape');
   assert.ok(await settingsOpen(), 'B in a sub-list does not close Settings');
   assert.strictEqual(await page.textContent('#settings h1'), 'Settings');
@@ -106,7 +99,6 @@ async function main() {
   assert.ok(fits, 'the top level fits on one screen: ' + JSON.stringify(await page.$eval('#settings .setup-list', (l) => [l.scrollHeight, l.clientHeight])));
   await shot('top-level');
 
-  // Games folders sub-list.
   await key('ArrowDown');
   await key('Enter');
   assert.strictEqual(await page.textContent('#settings h1'), 'Games folders');
@@ -115,7 +107,6 @@ async function main() {
   await key('Escape');
   assert.ok((await focusedRow()).startsWith('Games folders'));
 
-  // Consoles sub-list.
   await key('ArrowDown');
   await key('Enter');
   assert.strictEqual(await page.textContent('#settings h1'), 'Consoles');
@@ -123,7 +114,6 @@ async function main() {
   assert.ok((await focusedRow()).startsWith('Consoles'));
   await key('ArrowDown');
 
-  // Covers: re-download and the key.
   console.log('re-download hints:', await hints());
   await key('Enter');
   assert.ok((await dialogText()).startsWith('Replace all covers?'));
@@ -144,7 +134,6 @@ async function main() {
   assert.strictEqual(readSettings().steamGridDbKey, undefined);
   console.log('key cleared');
 
-  // Fullscreen.
   await key('ArrowDown');
   assert.ok((await focusedRow()).startsWith('Start in fullscreen | On'), await focusedRow());
   assert.strictEqual(await isFullscreen(), true);
@@ -154,7 +143,6 @@ async function main() {
   await key('Enter');
   assert.strictEqual(await isFullscreen(), true);
 
-  // Rescan, then the bottom: version and the update check (from source it just says Up to date).
   await key('ArrowDown');
   await key('Enter');
   assert.ok((await focusedRow()).endsWith('Done'));
@@ -166,7 +154,6 @@ async function main() {
   await sleep(300);
   assert.ok((await focusedRow()).endsWith('Up to date'), await focusedRow());
 
-  // Closing reloads the row. One game file goes missing meanwhile.
   fs.rmSync(path.join(games, 'Luigis Mansion (USA).rvz'));
   await key('Escape');
   assert.ok(!(await settingsOpen()), 'B closes Settings');
@@ -175,7 +162,6 @@ async function main() {
   console.log('row reloaded, title:', await page.textContent('#title'));
   await shot('15-shelf-after-settings');
 
-  // A game that vanishes after the scan: delete it, then play.
   fs.rmSync(path.join(games, 'Wind Waker (USA).rvz'));
   await key('Enter');
   assert.strictEqual(await dialogText(), "This game file can't be found.");
@@ -185,7 +171,6 @@ async function main() {
   assert.notStrictEqual(await page.textContent('#title'), 'Wind Waker', 'the rescan drops the missing game');
   assert.strictEqual(await hints(), '');
 
-  // Settings still opens with no games, and S/Menu on a pad do the same.
   await page.evaluate(() => {
     const pad = { buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0] };
     window.__pad = pad;
@@ -202,7 +187,6 @@ async function main() {
   await sleep(300);
   assert.ok(!(await settingsOpen()), 'the pad B button closes it');
 
-  // An unexpected error is logged in full and only a plain message shows.
   await page.evaluate(() => { setTimeout(() => Promise.reject(new Error('boom from the screen'))); });
   await sleep(400);
   assert.strictEqual(await dialogText(), 'Something went wrong.');

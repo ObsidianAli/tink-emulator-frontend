@@ -1,10 +1,9 @@
-// Tink's log file: plain timestamped lines, rolled over to tink.log.old so it never grows forever.
 const fs = require('node:fs');
 const path = require('node:path');
 
 const MAX_BYTES = 1024 * 1024;
 
-// Returns log(message, error). It never throws, since logging must not cause another failure.
+// It never throws, since logging must not cause another failure.
 function createLog(file, { maxBytes = MAX_BYTES, now = () => new Date() } = {}) {
   return (message, error) => {
     try {
@@ -18,7 +17,6 @@ function createLog(file, { maxBytes = MAX_BYTES, now = () => new Date() } = {}) 
       }
       fs.appendFileSync(file, line);
     } catch {
-      // nowhere left to report it
     }
   };
 }

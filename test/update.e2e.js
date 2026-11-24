@@ -1,6 +1,3 @@
-// Proves self-update with two real builds: the older one finds the newer one's Tink.zip on a fake local release
-// server, unpacks it, swaps the folder on Update, and keeps the data folder.
-// Usage: node test/update.e2e.js <old Tink.zip> <new Tink.zip> <old version> <new version>
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -26,7 +23,6 @@ function killTink(dir) {
   try {
     execFileSync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore' });
   } catch {
-    // nothing left to kill
   }
 }
 
@@ -70,7 +66,6 @@ async function main() {
     killTink(root);
     await sleep(2000);
 
-    // Starts Tink with a debugging port, waits for the update question, and answers it with a key.
     const answer = async (key, label) => {
       spawn(exe, ['--remote-debugging-port=9333'], { env, stdio: 'ignore', detached: true }).unref();
       let browser;

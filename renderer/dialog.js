@@ -1,5 +1,14 @@
-// showDialog({ message, confirm = 'OK', cancel, sound = 'error' }) shows a message and resolves true when confirm is chosen.
 let activeDialog = null;
+
+function overlayMs() {
+  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--duration-fast'));
+}
+
+// Hands focus back without blocking: the overlay keeps fading out after this returns.
+function returnFocus(from, overlay) {
+  if (from && from.isConnected && from !== document.body) from.focus({ preventScroll: true });
+  else if (overlay.contains(document.activeElement)) document.activeElement.blur();
+}
 
 function showDialog({ message, confirm = 'OK', cancel, sound = 'error' }) {
   if (activeDialog) activeDialog.close(false);
@@ -29,6 +38,7 @@ function showDialog({ message, confirm = 'OK', cancel, sound = 'error' }) {
     scrim.append(box);
     document.body.append(scrim);
 
+    const previousFocus = document.activeElement;
     const previousHints = getHints();
     setHints(cancel ? [{ button: 'a', label: 'Choose' }, { button: 'b', label: cancel }] : [{ button: 'a', label: confirm }]);
     let focused = 0;
@@ -37,7 +47,9 @@ function showDialog({ message, confirm = 'OK', cancel, sound = 'error' }) {
 
     function close(value) {
       activeDialog = null;
-      scrim.remove();
+      scrim.classList.remove('open');
+      returnFocus(previousFocus, scrim);
+      setTimeout(() => scrim.remove(), overlayMs());
       setHints(previousHints);
       resolve(value);
     }
@@ -64,7 +76,6 @@ function showDialog({ message, confirm = 'OK', cancel, sound = 'error' }) {
   });
 }
 
-// Lets the open dialog take an input action. Returns null when no dialog is open, else { sound }.
 function dialogTakesInput(action) {
   if (!activeDialog) return null;
   return { sound: activeDialog.handle(action) };

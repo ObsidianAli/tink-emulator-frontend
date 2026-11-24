@@ -1,5 +1,3 @@
-// A Steam game's overview and screenshots, from Steam's public store API. They are kept in the data folder after the
-// first time, so the Game info page works offline afterwards.
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { download, writeAtomic } = require('./covers');
@@ -13,7 +11,6 @@ const IMAGE_HOST = /^https:\/\/[a-z0-9.-]+\.(steamstatic\.com|akamaihd\.net)\//i
 
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
 
-// Steam's HTML description as plain text: paragraphs and line breaks kept, tags and entities gone.
 function plainText(html) {
   const text = String(html || '')
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
@@ -33,7 +30,6 @@ function plainText(html) {
   return text.length > MAX_TEXT ? `${text.slice(0, MAX_TEXT).replace(/\s+\S*$/, '')}…` : text;
 }
 
-// { overview, shots: [url] } from the store's answer for appId, or null when the store has no page for it.
 function parseDetails(body, appId) {
   const entry = body && body[appId];
   if (!entry || !entry.success || !entry.data) return null;
@@ -54,8 +50,6 @@ async function fetchDetails(fetchFn, appId, timeoutMs) {
   return parseDetails(JSON.parse(text), appId);
 }
 
-// dir: where the cache lives. fetch: swapped out in tests.
-// get(appId) gives { overview, screenshots: [data URL] }, or null when nothing is known and the store can't be reached.
 function createGameInfo({ dir, fetch: fetchFn = globalThis.fetch, timeoutMs = TIMEOUT_MS }) {
   const inFlight = new Map();
   const jsonFile = (appId) => path.join(dir, `${appId}.json`);
@@ -81,7 +75,6 @@ function createGameInfo({ dir, fetch: fetchFn = globalThis.fetch, timeoutMs = TI
     try {
       details = await fetchDetails(fetchFn, appId, timeoutMs);
     } catch {
-      // offline or the store failed: try again next time
       return null;
     }
     const files = [];
@@ -93,7 +86,6 @@ function createGameInfo({ dir, fetch: fetchFn = globalThis.fetch, timeoutMs = TI
         await writeAtomic(path.join(dir, appId, name), image.data);
         files.push(name);
       } catch {
-        // a screenshot that won't download is left out
       }
     }
     await writeAtomic(jsonFile(appId), JSON.stringify({ overview: details ? details.overview : '', files }));
