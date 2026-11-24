@@ -10,7 +10,6 @@ const { artUrls } = require('../src/steam');
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32, 1)]);
 const GC = 'https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_GameCube/master/Named_Boxarts/';
 
-// A fake network: known URLs answer with their response, everything else is a 404. Every request is logged.
 function fakeNet(routes) {
   const requests = [];
   const fetch = async (url) => {
@@ -111,7 +110,6 @@ test('re-download replaces a cached cover', async () => {
 test('a failed connection is not remembered as a miss', async () => {
   const dir = tempDir();
   const offline = createCovers({ dir, enabled: true, fetch: fakeNet({ [zeldaUrl]: new TypeError('fetch failed') }).fetch });
-  // The first variant is a 404, the second fails to connect.
   assert.ok((await offline.getCover(zelda)).plain);
   const online = createCovers({ dir, enabled: true, fetch: fakeNet({ [zeldaUrl]: PNG }).fetch });
   assert.ok((await online.getCover(zelda)).file);

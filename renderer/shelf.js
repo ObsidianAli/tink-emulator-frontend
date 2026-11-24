@@ -1,51 +1,69 @@
-// The three.js home row: the Games' Cases in a row, the selected one forward and facing the player, the others turned
-// towards it and stacked close behind on each side, and the round All games button as one more place at the end.
-// The selected Case can be flipped to its Back and opened to show its Disc. Only the Cases near the selection exist at
-// all, and a frame is drawn only while something is moving.
 import * as THREE from '../node_modules/three/build/three.module.js';
 import { SHAPES, shapeFor, coverAspect, spineAspect, createCase } from './case.js';
 import { createTextures } from './textures.js';
+import { createFocusRing } from './ring.js';
 
 const FOV = 30;
-// How many Case heights the view spans at the row's depth.
 const FRAME = 2.5;
-// Where the camera sits and looks, in Case heights: a little above the middle, looking slightly down.
 const EYE = 0.62;
 const AIM = 0.42;
-// The selected Case comes this far forward and turns a little, so its spine and thickness show.
 const PULL = 0.9;
 const SELECTED_TURN = 0.32;
-// The others stand back, turned towards the selection, the first one clear of it and the rest overlapping.
 const BACK = -0.8;
 const SIDE_TURN = 1.05;
-const NEAR = 1.15;
+const NEAR = 1.02;
 const STEP = 0.26;
 const SIDE_DIM = 0.35;
-// Extra Cases built past each edge of the screen, so moving never shows an empty slot.
 const SPARE = 2;
+// The cursor walks this many slots in from the left before the row starts scrolling under it.
+const HOLD = 2;
 const SETTLED = 0.0005;
-// How far one step of the open animation has to get before the next one starts.
 const NEXT_STEP = 0.9;
-// The lid starts to close once the Disc is this close to resting in the tray.
 const DISC_SEATED = 0.03;
 const DISC_SPIN = (Math.PI * 2) / 16000;
 const REST = { flip: 0, lid: 0 };
-// The row is spaced and framed for this shape; each Case is still drawn in its own Console's shape.
 const LAYOUT = SHAPES.dvd;
 const shapeOf = (game) => shapeFor(game.console);
 const SHARP_STEP = 64;
 const SHARP_MAX = 2048;
+// A slow Cover load can't keep the screen black for longer than this.
+const READY_MAX_MS = 500;
+const BREATH_FRAME_MS = 1000 / 30;
 
 function token(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
 function durationMs(name) {
-  return parseFloat(token(name)) || 500;
+  const value = token(name);
+  const number = parseFloat(value);
+  if (!number) return 500;
+  return value.endsWith('ms') || !value.endsWith('s') ? number : number * 1000;
 }
 
-// A dark room with two soft light panels, baked into the reflections every Case's plastic picks up: a long one above
-// that lines the top edges, and a tall one to the front right that lies across the selected Cover as a gloss band.
+const pixels = (name) => parseFloat(token(name)) || 0;
+
+function colour(name) {
+  const paint = new OffscreenCanvas(1, 1).getContext('2d');
+  paint.fillStyle = token(name);
+  paint.fillRect(0, 0, 1, 1);
+  return [...paint.getImageData(0, 0, 1, 1).data].map((value) => value / 255);
+}
+
+function focusTheme() {
+  return {
+    from: colour('--focus-from').slice(0, 3),
+    to: colour('--focus-to').slice(0, 3),
+    glow: colour('--focus-glow'),
+    line: pixels('--focus-line'),
+    gap: pixels('--focus-gap'),
+    glowSize: pixels('--focus-glow-size'),
+    low: parseFloat(token('--focus-breath-low')) || 1,
+    period: durationMs('--focus-period'),
+    fade: durationMs('--focus-fade'),
+  };
+}
+
 function studioLight(renderer) {
   const room = new THREE.Scene();
   const geometries = [];
@@ -73,9 +91,7 @@ function studioLight(renderer) {
   return texture;
 }
 
-// onTint(colour) is called with the selected Cover's average colour. button is the All games button, which this
-// moves along with the row.
-function createShelf(canvas, { onTint, button }) {
+function createShelf(canvas, { onTint, button, title }) {
   // At two or more device pixels per CSS pixel the edges are already fine, and multisampling a 4K buffer is costly.
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: (window.devicePixelRatio || 1) < 2, alpha: true });
   renderer.setPixelRatio(window.devicePixelRatio || 1);
@@ -93,37 +109,31 @@ function createShelf(canvas, { onTint, button }) {
   const row = new THREE.Group();
   scene.add(row);
 
+  const theme = focusTheme();
+  const ring = createFocusRing(theme);
+  let ringShown = true;
   const textures = createTextures(renderer.capabilities.getMaxAnisotropy());
-  // tau for the ease-out: within 1% of the target after the Case duration.
   const tau = durationMs('--duration-case') / 4.6;
   const discTau = durationMs('--duration-case-slow') / 4.6;
 
   let games = [];
   let selected = 0;
-  // The selected Case's poses, one per Y or X press, so B can undo them in order.
   let poses = [];
-  // index -> Case on screen
   const live = new Map();
-  // spare Cases per shape, reused instead of rebuilt
   const pools = new Map();
-  // eased value: which index the row is centred on
   const motion = { focus: 0 };
-  // index -> { flip, lid, disc, spin } of each live Case, all 0 at rest
   const poseOf = new Map();
   const restPose = () => ({ flip: 0, lid: 0, disc: 0, spin: 0 });
-  // indexes of the Cases showing a Back and Disc label right now
   const detailed = new Set();
-  // the index whose Case has its sharp Cover on
   let sharpIndex = -1;
 
   const halfTan = () => Math.tan(THREE.MathUtils.degToRad(FOV / 2));
 
-  function visibleHalfCount() {
-    const halfWidth = (camera.position.z - BACK) * halfTan() * camera.aspect;
-    return Math.max(1, Math.ceil((halfWidth - NEAR * LAYOUT.width) / (STEP * LAYOUT.width + LAYOUT.depth))) + 1 + SPARE;
+  function visibleCount(share) {
+    const width = 2 * (camera.position.z - BACK) * halfTan() * camera.aspect * share;
+    return Math.max(1, Math.ceil((width - NEAR * LAYOUT.width) / (STEP * LAYOUT.width + LAYOUT.depth))) + 1 + SPARE;
   }
 
-  // How tall the selected Cover is on screen in device pixels, so its sharp texture matches.
   function sharpHeight() {
     const { height, rim } = shapeOf(games[selected]);
     const view = 2 * (camera.position.z - PULL) * halfTan();
@@ -142,6 +152,7 @@ function createShelf(canvas, { onTint, button }) {
     live.delete(index);
     poseOf.delete(index);
     clearDetails(index, item);
+    ring.detach(item.group);
     if (sharpIndex === index) sharpIndex = -1;
     item.setPose(restPose());
     item.setCover(null);
@@ -160,7 +171,6 @@ function createShelf(canvas, { onTint, button }) {
     return new Set([...detailed, selected].filter((i) => games[i]).map((i) => games[i].id));
   }
 
-  // Swaps the selected Case's small Cover for one as sharp as the screen, and puts the small one back on the last.
   function sharpen() {
     const before = sharpIndex;
     if (before !== selected && live.has(before)) {
@@ -180,7 +190,6 @@ function createShelf(canvas, { onTint, button }) {
     });
   }
 
-  // Puts the generated Back and Disc label on the selected Case.
   function showDetails() {
     const index = selected;
     const item = live.get(index);
@@ -213,12 +222,11 @@ function createShelf(canvas, { onTint, button }) {
     });
   }
 
-  // Builds the Cases in view of the selection, and of where the row is still sliding from, and drops the rest.
   function updateWindow() {
-    const reach = visibleHalfCount();
+    const width = canvas.clientWidth || 1;
     const centre = Math.round(motion.focus);
-    const from = Math.max(0, Math.min(selected, centre) - reach);
-    const to = Math.min(games.length - 1, Math.max(selected, centre) + reach);
+    const from = Math.max(0, Math.min(selected, centre) - visibleCount(anchorAt(HOLD) / width));
+    const to = Math.min(games.length - 1, Math.max(selected, centre) + visibleCount(1 - anchorAt(0) / width));
     for (const index of [...live.keys()]) {
       if (index < from || index > to) releaseCase(index);
     }
@@ -232,7 +240,6 @@ function createShelf(canvas, { onTint, button }) {
     }
   }
 
-  // Where a Case stands when it is offset Cases away from the middle of the row.
   function place(item, offset) {
     const near = Math.min(1, Math.abs(offset));
     const side = Math.sign(offset);
@@ -248,12 +255,88 @@ function createShelf(canvas, { onTint, button }) {
   }
 
   const corner = new THREE.Vector3();
+  function toScreen(x, z) {
+    corner.set(x, LAYOUT.height / 2, z).project(camera);
+    return { left: ((corner.x + 1) / 2) * canvas.clientWidth, top: ((1 - corner.y) / 2) * canvas.clientHeight };
+  }
+
+  function rightEdge(offset, { width, depth }) {
+    const near = Math.min(1, Math.abs(offset));
+    const turn = (1 - near) * SELECTED_TURN - Math.sign(offset) * near * SIDE_TURN;
+    const x = slotX(offset);
+    const z = PULL + near * (BACK - PULL);
+    return Math.max(...[-depth / 2, depth / 2].map((along) =>
+      toScreen(x + (width / 2) * Math.cos(turn) + along * Math.sin(turn), z - (width / 2) * Math.sin(turn) + along * Math.cos(turn)).left));
+  }
+
+  // The button is flat HTML, so the overlapping Case step would put it on top of the last Case.
   function placeButton() {
     const offset = games.length - motion.focus;
     const near = Math.min(1, Math.abs(offset));
-    corner.set(slotX(offset), LAYOUT.height / 2, PULL + near * (BACK - PULL)).project(camera);
-    button.style.left = `${((corner.x + 1) / 2) * canvas.clientWidth}px`;
-    button.style.top = `${((1 - corner.y) / 2) * canvas.clientHeight}px`;
+    const at = toScreen(slotX(Math.min(offset, 1)), PULL + near * (BACK - PULL));
+    if (offset > 1) {
+      const last = shapeOf(games[games.length - 1]);
+      at.left += rightEdge(offset - 1, last) - rightEdge(0, last);
+    }
+    button.style.left = `${at.left}px`;
+    button.style.top = `${at.top}px`;
+    return at;
+  }
+
+  let rowStart = 0;
+  let slotPx = 0;
+  const screenX = (x, z) => toScreen(x, z).left;
+
+  function measureRow() {
+    camera.clearViewOffset();
+    aimCamera();
+    camera.updateMatrixWorld();
+    const half = LAYOUT.width / 2;
+    rowStart = pixels('--home-margin') + (screenX(half, PULL) - screenX(-half, PULL)) / 2;
+    slotPx = screenX(slotX(1), BACK) - screenX(0, PULL);
+  }
+
+  // A small window keeps the selected Case no further right than the middle.
+  function anchorAt(focus) {
+    return Math.min(canvas.clientWidth / 2, rowStart + Math.max(0, Math.min(focus, HOLD)) * slotPx);
+  }
+
+  // A lens shift rather than moving the camera, so the perspective stays centred on the selected Case.
+  function layoutRow() {
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    camera.setViewOffset(width, height, width / 2 - anchorAt(motion.focus), 0, width, height);
+  }
+
+  const point = new THREE.Vector3();
+  let titleAt = '';
+  function placeTitle(buttonAt) {
+    let x;
+    let top;
+    const item = live.get(selected);
+    if (selected >= games.length) {
+      x = buttonAt.left;
+      top = buttonAt.top - buttonHalf - theme.gap - theme.line;
+    } else if (item) {
+      const { width, height, depth } = item.shape;
+      const edge = width / 2 + ring.reach();
+      const topAt = (side) => {
+        point.set(side, height + ring.reach(), depth / 2);
+        return item.group.localToWorld(point).project(camera).y;
+      };
+      top = ((1 - Math.max(topAt(-edge), topAt(edge))) / 2) * canvas.clientHeight;
+      point.set(0, height, depth / 2);
+      x = ((item.group.localToWorld(point).project(camera).x + 1) / 2) * canvas.clientWidth;
+    } else return;
+    const at = `translate(${x.toFixed(1)}px, ${top.toFixed(1)}px)`;
+    if (at === titleAt) return;
+    titleAt = at;
+    title.style.transform = at;
+  }
+
+  function onScreen() {
+    return !document.hidden && canvas.checkVisibility({ visibilityProperty: true })
+      && !canvas.parentElement.querySelector(':scope > section:not([hidden])');
   }
 
   function aimCamera() {
@@ -263,8 +346,6 @@ function createShelf(canvas, { onTint, button }) {
 
   const currentPose = () => poses[poses.length - 1] || REST;
 
-  // Eases one Case towards its target pose one step at a time: it turns, then the lid opens, then the Disc
-  // lifts out. Putting it away runs the other way round.
   function stepPose(pose, target, ease, easeSlow) {
     const flipTarget = target.flip && pose.lid > 0 ? pose.flip : target.flip;
     pose.flip = ease(pose.flip, flipTarget);
@@ -274,7 +355,6 @@ function createShelf(canvas, { onTint, button }) {
     pose.disc = easeSlow(pose.disc, target.lid && pose.lid > NEXT_STEP ? 1 : 0);
   }
 
-  // Moves every eased value towards its target. moving: anything but the Disc's slow turn is still moving.
   function step(dt) {
     let moving = false;
     const easer = (t) => {
@@ -307,25 +387,42 @@ function createShelf(canvas, { onTint, button }) {
 
   let frameRequested = false;
   let lastTime = null;
+  let breathTimer = 0;
+  let settled = false;
+  let buttonHalf = 0;
 
   function frame(now) {
     frameRequested = false;
     const dt = lastTime === null ? 16 : Math.min(now - lastTime, 50);
     const { moving, spinning } = step(dt);
     aimCamera();
-    placeButton();
+    layoutRow();
+    const buttonAt = placeButton();
+    const item = live.get(selected);
+    if (item && selected < games.length) ring.attach(item.group, item.shape);
+    else ring.clear();
+    const { fading, showing } = ring.update(now, dt, ringShown && caseState() === 'front');
     renderer.render(scene, camera);
-    if (moving || spinning) {
+    placeTitle(buttonAt);
+    if (moving || spinning) settled = false;
+    else if (!settled) {
+      settled = true;
+      updateWindow();
+    }
+    if (moving || spinning || fading) {
       lastTime = now;
       nextFrame();
+    } else if (showing && onScreen()) {
+      // Only the breathing outline is changing, which doesn't need every display refresh.
+      lastTime = now;
+      breathTimer = setTimeout(nextFrame, BREATH_FRAME_MS);
     } else {
       lastTime = null;
-      // The row has stopped, so the Cases it slid past can go.
-      updateWindow();
     }
   }
 
   function nextFrame() {
+    clearTimeout(breathTimer);
     if (frameRequested) return;
     frameRequested = true;
     requestAnimationFrame(frame);
@@ -336,12 +433,12 @@ function createShelf(canvas, { onTint, button }) {
   function resize() {
     const { clientWidth, clientHeight } = canvas;
     if (!clientWidth || !clientHeight) return;
-    // Follows the window onto a screen with a different scale.
     renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.setSize(clientWidth, clientHeight, false);
     camera.aspect = clientWidth / clientHeight;
-    camera.updateProjectionMatrix();
-    aimCamera();
+    measureRow();
+    ring.setScale((2 * (camera.position.z - PULL) * halfTan()) / clientHeight);
+    buttonHalf = button.offsetHeight / 2;
     if (games.length) updateWindow();
     requestRender();
   }
@@ -356,7 +453,6 @@ function createShelf(canvas, { onTint, button }) {
     resize();
   }
 
-  // After the saved Covers change: drops the Cases and their textures, so the next show() builds them again.
   function forgetCovers() {
     for (const i of [...live.keys()]) releaseCase(i);
     textures.forget();
@@ -379,6 +475,13 @@ function createShelf(canvas, { onTint, button }) {
     return true;
   }
 
+  function ready() {
+    const waits = [...live.keys()].map(coverOf);
+    const game = games[selected];
+    if (live.has(selected)) waits.push(textures.getSharp(game, coverAspect(shapeOf(game)), sharpHeight(), inUseDetails()));
+    return Promise.race([Promise.all(waits), new Promise((resolve) => setTimeout(resolve, READY_MAX_MS))]);
+  }
+
   function changePose(change) {
     if (selected >= games.length) return false;
     change();
@@ -387,7 +490,6 @@ function createShelf(canvas, { onTint, button }) {
     return true;
   }
 
-  // Y: turns the selected Case to its Back, or back to its front.
   function flip() {
     const pose = currentPose();
     if (pose.lid) return false;
@@ -395,7 +497,6 @@ function createShelf(canvas, { onTint, button }) {
     return changePose(() => poses.push({ flip: 1, lid: 0 }));
   }
 
-  // X: opens the selected Case and lifts its Disc out. From the Back it turns round first, as its own step.
   function open() {
     const pose = currentPose();
     if (pose.lid) return false;
@@ -405,7 +506,6 @@ function createShelf(canvas, { onTint, button }) {
     });
   }
 
-  // B: undoes the last flip or open. Returns false when there's nothing to undo.
   function back() {
     if (!poses.length) return false;
     poses.pop();
@@ -413,16 +513,23 @@ function createShelf(canvas, { onTint, button }) {
     return true;
   }
 
-  // 'front', 'back' or 'open', for the button hints.
   function caseState() {
     const pose = currentPose();
     return pose.lid ? 'open' : pose.flip ? 'back' : 'front';
   }
 
+  function showRing(shown) {
+    ringShown = shown;
+    requestRender();
+  }
+
   window.addEventListener('resize', resize);
   document.addEventListener('visibilitychange', requestRender);
+  const screens = new MutationObserver(requestRender);
+  screens.observe(canvas.parentElement, { attributes: true, attributeFilter: ['class'] });
+  for (const section of canvas.parentElement.querySelectorAll(':scope > section')) screens.observe(section, { attributes: true, attributeFilter: ['hidden'] });
 
-  return { show, forgetCovers, select, flip, open, back, caseState, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
+  return { show, showRing, ready, forgetCovers, select, flip, open, back, caseState, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
 }
 
 export { createShelf };

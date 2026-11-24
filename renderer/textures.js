@@ -1,15 +1,10 @@
-// Turns a Game's Cover (or Plain cover) into a texture sized for its Case, plus its spine and the colour for the
-// background tint, and composes the Back and the Disc label from it. Every Case on the Shelf gets a small Cover; only
-// the selected one gets a sharp Cover as big as it shows on screen. Only the most recent few of each are kept.
 import * as THREE from '../node_modules/three/build/three.module.js';
 
 const TEXTURE_HEIGHT = 512;
 const KEEP = 64;
-// Sharp Covers are made for the selected Case only, so a handful is plenty.
 const KEEP_SHARP = 4;
 const SPINE_WIDTH = 48;
 const SPINE_DIM = 0.55;
-// Covers closer than this to the Case's shape are cropped to fill it; others are fitted whole.
 const CROP_LIMIT = 0.25;
 const TINT_SAMPLES = 16;
 const KEEP_DETAILS = 4;
@@ -41,7 +36,6 @@ async function loadImage(src) {
 }
 
 function drawImage(img, aspect, height) {
-  // Never bigger than the image itself, since that would only blur it and use memory.
   const canvas = canvasFor(aspect, Math.min(height, Math.max(TEXTURE_HEIGHT, img.naturalHeight)));
   const ctx = canvas.getContext('2d');
   const crop = Math.abs(img.naturalWidth / img.naturalHeight / aspect - 1) <= CROP_LIMIT;
@@ -57,7 +51,6 @@ function drawImage(img, aspect, height) {
   return canvas;
 }
 
-// Splits a Title into lines that fit the width.
 function wrap(ctx, text, maxWidth) {
   const lines = [];
   let line = '';
@@ -74,7 +67,6 @@ function wrap(ctx, text, maxWidth) {
   return lines;
 }
 
-// A Plain cover: the Title on its Console's colour.
 async function drawPlain(title, colour, aspect, height) {
   const canvas = canvasFor(aspect, height);
   const ctx = canvas.getContext('2d');
@@ -94,7 +86,6 @@ async function drawPlain(title, colour, aspect, height) {
   return canvas;
 }
 
-// The average colour of a canvas, for the background tint.
 function averageColour(canvas) {
   const small = document.createElement('canvas');
   small.width = TINT_SAMPLES;
@@ -112,7 +103,6 @@ function averageColour(canvas) {
   return `rgb(${sum.map((v) => Math.round(v / count)).join(' ')})`;
 }
 
-// The spine: the Title written top to bottom on a darker shade of the Cover's colour.
 async function drawSpine(title, tint, aspect) {
   const canvas = document.createElement('canvas');
   canvas.width = SPINE_WIDTH;
@@ -150,7 +140,6 @@ function fontFor(size, weight) {
   return `${token(weight)} ${Math.round(size)}px Inter`;
 }
 
-// The Back: the Cover blurred and darkened, the Title at the top and the Console name at the bottom.
 async function drawBack(cover, title, consoleName) {
   const canvas = document.createElement('canvas');
   canvas.width = cover.width;
@@ -186,7 +175,6 @@ async function drawBack(cover, title, consoleName) {
   return canvas;
 }
 
-// The Disc label: the middle of the Cover cropped into a circle, with a hub ring and a hole in the centre.
 function drawLabel(cover) {
   const canvas = document.createElement('canvas');
   const size = Math.max(cover.width, cover.height);
@@ -216,17 +204,14 @@ async function coverCanvas(game, aspect, height) {
   try {
     if (cover && cover.src) return drawImage(await loadImage(cover.src), aspect, height);
   } catch {
-    // a broken cached file: a Plain cover instead
   }
   const colour = (cover && cover.plain && cover.plain.colour) || token('--surface-raised');
   return drawPlain(game.title, colour, aspect, height);
 }
 
-// A most-recently-used cache of promises for texture sets, disposing what falls out.
 function createCache(keep, make) {
   const entries = new Map();
 
-  // Drops the oldest entries no live Case is showing.
   function trim(inUse) {
     for (const [id, entry] of entries) {
       if (entries.size <= keep) return;
@@ -249,7 +234,6 @@ function createCache(keep, make) {
     return entry;
   }
 
-  // Drops everything, so the next lookup is made fresh.
   get.clear = () => {
     for (const entry of entries.values()) entry.then((made) => made && made.textures.forEach((texture) => texture.dispose()));
     entries.clear();
@@ -280,25 +264,20 @@ function createTextures(maxAnisotropy) {
     return { back, label, textures: [back, label] };
   });
 
-  // Resolves to { texture, spine, tint }, or null if the Cover couldn't be made at all.
-  // inUse: ids of the Games whose textures must not be dropped.
   function get(game, aspect, spineAspect, inUse) {
     return covers(game.id, inUse, game, aspect, spineAspect);
   }
 
-  // Resolves to { texture } with the Cover height pixels tall, or null.
   function getSharp(game, aspect, height, inUse) {
     return sharp(game.id, inUse, game, aspect, height);
   }
 
-  // Resolves to { back, label } composed from the Game's sharp Cover, or null.
   async function getDetails(game, aspect, height, consoleName, inUse) {
     const made = await getSharp(game, aspect, height, inUse);
     if (!made) return null;
     return details(game.id, inUse, game, made.texture.image, consoleName);
   }
 
-  // Forgets every texture made so far, for when the saved Covers were replaced.
   function forget() {
     covers.clear();
     sharp.clear();

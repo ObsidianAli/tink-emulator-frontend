@@ -1,5 +1,4 @@
-// UI sounds, synthesized with Web Audio so there are no audio files. playSound('move') plays one by name.
-const MIN_GAP_MS = { move: 140, list: 140 };
+const MIN_GAP_MS = { move: 100, list: 100 };
 const DEFAULT_GAP_MS = 50;
 
 // A held direction repeats faster than a blip is worth hearing, so a sound repeating too soon is dropped.
@@ -8,7 +7,6 @@ function soundDue(name, now, lastPlayed) {
   return last === undefined || now - last >= (MIN_GAP_MS[name] || DEFAULT_GAP_MS);
 }
 
-// Each note: [startSeconds, frequency, lengthSeconds, loudness, type, slideToFrequency]
 const SOUNDS = {
   move: [[0, 1175, 0.06, 0.5, 'sine', 1100]],
   list: [[0, 740, 0.05, 0.4, 'sine']],
@@ -21,7 +19,6 @@ const SOUNDS = {
   error: [[0, 392, 0.11, 0.5, 'sine'], [0.1, 311, 0.14, 0.5, 'sine']],
   launch: [[0, 523, 0.1, 0.5, 'sine'], [0.08, 659, 0.1, 0.5, 'sine'], [0.16, 784, 0.1, 0.5, 'sine'], [0.24, 1047, 0.2, 0.5, 'sine']],
 };
-// Sounds that start another one a moment later.
 const FOLLOWED_BY = { open: ['discOut', 0.26] };
 
 const lastPlayed = new Map();
@@ -67,7 +64,6 @@ function playSound(name) {
     const follow = FOLLOWED_BY[name];
     if (follow) playNotes(SOUNDS[follow[0]], audio.currentTime + follow[1]);
   } catch {
-    // No audio device: stay silent.
   }
 }
 

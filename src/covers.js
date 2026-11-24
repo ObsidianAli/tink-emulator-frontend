@@ -1,4 +1,3 @@
-// Finds each Game's Cover (libretro, then SteamGridDB, or Steam's own art) and keeps it on disk.
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { CONSOLES, coverColour } = require('./presets');
@@ -20,7 +19,6 @@ const IMAGE_TYPES = [
 // libretro writes these characters as "_" in its file names.
 const libretroSafe = (name) => name.replace(/[&*/:`<>?\\|"]/g, '_');
 
-// The file name as it is, then without [..] dump tags, then with only its first (..) tag, then with no tags at all.
 function nameVariants(fileName) {
   const noBrackets = fileName.replace(/\s*\[[^\]]*\]/g, '').trim();
   const firstTag = noBrackets.match(/^[^(]*\([^)]*\)/);
@@ -35,8 +33,7 @@ function libretroUrl(system, name) {
 
 class Rejected extends Error {}
 
-// The image at url, null if the server has none, Rejected if it isn't a safe image.
-// Anything else (offline, server down) throws, so it isn't remembered as a miss.
+// Anything but a missing image throws, so it isn't remembered as a miss.
 async function download(fetchFn, url, timeoutMs) {
   if (!url.startsWith('https://')) throw new Rejected('not https');
   const response = await fetchFn(url, { redirect: 'error', signal: AbortSignal.timeout(timeoutMs) });
@@ -56,7 +53,7 @@ async function download(fetchFn, url, timeoutMs) {
   return { data, type };
 }
 
-// SteamGridDB's JSON answer, null if it has none. The key only ever goes to its own API host.
+// The key only ever goes to SteamGridDB's own API host.
 async function griddbJson(fetchFn, key, route, timeoutMs) {
   const response = await fetchFn(`${GRIDDB}${route}`, {
     redirect: 'error',
@@ -81,7 +78,6 @@ async function writeAtomic(file, data) {
   }
 }
 
-// Runs at most `limit` tasks at once.
 function limiter(limit) {
   let running = 0;
   const waiting = [];
@@ -100,9 +96,6 @@ function limiter(limit) {
   });
 }
 
-// dir: the cache folder. enabled: whether Tink may go online. steamGridKey: optional SteamGridDB API key. fetch: swapped out in tests.
-// getCover(game) gives { file, mime } for a real Cover, or { plain: { colour } } for a Plain cover.
-// A Steam Game brings its own art: { cover, fallback } URLs.
 function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.fetch, timeoutMs = TIMEOUT_MS }) {
   const missesFile = path.join(dir, 'misses.json');
   const inFlight = new Map();
@@ -134,13 +127,11 @@ function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.
         await fs.access(file);
         return { file, mime: type.mime };
       } catch {
-        // not this type
       }
     }
     return null;
   }
 
-  // Saves the first of these URLs that gives a safe image.
   async function firstImage(game, urls) {
     for (const url of urls) {
       try {
@@ -160,7 +151,6 @@ function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.
     return firstImage(game, nameVariants(game.fileName).map((name) => libretroUrl(system, name)));
   }
 
-  // Searches SteamGridDB by title and takes the first portrait grid of the best match.
   async function fromGridDb(game) {
     const ask = (route) => queue(() => griddbJson(fetchFn, steamGridKey, route, timeoutMs));
     const matches = await ask(`/search/autocomplete/${encodeURIComponent(game.title || game.fileName)}`);
@@ -169,7 +159,6 @@ function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.
     return firstImage(game, (grids || []).map((grid) => String(grid.url)));
   }
 
-  // The places to look for this Game's Cover, in order.
   function sources(game) {
     if (game.art) return [() => firstImage(game, [game.art.cover, game.art.fallback])];
     const system = CONSOLES[game.console].libretro;
@@ -189,7 +178,6 @@ function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.
       }
       await remember(missKey(game));
     } catch {
-      // offline or the server failed: try again next time
     }
     return plain;
   }
@@ -202,7 +190,6 @@ function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.
     return inFlight.get(key);
   }
 
-  // Forgets every cached Cover and every miss, so each Game is looked up again.
   async function redownload() {
     await fs.rm(dir, { recursive: true, force: true });
     misses = null;

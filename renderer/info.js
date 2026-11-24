@@ -1,6 +1,5 @@
-// The Game info page: Cover, title, Console, and for a Steam game its overview and screenshots. Left/Right move along
-// the screenshots, B goes back. Nothing is shown for what isn't known.
 import { element } from './dom.js';
+import { screen } from './transition.js';
 
 const root = document.getElementById('info');
 let active = null;
@@ -13,7 +12,6 @@ listenForInput((action) => {
 
 export const infoOpen = () => active !== null;
 
-// Resolves when the page is closed.
 export function openInfo(game) {
   return new Promise((resolve) => {
     let shots = [];
@@ -40,15 +38,18 @@ export function openInfo(game) {
       shots[focus].scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
     }
 
+    let closing = false;
+
     function close() {
-      root.hidden = true;
+      closing = true;
       // Still counts as open until every handler has seen this press.
       setTimeout(() => { active = null; }, 0);
-      resolve();
+      screen(() => { root.hidden = true; }).then(resolve);
     }
 
     active = {
       handle(action) {
+        if (closing) return null;
         if ((action === 'left' || action === 'right') && shots.length) {
           const before = focus;
           select(focus + (action === 'right' ? 1 : -1));
@@ -61,11 +62,13 @@ export function openInfo(game) {
         return null;
       },
     };
-    root.hidden = false;
-    showHints();
+    screen(() => {
+      root.hidden = false;
+      showHints();
+    });
 
     const mine = active;
-    const stillOpen = () => active === mine && !root.hidden;
+    const stillOpen = () => active === mine && !closing;
     window.tink.getCover(game.id).then((made) => {
       if (!stillOpen() || !made) return;
       if (made.src) {

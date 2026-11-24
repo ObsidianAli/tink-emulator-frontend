@@ -1,5 +1,3 @@
-// A small list screen in the Settings style, for the icons under the shelf (Controllers, Power).
-// openPanel({ title, rows: [{ label, run }], empty }) resolves when B goes back.
 import { element, focusRow } from './dom.js';
 
 const root = document.getElementById('panel');
@@ -58,7 +56,7 @@ export function openPanel({ title, rows, empty = '' }) {
         }
         if (action === 'a') {
           if (!nodes.length || !current[focus].run) return null;
-          // After every handler has seen this press, so a dialog it opens doesn't also receive it.
+          // After every handler has seen this press, so a dialog it opens doesn't also get it.
           const row = current[focus];
           setTimeout(() => row.run(), 0);
           return 'confirm';
@@ -69,7 +67,6 @@ export function openPanel({ title, rows, empty = '' }) {
         }
         return null;
       },
-      // Swaps the rows while open, like when a controller is plugged in.
       update(next) {
         current = next;
         render();

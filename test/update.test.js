@@ -9,7 +9,6 @@ const { compareVersions, allowedUrl, createUpdater } = require('../src/update');
 const ZIP = Buffer.alloc(100, 7);
 const ASSET = 'https://github.com/ObsidianAli/tink-emulator-frontend/releases/download/v0.3.0/Tink.zip';
 
-// A fake tar: the "zip" unpacks to Tink\Tink.exe plus resources\app.asar, unless the test says otherwise.
 function fakeExtract(shape) {
   return async (_zip, dest) => {
     if (shape === 'fail') throw new Error('tar failed');
@@ -138,7 +137,6 @@ test('the real tar.exe unpacks a zip', { skip: process.platform !== 'win32' }, a
   assert.strictEqual(t.read('Tink.new/Tink.exe'), 'MZ x');
 });
 
-// What the staged copy sees when it starts with the flag: the old Tink folder is still there until it lets go.
 function finisher(t, { launchError = null, busyFor = 0 } = {}) {
   let busy = busyFor;
   const launched = [];

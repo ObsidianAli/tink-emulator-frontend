@@ -1,5 +1,3 @@
-// Self-update for the Tink folder. It checks GitHub's latest release, downloads Tink.zip and unpacks it to a staging
-// folder beside the app folder (Tink.new), and swaps the files in when the user picks Update. The data folder is kept.
 const fs = require('node:fs');
 const path = require('node:path');
 const https = require('node:https');
@@ -26,7 +24,6 @@ function parseVersion(text) {
   return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
 }
 
-// Positive when a is newer than b, negative when older, 0 when equal. Null when either isn't a plain x.y.z.
 function compareVersions(a, b) {
   const left = parseVersion(a);
   const right = parseVersion(b);
@@ -48,7 +45,6 @@ function allowedUrl(text, loopback) {
   return ['api.github.com', 'github.com'].includes(url.hostname) || url.hostname.endsWith('.githubusercontent.com');
 }
 
-// Opens a response, following redirects that stay on allowed hosts. Resolves only for a 200.
 function open(url, { loopback, timeoutMs }) {
   return new Promise((resolve, reject) => {
     const go = (target, left) => {
@@ -121,7 +117,6 @@ function startsWithMZ(file) {
 const remove = (file) => fs.rmSync(file, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 
 // Windows 10 and later ship tar.exe, which reads zips. The full path avoids picking up another tar from PATH.
-// The zip holds one Tink folder; its contents land directly in dest.
 function unzip(zip, dest) {
   const tar = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
   fs.mkdirSync(dest, { recursive: true });
@@ -130,7 +125,6 @@ function unzip(zip, dest) {
   });
 }
 
-// appDir is the Tink folder that holds Tink.exe and data. The injected pieces let tests fake the network, unzip and relaunch.
 function createUpdater({
   appDir,
   dataDir,
@@ -157,7 +151,6 @@ function createUpdater({
     }
   };
 
-  // The zip holds one Tink folder; it only counts if it looks like a real build.
   const looksRight = (folder) => startsWithMZ(path.join(folder, 'Tink.exe')) && fs.existsSync(path.join(folder, 'resources', 'app.asar'));
 
   async function check() {
@@ -188,7 +181,6 @@ function createUpdater({
     }
   }
 
-  // Never throws and never blocks play: a failed check is just a line in the log.
   async function checkInBackground() {
     try {
       await check();
@@ -197,7 +189,6 @@ function createUpdater({
     }
   }
 
-  // For the Settings button: throws on failure, otherwise the version now waiting to install, or null.
   async function checkNow() {
     await check();
     return pendingVersion();
@@ -216,14 +207,12 @@ function createUpdater({
     });
   }
 
-  // The version of a downloaded update that is waiting to be installed, or null.
   function pendingVersion() {
     const next = read(pendingFile);
     return fs.existsSync(staging) && isNewer(next) ? next : null;
   }
 
-  // Windows won't let a running app's folder be replaced, so the staged copy does the swap itself:
-  // this starts it with --finish-update and the old process quits. True means this process should quit now.
+  // Windows won't let a running app's folder be replaced, so the staged copy does the swap (--finish-update) and the old process quits.
   async function applyPending() {
     if (!fs.existsSync(staging) || !isNewer(read(pendingFile)) || !looksRight(staging)) return false;
     try {
@@ -245,8 +234,6 @@ function createUpdater({
     }
   }
 
-  // Runs in the staged copy once the old Tink has quit and let go of its folder.
-  // True means the new Tink is running and this process should quit; false means it carries on as it is.
   async function finishUpdate() {
     const next = read(pendingFile);
     let moved = false;
@@ -285,8 +272,7 @@ function createUpdater({
     return true;
   }
 
-  // What is left from an update: the old folder, and a staged one that is no longer needed.
-  // The other process may still be shutting down for a moment, so deleting is retried.
+  // The other process may still be shutting down, so deleting is retried.
   function removeOld(tries = SWAP_TRIES) {
     const keep = isNewer(read(pendingFile));
     const stale = [old, zip, ...(keep ? [] : [staging])].filter((file) => fs.existsSync(file));
@@ -300,7 +286,6 @@ function createUpdater({
     }
   }
 
-  // "Updated to 0.3.0" once, right after an update, otherwise null.
   function takeNotice() {
     const done = read(doneFile);
     if (done === null) return null;

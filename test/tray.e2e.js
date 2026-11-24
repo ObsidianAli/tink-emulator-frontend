@@ -1,6 +1,3 @@
-// Runs Tink in Electron and drives the row of icons under the title: down into it, along it, A on each icon and B back,
-// then up to the shelf on the same game. Saves a screenshot of the shelf and of each panel.
-// Usage: node test/tray.e2e.js [screenshot folder]
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -62,10 +59,10 @@ async function main() {
   const title = await page.textContent('#title');
   await shot('1-shelf');
 
-  // Down goes into the row, Left/Right move along it, Up goes back to the same game.
   assert.strictEqual(await focusedIcon(), null);
   await key('ArrowDown');
   assert.strictEqual(await focusedIcon(), 'Profile');
+  assert.strictEqual(await page.$eval('#title', (el) => getComputedStyle(el).opacity), '0', 'the game title hides while the icons have focus');
   await shot('2-profile-focused');
   await key('ArrowLeft');
   assert.strictEqual(await focusedIcon(), 'Profile', 'the row stops at its first icon');
@@ -74,8 +71,8 @@ async function main() {
   await key('ArrowUp');
   assert.strictEqual(await focusedIcon(), null);
   assert.strictEqual(await page.textContent('#title'), title);
+  assert.strictEqual(await page.$eval('#title', (el) => getComputedStyle(el).opacity), '1');
 
-  // A on the profile icon opens the picker, B comes back to the icon.
   await key('ArrowDown');
   await key('Enter');
   assert.ok(await visible('#profiles'), 'the picker opens');
@@ -83,7 +80,6 @@ async function main() {
   assert.ok(!(await visible('#profiles')));
   assert.strictEqual(await focusedIcon(), 'Profile');
 
-  // Controllers.
   await key('ArrowRight');
   await key('Enter');
   assert.ok(await visible('#panel'));
@@ -94,7 +90,6 @@ async function main() {
   assert.ok(!(await visible('#panel')));
   assert.strictEqual(await focusedIcon(), 'Controllers');
 
-  // Settings.
   await key('ArrowRight');
   await key('Enter');
   assert.ok(await visible('#settings'));
@@ -102,27 +97,46 @@ async function main() {
   assert.ok(!(await visible('#settings')));
   assert.strictEqual(await focusedIcon(), 'Settings');
 
-  // Power: three options; Shut down asks first and Not now leaves everything alone.
   await key('ArrowRight');
   await key('Enter');
-  assert.strictEqual(await page.textContent('#panel h1'), 'Power');
-  assert.deepStrictEqual(await page.$$eval('#panel .setup-row', (rows) => rows.map((r) => r.textContent)), ['Sleep', 'Shut down', 'Close Tink']);
+  assert.ok(await visible('#case-menu'), 'Power opens a popup');
+  assert.ok(!(await visible('#panel')), 'and not a panel');
+  assert.deepStrictEqual(await page.$$eval('#case-menu button', (rows) => rows.map((r) => r.textContent)), ['Sleep', 'Shut down', 'Close Tink']);
+  const box = await page.evaluate(() => {
+    const menu = document.getElementById('case-menu').getBoundingClientRect();
+    const icon = document.querySelector('.tray-icon[aria-label="Power"]').getBoundingClientRect();
+    return { menuBottom: menu.bottom, iconTop: icon.top, right: menu.right, width: innerWidth };
+  });
+  assert.ok(box.menuBottom <= box.iconTop && box.iconTop - box.menuBottom < 24, 'sits just above the icon');
+  assert.ok(box.right <= box.width, 'stays on screen');
   await shot('4-power');
+  await key('Escape');
+  assert.ok(!(await visible('#case-menu')));
+  assert.strictEqual(await focusedIcon(), 'Power', 'B returns to the Power icon');
+
+  await key('Enter');
   await key('ArrowDown');
   await key('Enter');
   assert.strictEqual(await page.textContent('.dialog p'), 'Shut down this PC?');
   await shot('5-shut-down-asks');
   await key('Escape');
   assert.ok(!(await page.$('.dialog-scrim')), 'Not now closes the question');
-  assert.ok(await visible('#panel'), 'and stays on the Power panel');
-  await key('ArrowUp');
+  assert.ok(!(await visible('#case-menu')));
+  assert.strictEqual(await focusedIcon(), 'Power');
+  await key('Enter');
   await key('Enter');
   await sleep(300);
-  assert.ok(await visible('#panel'), 'Sleep does nothing here and Tink keeps running');
+  assert.ok(!(await visible('#case-menu')), 'Sleep closes the popup');
+  assert.strictEqual(await focusedIcon(), 'Power', 'and Tink keeps running here');
+  await page.click('.tray-icon[aria-label="Power"]');
+  await sleep(350);
+  assert.ok(await visible('#case-menu'), 'a click opens the popup');
+  await page.click('#case-menu button:nth-child(2)');
+  await sleep(350);
+  assert.strictEqual(await page.textContent('.dialog p'), 'Shut down this PC?', 'a click picks a row');
   await key('Escape');
   assert.strictEqual(await focusedIcon(), 'Power');
 
-  // B from the row goes back to the shelf too.
   await key('Escape');
   assert.strictEqual(await focusedIcon(), null);
   assert.strictEqual(await page.textContent('#title'), title);

@@ -1,7 +1,3 @@
-// Runs Tink in Electron with a throwaway data folder: opens the Game's panel with Menu, favourites and hides from it,
-// opens Game info for an emulated game and for a Steam game (a fixture library, with its details already cached),
-// and saves a screenshot of each screen.
-// Usage: node test/menu.e2e.js [screenshot folder]
 const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -11,7 +7,6 @@ const { _electron: electron } = require('playwright');
 const outDir = path.resolve(process.argv[2] || path.join(__dirname, '..', 'out', 'menu'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// A small plain PNG, a different colour each time.
 function colourPng(r, g, b, width = 320, height = 180) {
   const zlib = require('node:zlib');
   const pixels = Buffer.alloc((width * 3 + 1) * height);
@@ -49,7 +44,6 @@ async function main() {
   fs.mkdirSync(games, { recursive: true });
   for (const name of ['Luigis Mansion (USA).rvz', 'Wind Waker (USA).rvz']) fs.writeFileSync(path.join(games, name), '');
   fs.writeFileSync(path.join(data, 'settings.json'), JSON.stringify({ consoles: { gamecube: { folder: games } }, setupDone: true }));
-  // Portal 2's details, as they would be kept after the first visit, so no network is needed.
   const info = path.join(data, 'info');
   fs.mkdirSync(path.join(info, '620'), { recursive: true });
   const files = [];
@@ -96,7 +90,6 @@ async function main() {
   await sleep(600);
   assert.strictEqual(await hints(), '', 'no hints on the shelf');
 
-  // Menu opens the panel, not Settings; B closes it.
   await key('s');
   assert.ok(await visible('#case-menu'), 'Menu opens the panel');
   assert.ok(!(await visible('#settings')), 'Menu no longer opens Settings');
@@ -108,7 +101,6 @@ async function main() {
   assert.strictEqual(await hints(), '', 'no hints on the shelf');
   assert.strictEqual(await title(), 'Luigis Mansion');
 
-  // Favourite from the panel, then Unfavourite.
   await key('s');
   await key('Enter');
   assert.strictEqual(readSettings().profiles[0].favourites.length, 1);
@@ -121,7 +113,6 @@ async function main() {
   assert.strictEqual(readSettings().profiles[0].favourites.length, 0, 'L still favourites');
   await sleep(400);
 
-  // Game info for an emulated game: cover, title and Console only, and B returns with the same game selected.
   await key('ArrowRight');
   assert.strictEqual(await title(), 'Wind Waker');
   await key('s');
@@ -141,7 +132,6 @@ async function main() {
   assert.ok(!(await visible('#info')));
   assert.strictEqual(await title(), 'Wind Waker', 'B returns to the same game');
 
-  // Hide from the panel.
   await key('s');
   await key('ArrowDown');
   await key('Enter');
@@ -149,13 +139,11 @@ async function main() {
   assert.strictEqual(readSettings().profiles[0].hiddenGames.length, 1);
   assert.strictEqual(await title(), 'Luigis Mansion');
 
-  // Settings is still reachable with a comma.
   await key(',');
   assert.ok(await visible('#settings'), 'comma opens Settings');
   await key('Escape');
   assert.ok(!(await visible('#settings')));
 
-  // A Steam fixture library: Portal 2 with its details already kept.
   await app.evaluate((_electron, dir) => {
     const steam = process.mainModule.require('./src/steam');
     steam.findSteamDir = async () => dir;

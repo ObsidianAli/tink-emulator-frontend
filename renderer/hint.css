@@ -26,7 +26,6 @@ p {
   background: var(--hint-bg);
 }
 
-/* Self-made labels for the two buttons, so no console maker's glyphs are needed. */
 kbd {
   padding: 0 var(--space);
   border: var(--line-width) solid var(--muted);

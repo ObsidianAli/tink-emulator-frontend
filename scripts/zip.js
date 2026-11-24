@@ -1,4 +1,3 @@
-// Packs the unpacked build as dist/Tink.zip with one Tink folder inside, using the tar.exe that ships with Windows.
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');

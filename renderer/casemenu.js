@@ -1,8 +1,10 @@
-// The small panel beside the selected Case, opened with Menu: Favourite, Hide and Game info. Up/Down move, A picks, B closes.
 import { element } from './dom.js';
 
 const root = document.getElementById('case-menu');
+const scrim = element('div', 'menu-scrim');
+root.before(scrim);
 let active = null;
+let hideTimer = 0;
 
 // Registered before the shelf's handler, so the press that closes the panel isn't also taken by the shelf.
 listenForInput((action) => {
@@ -12,14 +14,18 @@ listenForInput((action) => {
 
 export const caseMenuOpen = () => active !== null;
 
-// Resolves 'fav', 'hide' or 'info', or null when it is closed with B.
 export function openCaseMenu({ fav }) {
-  return new Promise((resolve) => {
-    const choices = [
+  return openMenu({
+    choices: [
       { id: 'fav', label: fav ? 'Unfavourite' : 'Favourite' },
       { id: 'hide', label: 'Hide' },
       { id: 'info', label: 'Game info' },
-    ];
+    ],
+  });
+}
+
+export function openMenu({ choices, anchor = null }) {
+  return new Promise((resolve) => {
     let focus = 0;
     const nodes = choices.map((choice, index) => {
       const node = element('button', 'setup-row', choice.label);
@@ -31,8 +37,13 @@ export function openCaseMenu({ fav }) {
       return node;
     });
 
+    const previousFocus = document.activeElement;
+
     function close(choice) {
-      root.hidden = true;
+      root.classList.remove('open');
+      scrim.classList.remove('open');
+      returnFocus(previousFocus, root);
+      hideTimer = setTimeout(() => { root.hidden = true; }, overlayMs());
       // Still counts as open until every handler has seen this press.
       setTimeout(() => { active = null; }, 0);
       resolve(choice);
@@ -57,9 +68,24 @@ export function openCaseMenu({ fav }) {
         return null;
       },
     };
+    clearTimeout(hideTimer);
     root.replaceChildren(...nodes);
+    root.classList.toggle('anchored', anchor !== null);
     root.hidden = false;
+    if (anchor) {
+      const rect = anchor.getBoundingClientRect();
+      const margin = rect.height / 4;
+      const left = rect.left + rect.width / 2 - root.offsetWidth / 2;
+      root.style.left = `${Math.max(margin, Math.min(left, window.innerWidth - root.offsetWidth - margin))}px`;
+      root.style.bottom = `${window.innerHeight - rect.top}px`;
+    } else {
+      root.style.left = '';
+      root.style.bottom = '';
+    }
     nodes[0].focus();
+    void root.offsetWidth;
+    root.classList.add('open');
+    scrim.classList.add('open');
     setHints([{ button: 'a', label: 'Choose' }, { button: 'b', label: 'Close' }]);
   });
 }

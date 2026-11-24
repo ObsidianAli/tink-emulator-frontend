@@ -1,8 +1,4 @@
-// Per-console defaults: which emulator runs it, which files count as games, and the launch arguments.
-
-// Each emulator: its exe name, and the arguments that start a game fullscreen.
-// args(rom, core, fullscreen): RetroArch also gets the core to load. With fullscreen off the flag is left out
-// (PCSX2 gets its opposite). Dolphin and shadPS4 have no such flag, so they keep their own setting.
+// With fullscreen off the flag is left out (PCSX2 gets its opposite); Dolphin and shadPS4 have no such flag.
 const EMULATORS = {
   dolphin: { label: 'Dolphin', exe: 'Dolphin.exe', args: (rom) => ['-b', '-e', rom] },
   cemu: { label: 'Cemu', exe: 'Cemu.exe', args: (rom, _core, full) => [...(full ? ['-f'] : []), '-g', rom] },
@@ -19,11 +15,6 @@ const EMULATORS = {
 
 const PS_DISCS = ['.iso', '.chd', '.cso', '.cue', '.bin'];
 
-// libretro: the system name in the libretro thumbnail library, or null when it has no covers for it.
-// colour: the background of the Plain cover, used for cover content only.
-// kind "files" (the default): files with these extensions. "folders": folders holding eboot.bin.
-// "anything": every file and folder, for consoles whose emulator the user picks.
-// Cartridge systems also take .zip, which RetroArch opens directly.
 const CONSOLES = {
   gamecube: { name: 'GameCube', libretro: 'Nintendo - GameCube', colour: '#4a4466', emulator: 'dolphin', extensions: ['.iso', '.gcm', '.gcz', '.rvz', '.ciso'] },
   wii: { name: 'Wii', libretro: 'Nintendo - Wii', colour: '#5c6670', emulator: 'dolphin', extensions: ['.iso', '.rvz', '.wbfs', '.wad', '.gcz', '.ciso'] },
@@ -48,7 +39,6 @@ const CONSOLES = {
   dreamcast: { name: 'Dreamcast', libretro: 'Sega - Dreamcast', colour: '#6a5a40', emulator: 'retroarch', core: 'flycast', extensions: ['.gdi', '.cdi', '.chd', '.cue'] },
 };
 
-// Steam isn't an emulated Console, but its Games still need a Plain cover colour.
 const STEAM = { name: 'Steam', colour: '#3b4654' };
 
 // Own keys only, so ids from the screen like "__proto__" never match.
@@ -57,7 +47,6 @@ const isEmulator = (id) => Object.hasOwn(EMULATORS, id);
 
 const coverColour = (consoleId) => (isConsole(consoleId) ? CONSOLES[consoleId].colour : STEAM.colour);
 
-// The exe and arguments that start one game. Consoles without a preset emulator get just the game path.
 function launchSpec(consoleId, exe, gamePath, fullscreen = true) {
   const preset = CONSOLES[consoleId];
   const args = preset.emulator ? EMULATORS[preset.emulator].args(gamePath, preset.core, fullscreen) : [gamePath];

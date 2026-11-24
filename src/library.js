@@ -1,10 +1,8 @@
-// Lists the games of every emulated console from its games folder.
 const fs = require('node:fs');
 const path = require('node:path');
 const { CONSOLES } = require('./presets');
 const { cleanTitle } = require('./titles');
 
-// How many folders deep to look inside a games folder.
 const MAX_DEPTH = 3;
 
 function readDir(dir) {
@@ -35,7 +33,6 @@ function dropBinsWithCue(files) {
   return files.filter((f) => !(/\.bin$/i.test(f) && cues.has(stem(f))));
 }
 
-// The games in one console's folder, as { path, isFolder }.
 function findGames(preset, folder) {
   if (preset.kind === 'anything') {
     return readDir(folder).map((entry) => ({ path: path.join(folder, entry.name), isFolder: entry.isDirectory() }));
@@ -48,8 +45,6 @@ function findGames(preset, folder) {
   return dropBinsWithCue(filesWithExtensions(folder, preset.extensions)).map((file) => ({ path: file, isFolder: false }));
 }
 
-// Every emulated game, from settings like { consoles: { gamecube: { folder: "D:\\Games\\GameCube" } } }.
-// Consoles without a folder are skipped.
 function getEmulatedGames(settings) {
   const games = [];
   const consoles = (settings && settings.consoles) || {};
@@ -72,7 +67,6 @@ function getEmulatedGames(settings) {
   return games;
 }
 
-// One entry per Console that has Games, in preset order with Steam last, each sorted by Title.
 function groupConsoles(games) {
   const order = [...Object.keys(CONSOLES), 'steam'];
   const found = new Map();

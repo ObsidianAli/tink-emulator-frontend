@@ -1,5 +1,3 @@
-// First-run setup, three screens: emulators found, one games folder per Console, and whether to download Covers.
-// Up/Down move, A chooses, B goes back a screen and X clears a folder. Mouse clicks work too.
 import { element, focusRow, shortPath } from './dom.js';
 
 const root = document.getElementById('setup');

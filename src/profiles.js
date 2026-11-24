@@ -1,6 +1,3 @@
-// Profiles live in settings.json as
-// "profiles": [{ id, name, colour, avatar, recent: [gameKey], favourites: [gameKey], hiddenConsoles: [], hiddenGames: [], sort }]
-// plus "lastProfile". A game key is "<console>:<file name>" or "steam:<appid>", so it survives a rescan or a moved folder.
 const crypto = require('node:crypto');
 
 const COLOURS = ['blue', 'green', 'orange', 'red', 'purple', 'teal'];
@@ -27,8 +24,6 @@ function normalise(profile) {
   };
 }
 
-// First start after the update: settings without profiles get one, with nothing hidden.
-// Returns true when something had to be filled in, so the caller saves.
 function ensureProfiles(settings) {
   const before = JSON.stringify([settings.profiles, settings.lastProfile]);
   const list = Array.isArray(settings.profiles) ? settings.profiles.filter((p) => p && typeof p === 'object') : [];
@@ -39,7 +34,6 @@ function ensureProfiles(settings) {
 
 const activeProfile = (settings) => settings.profiles.find((p) => p.id === settings.lastProfile) || settings.profiles[0];
 
-// Returns the new profile, or null when there are already as many as fit on the picker.
 function addProfile(settings) {
   if (settings.profiles.length >= PROFILES_MAX) return null;
   const taken = settings.profiles.map((p) => p.colour);
@@ -49,8 +43,6 @@ function addProfile(settings) {
   return profile;
 }
 
-// Changes the parts of a profile the edit view offers; anything invalid is ignored.
-// avatars is the list of picture files that exist.
 function editProfile(profile, { name, colour, avatar }, avatars = []) {
   if (cleanName(name)) profile.name = cleanName(name);
   if (COLOURS.includes(colour)) profile.colour = colour;
@@ -58,7 +50,6 @@ function editProfile(profile, { name, colour, avatar }, avatars = []) {
   else if (avatars.includes(avatar)) profile.avatar = avatar;
 }
 
-// The last profile can't be removed. Returns false when nothing was removed.
 function removeProfile(settings, id) {
   if (settings.profiles.length < 2 || !settings.profiles.some((p) => p.id === id)) return false;
   settings.profiles = settings.profiles.filter((p) => p.id !== id);
@@ -70,7 +61,6 @@ function recordPlay(profile, key) {
   profile.recent = [key, ...profile.recent.filter((k) => k !== key)].slice(0, RECENT_MAX);
 }
 
-// Returns true when the game is a favourite afterwards.
 function toggleFavourite(profile, key) {
   const had = profile.favourites.includes(key);
   profile.favourites = had ? profile.favourites.filter((k) => k !== key) : [...profile.favourites, key];
@@ -90,7 +80,6 @@ function toggleConsole(profile, id) {
   profile.hiddenConsoles = hidden ? profile.hiddenConsoles.filter((c) => c !== id) : [...profile.hiddenConsoles, id];
 }
 
-// Games played before come first, the one played last at the front; the rest stay in the order they had.
 function sortByHistory(games, recent) {
   const rank = new Map(recent.map((key, index) => [key, index]));
   const played = games.filter((game) => rank.has(game.key)).sort((a, b) => rank.get(a.key) - rank.get(b.key));
@@ -118,7 +107,6 @@ function sortGames(games, sort, profile) {
 
 const homeRow = (games, profile) => sortGames(games, 'recent', profile).slice(0, ROW_MAX);
 
-// What the Settings screen needs about the profile: its Consoles and how many Games are hidden.
 function settingsView(profile, consoles) {
   return {
     consoleList: consoles.map((item) => ({ id: item.console, name: item.name, hidden: profile.hiddenConsoles.includes(item.console) })),

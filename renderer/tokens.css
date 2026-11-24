@@ -1,6 +1,4 @@
-/* Every colour, size, spacing and timing value the UI uses lives here. Other stylesheets use only these. */
-
-/* Inter, bundled so Tink looks the same on every PC. Licence: fonts/LICENSE.txt (SIL Open Font License). */
+/* Inter, bundled. Licence: fonts/LICENSE.txt (SIL Open Font License). */
 @font-face {
   font-family: 'Inter';
   font-style: normal;
@@ -19,15 +17,39 @@
     U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
-/* The background tint, taken from the selected Cover. Registered so it can fade between Covers. */
+/* Registered so the background tint can fade between Covers. */
 @property --tint {
   syntax: '<color>';
   inherits: true;
   initial-value: #0f1115;
 }
 
+/* Registered so scripts read them as pixels even when written with calc(). */
+@property --home-margin {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --focus-line {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --focus-gap {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --focus-glow-size {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
 :root {
-  /* Colour. One accent, used for focus and nothing decorative. */
   --bg: #0f1115;
   --surface: #1a1d23;
   --surface-raised: #252931;
@@ -36,12 +58,12 @@
   --muted: #9aa0aa;
   --accent: #4da3ff;
   --on-light: #0f1115;
-  --scrim: rgba(8, 9, 12, 0.72);
+  --scrim: rgba(8, 9, 12, 0.5);
   --hint-bg: rgba(15, 17, 21, 0.92);
+  --black: #000;
   --tint-strength: 28%;
   --tint-reach: 80%;
 
-  /* Profile colours, for the badge behind a name's first letter. */
   --profile-blue: #2f6fd6;
   --profile-green: #2f9e5b;
   --profile-orange: #d9731f;
@@ -49,7 +71,6 @@
   --profile-purple: #8456d6;
   --profile-teal: #1f9aa6;
 
-  /* Type. One font, three sizes, two weights. */
   --font: 'Inter', system-ui, sans-serif;
   --text-title: 40px;
   --text-body: 24px;
@@ -58,7 +79,6 @@
   --weight-regular: 400;
   --weight-bold: 600;
 
-  /* Spacing on an 8px grid. */
   --space: 8px;
   --space-2: calc(var(--space) * 2);
   --space-3: calc(var(--space) * 3);
@@ -66,26 +86,48 @@
   --space-6: calc(var(--space) * 6);
   --space-8: calc(var(--space) * 8);
 
-  /* Shapes. */
   --radius: var(--space);
   --radius-large: var(--space-2);
   --radius-round: 999px;
   --line-width: 1px;
 
-  /* Focus: the same ring on everything a controller can land on. */
   --focus-width: calc(var(--space) / 2);
   --focus-offset: calc(var(--space) / 2);
   --focus-ring: var(--focus-width) solid var(--accent);
 
-  /* Motion: always ease-out, never bouncy. UI 150–300ms, Case animations 400–600ms. */
+  --focus-from: #5b8def;
+  --focus-to: #c9b9f6;
+  --focus-glow: rgba(140, 150, 245, 0.3);
+  --focus-line: 2px;
+  --focus-gap: 5px;
+  --focus-glow-size: var(--space);
+  --focus-breath-low: 0.8;
+  --focus-period: 2400ms;
+  --focus-fade: 140ms;
+  --focus-ease: ease-in-out;
+
+  --home-margin: calc(var(--space) * 12);
+  --title-home-size: var(--text-body);
+  --title-home-colour: #b9c6f0;
+  --title-home-gap: calc(var(--space) * 1.5);
+  --title-home-width: calc(var(--space) * 70);
+  --clock-size: 22px;
+  --clock-colour: var(--text);
+
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --duration-fast: 150ms;
   --duration-ui: 250ms;
   --duration-case: 500ms;
   --duration-case-slow: 600ms;
-  --zoom-screen: 1.04;
+  --duration-to-black: 120ms;
+  --duration-from-black: 250ms;
+  --ease-fade: cubic-bezier(0, 0, 0.58, 1);
+  --duration-screen-out: 100ms;
+  --duration-screen-in: 250ms;
+  --ease-screen: cubic-bezier(0.2, 0, 0, 1);
+  --screen-zoom: 0.97;
+  --scale-overlay: 0.96;
 
-  /* Sizes of recurring things. */
   --glyph-size: var(--space-4);
   --dialog-width: calc(var(--space) * 70);
   --hints-height: calc(var(--space) * 10);
@@ -100,6 +142,7 @@
   --all-games-size: calc(var(--space) * 12);
   --grid-columns: 6;
   --grid-top: calc(var(--space) * 13);
+  --grid-fade: var(--space-4);
   --tile-width: calc(var(--space) * 18);
   --tile-height: calc(var(--tile-width) * 4 / 3);
   --tile-dim: 0.7;
@@ -108,7 +151,7 @@
   --shadow-tile: 0 8px 20px rgba(0, 0, 0, 0.35);
   --shadow-tile-focus: 0 20px 40px rgba(0, 0, 0, 0.5);
 
-  /* Layers. */
   --layer-dialog: 10;
   --layer-hints: 20;
+  --layer-blackout: 30;
 }

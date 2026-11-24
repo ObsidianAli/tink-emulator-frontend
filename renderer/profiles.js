@@ -1,14 +1,11 @@
-// The profile picker: a row of badges, A picks, X edits, "Add" makes a new one. The edit view is one short list
-// (Name, Colour, Picture, Remove); a picture is chosen from a grid of the files in data/avatars.
-// A new profile goes step by step: a picture, then a name, then back to the picker.
 import { element, focusRow } from './dom.js';
+import { screen as changeScreen } from './transition.js';
 
 const root = document.getElementById('profiles');
 const COLOURS = ['blue', 'green', 'orange', 'red', 'purple', 'teal'];
 const GRID_COLUMNS = 6;
 const PROFILES_MAX = 8;
 let active = null;
-let hideTimer = null;
 
 // Registered before the shelf's handler, so the press that picks a profile isn't also taken by the shelf.
 listenForInput((action) => {
@@ -20,7 +17,6 @@ export const profilesOpen = () => active !== null;
 
 const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
-// A round badge: the picture when there is one, else the first letter on the profile's colour.
 export function badge(profile, small = false) {
   const node = element('div', small ? 'badge small' : 'badge');
   node.style.background = `var(--profile-${profile.colour})`;
@@ -35,8 +31,11 @@ export function badge(profile, small = false) {
   return node;
 }
 
-// Shows the picker and resolves once a profile is chosen. canCancel lets B go back to the shelf, resolving false.
-export async function chooseProfile({ canCancel = false } = {}) {
+export function closeProfiles() {
+  root.hidden = true;
+}
+
+export async function chooseProfile({ canCancel = false, stay = false } = {}) {
   let data = await window.tink.getProfiles();
   if (data.profiles.length === 1 && !canCancel) {
     await window.tink.chooseProfile(data.profiles[0].id);
@@ -73,17 +72,10 @@ export async function chooseProfile({ canCancel = false } = {}) {
     }
 
     function finish(value) {
-      // Fades out over the shelf; the answer is given now, so nothing waits for the fade.
-      root.classList.remove('entering');
-      root.classList.add('leaving');
-      const fade = parseFloat(getComputedStyle(root).getPropertyValue('--duration-ui'));
-      hideTimer = setTimeout(() => {
-        root.hidden = true;
-        root.classList.remove('leaving');
-      }, fade);
       // Still counts as open until every handler has seen this press.
       setTimeout(() => { active = null; }, 0);
-      resolve(value);
+      if (value && stay) resolve(value);
+      else changeScreen(closeProfiles).then(() => resolve(value));
     }
 
     function show(next, index = 0) {
@@ -299,7 +291,6 @@ export async function chooseProfile({ canCancel = false } = {}) {
       else cancelNew();
     }
 
-    // Backing out of the first step drops the profile that was started.
     async function cancelNew() {
       await busy(async () => {
         await window.tink.removeProfile(editing);
@@ -321,7 +312,7 @@ export async function chooseProfile({ canCancel = false } = {}) {
     }
 
     active = {
-      busy: false,
+      busy: true,
       handle(action) {
         if (screen === 'pick') {
           if (action === 'a') {
@@ -390,10 +381,10 @@ export async function chooseProfile({ canCancel = false } = {}) {
         return move(action, GRID_COLUMNS);
       },
     };
-    clearTimeout(hideTimer);
-    root.classList.remove('leaving');
-    root.classList.add('entering');
-    root.hidden = false;
-    render();
+    changeScreen(() => {
+      root.hidden = false;
+      render();
+      active.busy = false;
+    });
   });
 }

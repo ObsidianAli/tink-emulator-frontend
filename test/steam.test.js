@@ -5,8 +5,6 @@ const os = require('node:os');
 const path = require('node:path');
 const { getSteamGames, artUrls, parseVdf, gameProcesses, closeSteamGame } = require('../src/steam');
 
-// Copy the fixture install to a temp folder and point its library list at the copies,
-// writing paths the way Steam does (backslashes doubled).
 function makeInstall() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tink-steam-'));
   const main = path.join(root, 'steam');

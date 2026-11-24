@@ -1,4 +1,3 @@
-// The button hints along the bottom edge. setHints([{ button: 'a', label: 'Play' }]) replaces them.
 const hintsBar = document.getElementById('hints');
 let currentHints = [];
 
