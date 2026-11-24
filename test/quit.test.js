@@ -142,46 +142,15 @@ test('the real XInput loads through koffi', { skip: process.platform !== 'win32'
   assert.strictEqual(typeof reader.read(), 'boolean');
 });
 
-test('holding the combo closes the game and Tink comes back', async () => {
-  const events = [];
+test('holding the combo closes the game', async () => {
   const spec = { exe: process.execPath, args: [path.join(__dirname, 'stub-emulator-stubborn.js'), 'stubborn'] };
   const pad = fakePad();
   pad.held = true;
-  await playGame(spec, {
-    hide: () => events.push('hide'),
-    show: () => events.push('show'),
-    whilePlaying: (child) => {
-      events.push('playing');
-      const stop = watchCombo(() => closeEmulator(child, { waitMs: 300 }), { read: pad.read, holdMs: 100 });
-      return () => {
-        events.push('stop polling');
-        stop();
-      };
-    },
-  });
-  assert.deepStrictEqual(events, ['hide', 'playing', 'stop polling', 'show']);
+  const { child, exited } = playGame(spec);
+  const stop = watchCombo(() => closeEmulator(child, { waitMs: 300 }), { read: pad.read, holdMs: 100 });
+  await exited;
+  stop();
   const reads = pad.reads;
   await sleep(200);
   assert.strictEqual(pad.reads, reads, 'no polling once the game is gone');
-});
-
-test('no polling happens before a game starts or after it ends on its own', async () => {
-  const pad = fakePad();
-  const spec = { exe: process.execPath, args: [path.join(__dirname, 'stub-emulator-stubborn.js'), 'stubborn'] };
-  let child;
-  const playing = playGame(spec, {
-    hide: () => assert.strictEqual(pad.reads, 0),
-    show: () => {},
-    whilePlaying: (c) => {
-      child = c;
-      return watchCombo(() => assert.fail('fired'), { read: pad.read });
-    },
-  });
-  await sleep(300);
-  assert.ok(pad.reads > 0, 'polled while playing');
-  child.kill();
-  await playing;
-  const reads = pad.reads;
-  await sleep(200);
-  assert.strictEqual(pad.reads, reads);
 });

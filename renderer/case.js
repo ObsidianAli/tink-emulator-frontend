@@ -236,7 +236,22 @@ function createCase(shape, colours) {
     discMesh.rotation.y = LABEL_TURN - spin;
   }
 
-  return { group, shape, disc: discMesh, setCover, setSpine, setBack, setLabel, setDim, setPose };
+  function dispose() {
+    for (const material of [coverMaterial, spineMaterial, backMaterial, labelMaterial]) material.dispose();
+  }
+
+  return { group, shape, disc: discMesh, setCover, setSpine, setBack, setLabel, setDim, setPose, dispose };
 }
 
-export { SHAPES, shapeFor, coverAspect, spineAspect, createCase };
+function disposeShared() {
+  for (const geometries of geometryCache.values()) {
+    for (const geometry of Object.values(geometries)) geometry?.dispose();
+  }
+  geometryCache.clear();
+  if (!shared) return;
+  shared.shadow.map.dispose();
+  for (const material of Object.values(shared)) material.dispose();
+  shared = null;
+}
+
+export { SHAPES, shapeFor, coverAspect, spineAspect, createCase, disposeShared };

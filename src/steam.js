@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
+const win32 = require('./win32');
 
 const DEFAULT_STEAM_DIR = 'C:\\Program Files (x86)\\Steam';
 
@@ -111,6 +112,9 @@ async function findSteamDir() {
 
 // Returns null if it couldn't be read (which is not the same as "nothing is running").
 async function getRunningAppId() {
+  const native = win32.native();
+  const fast = native ? native.runningAppId() : null;
+  if (fast !== null) return fast;
   const value = await readSteamRegistry('RunningAppID');
   return /^0x[0-9a-f]+$/i.test(value || '') ? parseInt(value, 16) : null;
 }
@@ -133,6 +137,9 @@ function gameProcesses(processes, installDir) {
 }
 
 function listProcesses() {
+  const native = win32.native();
+  const rows = native ? native.listProcesses() : null;
+  if (rows) return Promise.resolve(rows);
   const script = 'Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath } | Select-Object ProcessId, ExecutablePath | ConvertTo-Json -Compress';
   return new Promise((resolve) => {
     execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, stdout) => {
@@ -155,14 +162,29 @@ const taskkill = (args) =>
   });
 
 const CLOSE_WAIT_MS = 5000;
+const CLOSE_POLL_MS = 100;
 
-async function closeSteamGame(installDir, { waitMs = CLOSE_WAIT_MS, list = listProcesses, kill = taskkill, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+function nativeAlive() {
+  const native = win32.native();
+  return native ? native.isAlive : null;
+}
+
+async function closeSteamGame(installDir, { waitMs = CLOSE_WAIT_MS, list = listProcesses, kill = taskkill, alive = nativeAlive(), wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
   const asked = gameProcesses(await list(), installDir);
   await Promise.all(asked.map((pid) => kill(['/PID', String(pid)])));
   if (asked.length === 0) return;
-  await wait(waitMs);
-  const left = gameProcesses(await list(), installDir).filter((pid) => asked.includes(pid));
+  let left;
+  if (alive) {
+    for (let waited = 0; waited < waitMs; waited += CLOSE_POLL_MS) {
+      await wait(CLOSE_POLL_MS);
+      if (!asked.some(alive)) return;
+    }
+    left = asked.filter(alive);
+  } else {
+    await wait(waitMs);
+    left = gameProcesses(await list(), installDir).filter((pid) => asked.includes(pid));
+  }
   await Promise.all(left.map((pid) => kill(['/PID', String(pid), '/T', '/F'])));
 }
 
-module.exports = { parseVdf, getSteamGames, artUrls, findSteamDir, getRunningAppId, isSteamRunning, gameProcesses, closeSteamGame };
+module.exports = { parseVdf, getSteamGames, artUrls, findSteamDir, getRunningAppId, isSteamRunning, gameProcesses, listProcesses, closeSteamGame };

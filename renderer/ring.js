@@ -143,7 +143,14 @@ function createFocusRing(theme) {
     return { fading, showing };
   }
 
-  return { attach, detach, clear, setScale, update, reach: () => units(theme.gap + theme.line) };
+  function dispose() {
+    for (const ring of rings) {
+      ring.mesh.geometry.dispose();
+      ring.material.dispose();
+    }
+  }
+
+  return { attach, detach, clear, setScale, update, dispose, reach: () => units(theme.gap + theme.line) };
 }
 
 export { createFocusRing };

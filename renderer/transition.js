@@ -17,11 +17,24 @@ function enqueue(job) {
   return run;
 }
 
+const isBlack = () => overlay.classList.contains('black');
+
+// Two frames: one for black to be drawn and one for it to be on screen.
+export async function fadeToBlack() {
+  if (isBlack()) return;
+  overlay.classList.add('black');
+  await wait(duration(overlay, '--duration-to-black'));
+  await nextFrame();
+  await nextFrame();
+}
+
 // Resolves as the fade-in starts, not when it ends, so input works again straight away.
 export function transition(build) {
   return enqueue(async () => {
-    overlay.classList.add('black');
-    await wait(duration(overlay, '--duration-to-black'));
+    if (!isBlack()) {
+      overlay.classList.add('black');
+      await wait(duration(overlay, '--duration-to-black'));
+    }
     try {
       await build();
       // One frame for the new screen to be drawn and one for it to be on screen before the black lifts.

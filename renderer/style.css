@@ -63,6 +63,10 @@ main:has(> :is(#settings, #profiles, #info):not([hidden])) > :is(#shelf, #title,
   visibility: hidden;
 }
 
+main:has(> #loading:not([hidden])) > :not(#loading) {
+  visibility: hidden;
+}
+
 #shelf {
   position: absolute;
   inset: 0;
@@ -814,4 +818,78 @@ html.settling *::after {
 
 .info-shot.current {
   outline: var(--focus-ring);
+}
+
+#loading {
+  position: absolute;
+  inset: 0;
+}
+
+#loading[hidden] {
+  display: none;
+}
+
+#loading-cover {
+  position: absolute;
+  left: 50%;
+  top: var(--loading-cover-top);
+  height: var(--loading-cover-height);
+  aspect-ratio: var(--loading-cover-aspect);
+  overflow: hidden;
+  border-radius: var(--cover-radius);
+  box-shadow: var(--shadow-loading-cover);
+  opacity: 0;
+  translate: -50% -50%;
+  transition: opacity var(--duration-ui) var(--ease-out);
+}
+
+#loading-cover.shown {
+  opacity: 1;
+}
+
+#loading-cover.plain {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  font-weight: var(--weight-bold);
+  text-align: center;
+}
+
+#loading-cover canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#loading-spinner {
+  position: absolute;
+  left: 50%;
+  top: var(--loading-spinner-top);
+  box-sizing: border-box;
+  width: var(--loading-spinner-size);
+  height: var(--loading-spinner-size);
+  border: var(--loading-spinner-line) solid var(--loading-spinner-track);
+  border-top-color: var(--loading-spinner-colour);
+  border-radius: var(--radius-round);
+  translate: -50% 0;
+  animation: loading-spin var(--loading-spinner-period) linear infinite;
+}
+
+@keyframes loading-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+#loading-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--loading-hint-bottom);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--loading-hint-size);
+  text-align: center;
 }

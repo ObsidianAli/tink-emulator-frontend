@@ -12,10 +12,8 @@ function values(css) {
 
 test('stylesheets only use values from tokens.css', () => {
   const raw = /#[0-9a-f]{3,8}\b|\b(rgba?|hsla?)\(|\d(px|em|rem|ms|s)\b|cubic-bezier|['"]/i;
-  for (const name of ['style.css', 'hint.css']) {
-    for (const value of values(read(name))) {
-      assert.ok(!raw.test(value), `${name} uses a raw value: ${value}`);
-    }
+  for (const value of values(read('style.css'))) {
+    assert.ok(!raw.test(value), `style.css uses a raw value: ${value}`);
   }
 });
 

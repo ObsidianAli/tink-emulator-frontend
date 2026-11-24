@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, screen, dialog, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeImage } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const steam = require('./src/steam');
@@ -12,16 +12,19 @@ const options = require('./src/options');
 const { resolveDataDir, migrateOldData } = require('./src/paths');
 const { createLog } = require('./src/log');
 const { playGame, closeEmulator } = require('./src/launcher');
+const { startSession } = require('./src/session');
+const win32 = require('./src/win32');
 const { watchCombo, loadPadReader } = require('./src/pad');
 const { createCovers } = require('./src/covers');
 const { createGameInfo } = require('./src/gameinfo');
 const { powerAction } = require('./src/power');
 const { createUpdater, FINISH_FLAG } = require('./src/update');
 
-const POLL_MS = 2000;
-// Generous: a first launch can wait on an update or a Steam login.
-const START_TIMEOUT_MS = 5 * 60 * 1000;
-const HINT_MS = 3000;
+const BACKGROUND = '#0f1115';
+const BACKDROP = '#000';
+const MEMORY_LOG_DELAY_MS = 1500;
+const AWAKE_CHECK_MS = 1000;
+const REFOCUS_CHECK_MS = 100;
 const UPDATE_CHECK_DELAY_MS = 10 * 1000;
 
 const FINISHING = process.argv.includes(FINISH_FLAG) && /\.new$/i.test(path.dirname(process.execPath));
@@ -70,7 +73,7 @@ function createWindow() {
     width: 1280,
     height: 720,
     fullscreen: options.wantsFullscreen(loadSettings(settingsFile())),
-    backgroundColor: '#0f1115',
+    backgroundColor: BACKGROUND,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -86,6 +89,12 @@ function createWindow() {
   win.webContents.session.setPermissionCheckHandler(() => false);
   win.webContents.on('will-navigate', (event) => event.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.on('focus', () => {
+    if (session && session.alive()) sendGame('awake');
+  });
+  win.on('blur', () => {
+    if (session && session.state() === 'playing') sendGame('sleep');
+  });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
@@ -193,61 +202,38 @@ async function getGameInfo(id) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Any running game counts as started, since some games start through a launcher with another id.
-// A failed registry read is ignored rather than taken as "the game ended".
-async function waitForGameToEnd() {
-  const deadline = Date.now() + START_TIMEOUT_MS;
-  let started = false;
-  while (started || Date.now() < deadline) {
-    await sleep(POLL_MS);
-    const running = await steam.getRunningAppId();
-    if (running === null) continue;
-    if (running === 0) {
-      if (started) return;
-    } else if (await steam.isSteamRunning()) {
-      started = true;
-    } else if (started) {
-      // Steam crashed, so the game id is stale and nothing is left to wait for.
-      return;
-    }
-  }
+let session = null;
+let playing = null;
+let lastGameState = null;
+
+// The blur that follows a handoff repeats 'sleep', so only real changes between sleep and awake go through.
+function sendGame(state, info) {
+  if ((state === 'sleep' || state === 'awake') && state === lastGameState) return;
+  lastGameState = state;
+  if (win && !win.isDestroyed()) win.webContents.send('game', state, info);
 }
 
-// Windows won't always let a hidden app take focus back, so Tink briefly goes on top to get there.
-function showTink() {
+function logMemory(where) {
+  const metrics = app.getAppMetrics();
+  const sum = (key) => Math.round(metrics.reduce((total, m) => total + (m.memory[key] || 0), 0) / 1024);
+  log(`Memory ${where}: ${sum('workingSetSize')} MB in use, ${sum('privateBytes')} MB private`);
+}
+
+function ownHandle() {
+  const handle = win.getNativeWindowHandle();
+  return Number(handle.length >= 8 ? handle.readBigUInt64LE(0) : handle.readUInt32LE(0));
+}
+
+// Windows won't always let a background app take focus back, so Tink briefly goes on top to get there.
+async function showTink() {
+  if (win.isMinimized()) win.restore();
   win.setAlwaysOnTop(true);
   win.show();
   win.focus();
   win.setAlwaysOnTop(false);
-}
-
-function showHint() {
-  const { workArea } = screen.getPrimaryDisplay();
-  const width = 720;
-  const height = 96;
-  const hint = new BrowserWindow({
-    width,
-    height,
-    x: Math.round(workArea.x + (workArea.width - width) / 2),
-    y: workArea.y + workArea.height - height - 48,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    focusable: false,
-    skipTaskbar: true,
-    show: false,
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
-  });
-  hint.setAlwaysOnTop(true, 'screen-saver');
-  hint.setIgnoreMouseEvents(true);
-  hint.once('ready-to-show', () => hint.showInactive());
-  hint.loadFile(path.join(__dirname, 'renderer', 'hint.html'));
-  const timer = setTimeout(() => close(), HINT_MS);
-  function close() {
-    clearTimeout(timer);
-    if (!hint.isDestroyed()) hint.destroy();
-  }
-  return close;
+  await sleep(REFOCUS_CHECK_MS);
+  const native = win32.native();
+  if (native && !win.isDestroyed() && !win.isFocused()) native.bringToFront(ownHandle());
 }
 
 let padReader;
@@ -259,40 +245,87 @@ function getPadReader() {
   return padReader;
 }
 
-function whilePlaying(child) {
-  const closeHint = showHint();
+function watchQuit(close) {
   const reader = getPadReader();
-  const stopWatching = reader
-    ? watchCombo(() => closeEmulator(child), {
-        read: reader.read,
-        onFail: (error) => log("Reading the pad failed, so Select + Start won't work this time", error),
-      })
-    : () => {};
-  return () => {
-    stopWatching();
-    closeHint();
+  if (!reader) return () => {};
+  return watchCombo(close, {
+    read: reader.read,
+    onFail: (error) => log("Reading the pad failed, so Select + Start won't work this time", error),
+  });
+}
+
+function platform() {
+  const native = win32.native();
+  return {
+    processes: native && native.listProcesses,
+    windows: native && native.topWindows,
+    bringToFront: native && native.bringToFront,
+    runningAppId: steam.getRunningAppId,
+    steamRunning: steam.isSteamRunning,
   };
+}
+
+async function play(game, target, close) {
+  const native = win32.native();
+  if (native) native.allowAnyForeground();
+  const stopQuit = watchQuit(close);
+  let memoryTimer = null;
+  let awakeTimer = null;
+  playing = { game, close };
+  session = startSession(target, {
+    platform: platform(),
+    onState(state) {
+      if (state === 'handoff') sendGame('handoff');
+      if (state !== 'playing') return;
+      win.setBackgroundColor(BACKDROP);
+      sendGame('sleep');
+      memoryTimer = setTimeout(() => logMemory('while playing'), MEMORY_LOG_DELAY_MS);
+      // A game that never takes the foreground leaves Tink in front and black, with no focus change to wake it.
+      awakeTimer = setTimeout(() => {
+        if (session && session.state() === 'playing' && win.isFocused()) sendGame('awake');
+      }, AWAKE_CHECK_MS);
+    },
+    async restore(outcome) {
+      stopQuit();
+      clearTimeout(memoryTimer);
+      clearTimeout(awakeTimer);
+      await showTink();
+      win.setBackgroundColor(BACKGROUND);
+      sendGame(outcome.status === 'failed' ? 'failed' : 'back');
+    },
+  });
+  try {
+    return await session.done;
+  } finally {
+    session = null;
+    playing = null;
+  }
+}
+
+function cancelLaunch() {
+  if (session && session.cancel()) playing.close();
+}
+
+function focusGame() {
+  if (!session || !session.focus()) return false;
+  sendGame('sleep');
+  return true;
 }
 
 async function launchSteam(game) {
   const { appId } = game;
   if (!/^\d+$/.test(String(appId))) return;
-  let stopWatching = () => {};
+  sendGame('loading', { id: game.id, title: game.title });
   try {
     await shell.openExternal(`steam://rungameid/${appId}`);
-    win.hide();
-    const reader = getPadReader();
-    if (reader) {
-      stopWatching = watchCombo(() => steam.closeSteamGame(game.installDir).catch((error) => log('Could not close the Steam game', error)), {
-        read: reader.read,
-        onFail: (error) => log("Reading the pad failed, so Select + Start won't work this time", error),
-      });
-    }
-    await waitForGameToEnd();
-  } finally {
-    stopWatching();
-    showTink();
+  } catch (error) {
+    sendGame('failed');
+    throw error;
   }
+  const close = () => steam.closeSteamGame(game.installDir).catch((error) => log('Could not close the Steam game', error));
+  const outcome = await play(game, { kind: 'steam', installDir: game.installDir }, close);
+  if (outcome.status === 'failed') throw outcome.error || new Error('The game did not start in time');
+  if (outcome.status === 'ended') changeActive((profile) => profiles.recordPlay(profile, game.key));
 }
 
 function emulatorExe(game) {
@@ -407,24 +440,32 @@ async function launchEmulated(game) {
   const exe = emulatorExe(game);
   if (!exe || !fs.existsSync(exe)) return { error: `${name} isn't set up.`, fix: 'settings', console: game.console };
   if (!fs.existsSync(game.path)) return { error: "This game file can't be found.", fix: 'rescan' };
+  sendGame('loading', { id: game.id, title: game.title });
+  let outcome;
   try {
     const spec = launchSpec(game.console, exe, game.path, options.wantsFullscreen(settings));
-    await playGame(spec, { hide: () => win.hide(), show: showTink, whilePlaying });
-    changeActive((profile) => profiles.recordPlay(profile, game.key));
+    const { child, exited } = playGame(spec);
+    outcome = await play(game, { kind: 'emulator', child, exited }, () => closeEmulator(child));
   } catch (error) {
-    log(`Could not start ${name} for ${game.consoleName}`, error);
+    sendGame('failed');
+    outcome = { status: 'failed', error };
+  }
+  if (outcome.status === 'failed') {
+    log(`Could not start ${name} for ${game.consoleName}`, outcome.error);
     return { error: `${name} couldn't be started.`, fix: 'settings', console: game.console };
   }
+  if (outcome.status === 'ended') changeActive((profile) => profiles.recordPlay(profile, game.key));
   return {};
 }
 
 async function launch(id) {
+  if (playing) return { error: `Close ${playing.game.title} first.` };
   const game = lookup(id);
   if (!game) return { error: "This game can't be found.", fix: 'rescan' };
+  logMemory('on Home');
   if (game.console === 'steam') {
     try {
       await launchSteam(game);
-      changeActive((profile) => profiles.recordPlay(profile, game.key));
     } catch (error) {
       log('Could not start a Steam game', error);
       return { error: "Steam couldn't start this game." };
@@ -537,6 +578,11 @@ app.whenReady().then(async () => {
   handle('getCover', (id) => getCover(String(id)));
   handle('getGameInfo', (id) => getGameInfo(String(id)));
   handle('launch', (id) => launch(String(id)));
+  handle('cancelLaunch', cancelLaunch);
+  handle('focusGame', focusGame);
+  handle('handoffReady', () => {
+    if (session) session.ready();
+  });
   handle('power', (action) => (action === 'close' ? app.quit() : powerAction(String(action))));
   ipcMain.handle('logError', (_event, text) => log('Screen error', String(text).slice(0, 2000)));
   createWindow();

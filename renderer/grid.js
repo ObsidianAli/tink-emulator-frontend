@@ -108,11 +108,19 @@ function forgetCovers() {
   covers.clear();
 }
 
+function sleep() {
+  forgetCovers();
+  observer.disconnect();
+  tiles = [];
+  list.replaceChildren();
+}
+
 export const grid = {
   set,
   move,
   nextSort,
   forgetCovers,
+  sleep,
   game: () => games[index] || null,
   open: (open) => { root.hidden = !open; },
 };

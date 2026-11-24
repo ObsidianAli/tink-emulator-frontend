@@ -67,4 +67,8 @@ function playSound(name) {
   }
 }
 
+function suspendSound() {
+  if (audio && audio.state === 'running') audio.suspend().catch(() => {});
+}
+
 if (typeof module !== 'undefined') module.exports = { soundDue };
