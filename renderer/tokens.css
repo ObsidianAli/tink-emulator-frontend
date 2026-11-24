@@ -151,6 +151,19 @@
   --shadow-tile: 0 8px 20px rgba(0, 0, 0, 0.35);
   --shadow-tile-focus: 0 20px 40px rgba(0, 0, 0, 0.5);
 
+  --loading-cover-top: 44%;
+  --loading-cover-height: 46vh;
+  --loading-cover-aspect: 5 / 7;
+  --shadow-loading-cover: 0 12px 40px rgba(0, 0, 0, 0.6);
+  --loading-spinner-top: 77%;
+  --loading-spinner-size: 28px;
+  --loading-spinner-line: 3px;
+  --loading-spinner-track: rgba(255, 255, 255, 0.15);
+  --loading-spinner-colour: rgba(255, 255, 255, 0.7);
+  --loading-spinner-period: 1s;
+  --loading-hint-bottom: 6%;
+  --loading-hint-size: 18px;
+
   --layer-dialog: 10;
   --layer-hints: 20;
   --layer-blackout: 30;

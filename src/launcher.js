@@ -3,15 +3,6 @@ const path = require('node:path');
 
 const CLOSE_WAIT_MS = 5000;
 
-function runEmulator({ exe, args }, onStart) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(exe, args, { cwd: path.dirname(exe), stdio: 'ignore' });
-    child.once('error', reject);
-    child.once('spawn', () => onStart && onStart(child));
-    child.once('exit', () => resolve());
-  });
-}
-
 const taskkill = (args) =>
   new Promise((resolve) => {
     const proc = spawn('taskkill', args, { stdio: 'ignore', windowsHide: true });
@@ -34,17 +25,13 @@ function closeEmulator(child, { waitMs = CLOSE_WAIT_MS, ask = askToClose, force 
   });
 }
 
-async function playGame(spec, { hide, show, whilePlaying }) {
-  hide();
-  let stop = null;
-  try {
-    await runEmulator(spec, (child) => {
-      if (whilePlaying) stop = whilePlaying(child);
-    });
-  } finally {
-    if (stop) stop();
-    show();
-  }
+function playGame({ exe, args }) {
+  const child = spawn(exe, args, { cwd: path.dirname(exe), stdio: 'ignore' });
+  const exited = new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('exit', () => resolve());
+  });
+  return { child, exited };
 }
 
 module.exports = { playGame, closeEmulator };

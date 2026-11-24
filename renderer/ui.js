@@ -5,8 +5,9 @@ import { openSettings, hideSettings, settingsOpen } from './settings.js';
 import { openCaseMenu, openMenu, caseMenuOpen } from './casemenu.js';
 import { openInfo, infoOpen } from './info.js';
 import { chooseProfile, closeProfiles, badge } from './profiles.js';
-import { transition, screen, changingScreen } from './transition.js';
+import { transition, screen, changingScreen, fadeToBlack } from './transition.js';
 import { openPanel, updatePanel, panelOpen } from './panel.js';
+import { showLoading, hideLoading, loadingOpen } from './loading.js';
 import './clock.js';
 
 const main = document.querySelector('main');
@@ -28,6 +29,9 @@ let inPanel = false;
 let ready = false;
 let changing = false;
 let inMenu = false;
+let running = null;
+let asleep = false;
+let cancelled = false;
 
 const reported = new Set();
 function report(reason) {
@@ -251,21 +255,80 @@ async function openGameMenu() {
   }
 }
 
+function sleep() {
+  if (asleep) return;
+  asleep = true;
+  hideLoading();
+  shelf.sleep();
+  grid.sleep();
+  suspendSound();
+  window.tink.releaseCaches?.();
+}
+
+async function wake({ played = false } = {}) {
+  hideLoading();
+  if (!asleep && !played) {
+    showHints();
+    return;
+  }
+  asleep = false;
+  shelf.wake();
+  showLibrary(await window.tink.refreshLibrary(), { played });
+  await shelf.ready();
+}
+
+// States arrive while earlier ones are still fading, so they run one after another.
+let states = Promise.resolve();
+let shownLoading = false;
+function onGameState(state) {
+  states = states.then(async () => {
+    if (state === 'loading') {
+      shownLoading = true;
+      await screen(() => showLoading(running, shelf.art));
+    } else if (state === 'handoff') {
+      await fadeToBlack();
+      window.tink.handoffReady?.();
+    } else if (state === 'sleep') {
+      launching = true;
+      await fadeToBlack();
+      sleep();
+    } else if (state === 'awake') {
+      launching = false;
+      await transition(wake);
+    } else if (state === 'back' || state === 'failed') {
+      await fadeToBlack();
+    }
+  }).catch(report);
+}
+
+const launchSound = () => (!running ? 'launch' : running.id === focusedGame()?.id ? 'confirm' : null);
+
 async function play() {
   const game = focusedGame();
-  if (launching || !game) return;
+  if (!game) return;
+  if (running) {
+    if (running.id === game.id) window.tink.focusGame?.();
+    else {
+      const result = await window.tink.launch(game.id);
+      if (result && result.error) await explain(result);
+    }
+    return;
+  }
+  if (launching) return;
   launching = true;
+  cancelled = false;
+  running = game;
+  const stop = window.tink.onGame?.(onGameState);
   try {
-    let result;
-    // Black before the window hides, so the old row is never what shows when Tink comes back.
-    await transition(async () => {
-      result = await window.tink.launch(game.id);
-      if (result && result.error) return;
-      showLibrary(await window.tink.refreshLibrary(), { played: true });
-      await shelf.ready();
-    });
+    shownLoading = false;
+    const result = await window.tink.launch(game.id);
+    await states;
+    const played = !cancelled && !(result && result.error);
+    if (shownLoading) await transition(() => wake({ played }));
     if (result && result.error) await explain(result);
   } finally {
+    if (stop) stop();
+    running = null;
     launching = false;
   }
 }
@@ -303,6 +366,12 @@ async function goToSettings(focusConsole) {
 listenForInput((action) => {
   const dialog = dialogTakesInput(action);
   if (dialog) return dialog.sound;
+  if (loadingOpen()) {
+    if (action !== 'b' || !window.tink.cancelLaunch || cancelled) return null;
+    cancelled = true;
+    window.tink.cancelLaunch();
+    return 'back';
+  }
   if (changingScreen() || settingsOpen() || inSettings || inPicker || inMenu || caseMenuOpen() || infoOpen() || panelOpen() || inPanel) return null;
   if (action === 'view') {
     switchProfile();
@@ -361,8 +430,9 @@ listenForInput((action) => {
       return 'confirm';
     }
     if (launching || !shelf.game()) return null;
+    const sound = launchSound();
     play();
-    return 'launch';
+    return sound;
   }
   const moves = { y: shelf.flip, x: shelf.open, b: shelf.back };
   if (!moves[action] || !moves[action]()) return null;
@@ -379,8 +449,9 @@ function gridAction(action) {
   }
   if (action === 'a') {
     if (launching || !grid.game()) return null;
+    const sound = launchSound();
     play();
-    return 'launch';
+    return sound;
   }
   if (action === 'y') {
     changeSort();

@@ -134,22 +134,18 @@ test('launch arguments per emulator', () => {
   assert.deepStrictEqual(launchSpec('switch2', 'my-switch2.exe', rom).args, [rom]);
 });
 
-test('Tink hides while the emulator runs and comes back when it closes', async () => {
+test('the emulator gets the game and its end is reported', async () => {
   const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tink-stub-')), 'args.json');
-  const events = [];
   const spec = { exe: process.execPath, args: [path.join(__dirname, 'stub-emulator.js'), out, 'D:\\Games\\game.iso'] };
-  const played = playGame(spec, { hide: () => events.push('hide'), show: () => events.push('show') });
-  assert.deepStrictEqual(events, ['hide']);
-  await played;
-  assert.deepStrictEqual(events, ['hide', 'show']);
+  const { child, exited } = playGame(spec);
+  assert.ok(child.pid > 0);
+  await exited;
   assert.deepStrictEqual(JSON.parse(fs.readFileSync(out, 'utf8')), ['D:\\Games\\game.iso']);
 });
 
-test('Tink comes back if the emulator can\'t be started', async () => {
-  const events = [];
+test('an emulator that can\'t be started is reported', async () => {
   const spec = { exe: path.join(os.tmpdir(), 'no-such-emulator.exe'), args: [] };
-  await assert.rejects(playGame(spec, { hide: () => events.push('hide'), show: () => events.push('show') }));
-  assert.deepStrictEqual(events, ['hide', 'show']);
+  await assert.rejects(playGame(spec).exited);
 });
 
 test('only consoles with games are listed, in console order with Steam last', () => {

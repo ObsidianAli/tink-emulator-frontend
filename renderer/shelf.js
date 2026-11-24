@@ -1,5 +1,5 @@
 import * as THREE from '../node_modules/three/build/three.module.js';
-import { SHAPES, shapeFor, coverAspect, spineAspect, createCase } from './case.js';
+import { SHAPES, shapeFor, coverAspect, spineAspect, createCase, disposeShared } from './case.js';
 import { createTextures } from './textures.js';
 import { createFocusRing } from './ring.js';
 
@@ -28,6 +28,7 @@ const SHARP_STEP = 64;
 const SHARP_MAX = 2048;
 // A slow Cover load can't keep the screen black for longer than this.
 const READY_MAX_MS = 500;
+const COMPILE_MAX_MS = 1000;
 const BREATH_FRAME_MS = 1000 / 30;
 
 function token(name) {
@@ -91,12 +92,16 @@ function studioLight(renderer) {
   return texture;
 }
 
-function createShelf(canvas, { onTint, button, title }) {
+function makeRenderer(canvas) {
   // At two or more device pixels per CSS pixel the edges are already fine, and multisampling a 4K buffer is costly.
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: (window.devicePixelRatio || 1) < 2, alpha: true });
   renderer.setPixelRatio(window.devicePixelRatio || 1);
   renderer.setClearColor(0x000000, 0);
+  return renderer;
+}
 
+function createShelf(canvas, { onTint, button, title }) {
+  let renderer = makeRenderer(canvas);
   const scene = new THREE.Scene();
   scene.environment = studioLight(renderer);
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 100);
@@ -112,7 +117,7 @@ function createShelf(canvas, { onTint, button, title }) {
   const theme = focusTheme();
   const ring = createFocusRing(theme);
   let ringShown = true;
-  const textures = createTextures(renderer.capabilities.getMaxAnisotropy());
+  let textures = createTextures(renderer.capabilities.getMaxAnisotropy());
   const tau = durationMs('--duration-case') / 4.6;
   const discTau = durationMs('--duration-case-slow') / 4.6;
 
@@ -386,6 +391,8 @@ function createShelf(canvas, { onTint, button, title }) {
   }
 
   let frameRequested = false;
+  let frameId = 0;
+  let asleep = false;
   let lastTime = null;
   let breathTimer = 0;
   let settled = false;
@@ -423,16 +430,16 @@ function createShelf(canvas, { onTint, button, title }) {
 
   function nextFrame() {
     clearTimeout(breathTimer);
-    if (frameRequested) return;
+    if (frameRequested || asleep) return;
     frameRequested = true;
-    requestAnimationFrame(frame);
+    frameId = requestAnimationFrame(frame);
   }
 
   const requestRender = nextFrame;
 
   function resize() {
     const { clientWidth, clientHeight } = canvas;
-    if (!clientWidth || !clientHeight) return;
+    if (!clientWidth || !clientHeight || asleep) return;
     renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.setSize(clientWidth, clientHeight, false);
     camera.aspect = clientWidth / clientHeight;
@@ -463,6 +470,7 @@ function createShelf(canvas, { onTint, button, title }) {
     if (next === selected) return false;
     selected = next;
     poses = [];
+    if (asleep) return true;
     updateWindow();
     const item = live.get(selected);
     if (item) {
@@ -479,7 +487,52 @@ function createShelf(canvas, { onTint, button, title }) {
     const waits = [...live.keys()].map(coverOf);
     const game = games[selected];
     if (live.has(selected)) waits.push(textures.getSharp(game, coverAspect(shapeOf(game)), sharpHeight(), inUseDetails()));
-    return Promise.race([Promise.all(waits), new Promise((resolve) => setTimeout(resolve, READY_MAX_MS))]);
+    const capped = (promise, ms) => Promise.race([promise, new Promise((resolve) => setTimeout(resolve, ms))]);
+    // A fresh WebGL context after sleep has to compile every shader again, which stalls the first frame if left to draw time.
+    return capped(Promise.all(waits), READY_MAX_MS).then(() => capped(renderer.compileAsync(scene, camera), COMPILE_MAX_MS));
+  }
+
+  async function art(game, height) {
+    const shape = shapeOf(game);
+    const inUse = new Set([...live.keys()].map((i) => games[i].id).concat(game.id));
+    const [cover, sharp] = await Promise.all([
+      textures.get(game, coverAspect(shape), spineAspect(shape), inUse),
+      textures.getSharp(game, coverAspect(shape), height, inUse),
+    ]);
+    if (cover) onTint(cover.tint);
+    return sharp && { image: sharp.texture.image, aspect: coverAspect(shape) };
+  }
+
+  function sleep() {
+    if (asleep) return;
+    asleep = true;
+    cancelAnimationFrame(frameId);
+    clearTimeout(breathTimer);
+    frameRequested = false;
+    lastTime = null;
+    for (const i of [...live.keys()]) releaseCase(i);
+    for (const pool of pools.values()) pool.forEach((item) => item.dispose());
+    pools.clear();
+    disposeShared();
+    ring.dispose();
+    textures.forget();
+    scene.environment.dispose();
+    scene.environment = null;
+    renderer.dispose();
+    renderer.forceContextLoss();
+    // A canvas keeps its lost context for good, so the next renderer needs a new canvas.
+    const fresh = canvas.cloneNode();
+    canvas.replaceWith(fresh);
+    canvas = fresh;
+  }
+
+  function wake() {
+    if (!asleep) return;
+    asleep = false;
+    renderer = makeRenderer(canvas);
+    scene.environment = studioLight(renderer);
+    textures = createTextures(renderer.capabilities.getMaxAnisotropy());
+    show(games, selected);
   }
 
   function changePose(change) {
@@ -529,7 +582,7 @@ function createShelf(canvas, { onTint, button, title }) {
   screens.observe(canvas.parentElement, { attributes: true, attributeFilter: ['class'] });
   for (const section of canvas.parentElement.querySelectorAll(':scope > section')) screens.observe(section, { attributes: true, attributeFilter: ['hidden'] });
 
-  return { show, showRing, ready, forgetCovers, select, flip, open, back, caseState, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
+  return { show, showRing, ready, forgetCovers, art, sleep, wake, select, flip, open, back, caseState, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
 }
 
 export { createShelf };

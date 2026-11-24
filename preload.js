@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
 contextBridge.exposeInMainWorld('tink', {
   getSetup: () => ipcRenderer.invoke('getSetup'),
@@ -33,4 +33,13 @@ contextBridge.exposeInMainWorld('tink', {
   getNotice: () => ipcRenderer.invoke('getNotice'),
   power: (action) => ipcRenderer.invoke('power', action),
   launch: (id) => ipcRenderer.invoke('launch', id),
+  onGame: (callback) => {
+    const listener = (_event, state, info) => callback(state, info);
+    ipcRenderer.on('game', listener);
+    return () => ipcRenderer.removeListener('game', listener);
+  },
+  handoffReady: () => ipcRenderer.invoke('handoffReady'),
+  cancelLaunch: () => ipcRenderer.invoke('cancelLaunch'),
+  focusGame: () => ipcRenderer.invoke('focusGame'),
+  releaseCaches: () => webFrame.clearCache(),
 });

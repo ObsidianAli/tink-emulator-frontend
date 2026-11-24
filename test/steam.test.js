@@ -123,6 +123,7 @@ test('closing a Steam game asks politely, then forces what is left after the wai
   await closeSteamGame(GAME_DIR, {
     list: async () => lists[round++],
     kill: async (args) => calls.push(args),
+    alive: null,
     wait: async (ms) => calls.push(['wait', ms]),
   });
   assert.deepStrictEqual(calls, [['/PID', '1'], ['/PID', '2'], ['wait', 5000], ['/PID', '2', '/T', '/F']]);
@@ -132,4 +133,31 @@ test('closing does nothing when no process of the game is running', async () => 
   const calls = [];
   await closeSteamGame(GAME_DIR, { list: async () => [{ pid: 9, exe: STEAM_EXE }], kill: async (a) => calls.push(a), wait: async () => calls.push('wait') });
   assert.deepStrictEqual(calls, []);
+});
+
+test('with native access, closing returns as soon as the game is gone', async () => {
+  const calls = [];
+  const living = new Set([1, 2]);
+  await closeSteamGame(GAME_DIR, {
+    list: async () => [{ pid: 1, exe: at('portal2.exe') }, { pid: 2, exe: at('crash.exe') }, { pid: 9, exe: STEAM_EXE }],
+    kill: async (args) => calls.push(args),
+    alive: (pid) => living.has(pid),
+    wait: async (ms) => {
+      calls.push(['wait', ms]);
+      living.delete(calls.filter((call) => call[0] === 'wait').length);
+    },
+  });
+  assert.deepStrictEqual(calls, [['/PID', '1'], ['/PID', '2'], ['wait', 100], ['wait', 100]]);
+});
+
+test('with native access, only processes still alive at the limit are forced', async () => {
+  const calls = [];
+  await closeSteamGame(GAME_DIR, {
+    waitMs: 300,
+    list: async () => [{ pid: 1, exe: at('portal2.exe') }, { pid: 2, exe: at('crash.exe') }],
+    kill: async (args) => calls.push(args),
+    alive: (pid) => pid === 2,
+    wait: async (ms) => calls.push(['wait', ms]),
+  });
+  assert.deepStrictEqual(calls, [['/PID', '1'], ['/PID', '2'], ['wait', 100], ['wait', 100], ['wait', 100], ['/PID', '2', '/T', '/F']]);
 });
