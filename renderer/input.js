@@ -25,6 +25,11 @@ const REPEAT_DELAY_MS = 400;
 const REPEAT_EVERY_MS = 120;
 
 const inputHandlers = [];
+let keyCapture = null;
+
+function captureKeys(handler) {
+  keyCapture = handler;
+}
 
 function listenForInput(handler) {
   inputHandlers.push(handler);
@@ -38,6 +43,10 @@ function emitAction(action) {
 
 document.addEventListener('keydown', (event) => {
   if (event.target instanceof HTMLInputElement) return;
+  if (keyCapture && keyCapture(event)) {
+    event.preventDefault();
+    return;
+  }
   const action = KEY_ACTIONS[event.key];
   if (!action) return;
   // Stops Enter or Space from also clicking whatever has focus, so each press counts once.

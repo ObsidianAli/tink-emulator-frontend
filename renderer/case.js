@@ -270,6 +270,17 @@ function createCase(shape, colours) {
     }
   }
 
+  let rim = [];
+  function setRim(material) {
+    for (const mesh of rim) mesh.removeFromParent();
+    rim = material ? [tray, lid, spine].map((part) => {
+      const mesh = new THREE.Mesh(part.geometry, material);
+      mesh.renderOrder = 5;
+      part.add(mesh);
+      return mesh;
+    }) : [];
+  }
+
   function setPose({ flip, lid, disc: out, spin }) {
     body.rotation.y = flip * Math.PI;
     hinge.rotation.y = lid * LID_OPEN;
@@ -285,7 +296,7 @@ function createCase(shape, colours) {
     if (mats !== materials) for (const material of Object.values(mats)) material.dispose();
   }
 
-  return { group, shape, disc: discMesh, setCover, setSpine, setBack, setLabel, setDim, setFade, setPose, dispose };
+  return { group, shape, disc: discMesh, setCover, setSpine, setBack, setLabel, setDim, setFade, setRim, setPose, dispose };
 }
 
 function disposeShared() {

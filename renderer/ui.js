@@ -11,12 +11,16 @@ import { transition, screen, changingScreen, fadeToBlack } from './transition.js
 import { openPanel, updatePanel, panelOpen } from './panel.js';
 import { showLoading, hideLoading, loadingOpen } from './loading.js';
 import './clock.js';
+import { setBackground, setArt, rest } from './backdrop.js';
 
 const main = document.querySelector('main');
 const allGamesButton = document.getElementById('all-games');
 const title = document.getElementById('title');
 const message = document.getElementById('message');
 const tray = document.getElementById('tray');
+const homeProfiles = document.getElementById('home-profiles');
+const homeLabel = document.createElement('span');
+homeLabel.id = 'home-label';
 const trayLabel = document.createElement('span');
 trayLabel.id = 'tray-label';
 
@@ -57,12 +61,35 @@ function showMessage(text) {
 
 const focusedGame = () => (inGrid ? grid.game() : shelf.game());
 
+const titleOutMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--duration-title-out'));
+let titleKey = null;
+let titleTimer = 0;
+
+function swapTitle(text) {
+  const key = `${shelf.selected()} ${text}`;
+  if (key === titleKey) return;
+  titleKey = key;
+  clearTimeout(titleTimer);
+  title.classList.add('away');
+  const reveal = () => shelf.whenSettled(() => title.classList.remove('away'));
+  if (!title.textContent) {
+    title.textContent = text;
+    reveal();
+    return;
+  }
+  titleTimer = setTimeout(() => {
+    title.textContent = text;
+    reveal();
+  }, titleOutMs);
+}
+
 function showTitle() {
   const game = shelf.game();
-  title.textContent = shelf.onButton() ? 'All games' : game ? game.title : '';
-  allGamesButton.classList.toggle('selected', shelf.onButton() && trayFocus < 0);
+  swapTitle(shelf.onButton() ? 'All games' : game ? game.title : '');
+  allGamesButton.classList.toggle('selected', shelf.onButton() && trayFocus < 0 && topFocus < 0);
   main.classList.toggle('tray-focused', trayFocus >= 0);
-  shelf.showRing(trayFocus < 0);
+  main.classList.toggle('top-focused', topFocus >= 0);
+  shelf.showRing(trayFocus < 0 && topFocus < 0);
 }
 
 function showHints() {
@@ -77,6 +104,9 @@ const trayIcons = [
   { name: 'Power', sound: 'power', draw: () => power(), activate: () => showPower() },
 ];
 let trayFocus = -1;
+let topFocus = -1;
+let topProfiles = [];
+let currentProfile = null;
 
 function icon(...shapes) {
   const ns = 'http://www.w3.org/2000/svg';
@@ -118,7 +148,10 @@ const blocks = () => icon(
 allGamesButton.append(blocks(), focusGlow());
 
 const shelf = createShelf(document.getElementById('shelf'), {
-  onTint: (colour) => document.body.style.setProperty('--tint', colour),
+  onTint: (colour, art) => {
+    document.body.style.setProperty('--tint', colour);
+    setArt(art);
+  },
   button: allGamesButton,
   title,
 });
@@ -180,9 +213,70 @@ async function showPower() {
   }
 }
 
+function renderTop(profiles, current, shown) {
+  topProfiles = shown ? [current, ...profiles.filter((p) => p !== current)] : [];
+  homeProfiles.hidden = !shown;
+  if (topFocus >= topProfiles.length) topFocus = -1;
+  homeProfiles.replaceChildren(...topProfiles.map((profile, index) => {
+    const node = document.createElement('button');
+    node.className = 'home-badge';
+    node.setAttribute('aria-label', profile.name);
+    node.append(badge(profile), focusGlow());
+    node.addEventListener('click', () => {
+      if (!ready || inMenu || inPicker || inPanel || inSettings || launching || settingsOpen() || document.querySelector('.dialog-scrim')) return;
+      topFocus = index;
+      trayFocus = -1;
+      showTitle();
+      focusTop();
+      playSound(pressTop());
+    });
+    return node;
+  }), homeLabel);
+  focusTop();
+}
+
+function focusTop() {
+  const node = homeProfiles.children[topFocus];
+  if (topFocus < 0 || !node || node === homeLabel) return;
+  node.focus({ preventScroll: true });
+  homeLabel.textContent = topProfiles[topFocus].name;
+  homeLabel.style.left = `${node.offsetLeft + node.offsetWidth / 2}px`;
+}
+
+function leaveTop() {
+  topFocus = -1;
+  if (document.activeElement) document.activeElement.blur();
+  showTitle();
+}
+
+function pressTop() {
+  const profile = topProfiles[topFocus];
+  if (profile !== currentProfile) pickProfile(profile);
+  return 'confirm';
+}
+
+async function pickProfile(profile) {
+  if (inPicker || launching) return;
+  inPicker = true;
+  try {
+    await window.tink.chooseProfile(profile.id);
+    await screen(async () => {
+      await loadLibrary({ fresh: true });
+      await shelf.ready();
+      if (topProfiles.length) topFocus = 0;
+      focusTop();
+      showTitle();
+    });
+  } finally {
+    inPicker = false;
+  }
+}
+
 async function renderTray() {
-  const { profiles, last } = await window.tink.getProfiles();
+  const [{ profiles, last }, shown] = await Promise.all([window.tink.getProfiles(), window.tink.getSettings()]);
   const profile = profiles.find((p) => p.id === last) || profiles[0];
+  currentProfile = profile;
+  renderTop(profiles, profile, shown.homeProfiles !== false);
   tray.replaceChildren(...trayIcons.map((icon) => {
     const node = document.createElement('button');
     node.className = 'tray-icon';
@@ -192,6 +286,7 @@ async function renderTray() {
     node.addEventListener('click', () => {
       if (!ready || inMenu || inPicker || inPanel || inSettings || launching || settingsOpen() || document.querySelector('.dialog-scrim')) return;
       trayFocus = trayIcons.indexOf(icon);
+      topFocus = -1;
       showTitle();
       playSound(pressTray(icon));
     });
@@ -269,6 +364,7 @@ async function openGameMenu() {
 function sleep() {
   if (asleep) return;
   asleep = true;
+  rest(true);
   hideLoading();
   shelf.sleep();
   grid.sleep();
@@ -283,6 +379,7 @@ async function wake({ played = false } = {}) {
     return;
   }
   asleep = false;
+  rest(false);
   shelf.wake();
   showLibrary(await window.tink.refreshLibrary(), { played });
   await shelf.ready();
@@ -361,14 +458,21 @@ async function goToSettings(focusConsole) {
   inSettings = true;
   try {
     const changed = await openSettings({ focusConsole });
-    shelf.setLeftEdge((await window.tink.getSettings()).leftEdge);
+    const shown = await window.tink.getSettings();
+    shelf.setLeftEdge(shown.leftEdge);
+    shelf.setFocusStyle(shown.focusStyle);
     await screen(async () => {
       hideSettings();
+      setBackground(shown.background);
       if (changed) {
         shelf.forgetCovers();
         grid.forgetCovers();
         await loadLibrary();
-      } else showHints();
+      } else {
+        await renderTray().catch(report);
+        showTitle();
+        showHints();
+      }
     });
   } finally {
     inSettings = false;
@@ -393,12 +497,27 @@ listenForInput((action) => {
     goToSettings();
     return 'confirm';
   }
-  if (action === 'menu' && trayFocus < 0) {
+  if (action === 'menu' && trayFocus < 0 && topFocus < 0) {
     if (changing || launching) return null;
     openGameMenu();
     return 'confirm';
   }
   if (!ready) return null;
+  if (topFocus >= 0) {
+    if (action === 'left' || action === 'right') {
+      const next = topFocus + (action === 'right' ? 1 : -1);
+      if (next < 0 || next >= topProfiles.length) return null;
+      topFocus = next;
+      focusTop();
+      return 'move';
+    }
+    if (action === 'down' || action === 'b') {
+      leaveTop();
+      return 'move';
+    }
+    if (action === 'a') return pressTop();
+    return null;
+  }
   if (trayFocus >= 0) {
     if (action === 'left' || action === 'right') {
       const next = trayFocus + (action === 'right' ? 1 : -1);
@@ -421,6 +540,12 @@ listenForInput((action) => {
     trayFocus = 0;
     showTitle();
     focusTray();
+    return 'move';
+  }
+  if (action === 'up' && topProfiles.length && (!row.length || shelf.caseState() === 'front')) {
+    topFocus = 0;
+    showTitle();
+    focusTop();
     return 'move';
   }
   if (row.length === 0) return null;
@@ -520,6 +645,8 @@ function showLibrary(library, { fresh = false, played = false } = {}) {
   if (fresh || games.length === 0) leaveGrid();
   if (games.length === 0) {
     shelf.show([], 0);
+    clearTimeout(titleTimer);
+    titleKey = null;
     title.textContent = '';
     showMessage('No games found.');
     showHints();

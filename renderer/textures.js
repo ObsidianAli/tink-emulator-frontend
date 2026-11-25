@@ -202,11 +202,11 @@ function drawLabel(cover) {
 async function coverCanvas(game, aspect, height) {
   const cover = await window.tink.getCover(game.id);
   try {
-    if (cover && cover.src) return drawImage(await loadImage(cover.src), aspect, height);
+    if (cover && cover.src) return { canvas: drawImage(await loadImage(cover.src), aspect, height), art: true };
   } catch {
   }
   const colour = (cover && cover.plain && cover.plain.colour) || token('--surface-raised');
-  return drawPlain(game.title, colour, aspect, height);
+  return { canvas: await drawPlain(game.title, colour, aspect, height), art: false };
 }
 
 function createCache(keep, make) {
@@ -246,15 +246,15 @@ function createTextures(maxAnisotropy) {
   const anisotropy = Math.min(8, maxAnisotropy);
 
   const covers = createCache(KEEP, async (game, aspect, spineAspect) => {
-    const canvas = await coverCanvas(game, aspect, TEXTURE_HEIGHT);
+    const { canvas, art } = await coverCanvas(game, aspect, TEXTURE_HEIGHT);
     const tint = averageColour(canvas);
     const texture = makeTexture(canvas, anisotropy);
     const spine = makeTexture(await drawSpine(game.title, tint, spineAspect), anisotropy);
-    return { texture, spine, tint, textures: [texture, spine] };
+    return { texture, spine, tint, art: art ? canvas : null, textures: [texture, spine] };
   });
 
   const sharp = createCache(KEEP_SHARP, async (game, aspect, height) => {
-    const texture = makeTexture(await coverCanvas(game, aspect, height), anisotropy);
+    const texture = makeTexture((await coverCanvas(game, aspect, height)).canvas, anisotropy);
     return { texture, textures: [texture] };
   });
 

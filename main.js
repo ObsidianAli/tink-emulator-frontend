@@ -422,6 +422,10 @@ function setFullscreen(on) {
 }
 
 const setLeftEdge = (mode) => changeSettings((current) => options.setLeftEdge(current, mode));
+const setFocusStyle = (mode) => changeSettings((current) => options.setFocusStyle(current, mode));
+const setBackground = (mode) => changeSettings((current) => options.setBackground(current, mode));
+const setKeyboard = (mode) => changeSettings((current) => options.setKeyboard(current, mode));
+const setHomeProfiles = (on) => changeSettings((current) => options.setHomeProfiles(current, on));
 const setSteamKey = (key) => changeSettings((current) => options.setSteamKey(current, key));
 const findAutomatically = (id) => changeSettings((current) => options.clearEmulator(current, id));
 
@@ -545,6 +549,10 @@ app.whenReady().then(async () => {
   handle('getSettings', getSettings);
   handle('setFullscreen', (on) => setFullscreen(on === true));
   handle('setLeftEdge', (mode) => setLeftEdge(String(mode)));
+  handle('setFocusStyle', (mode) => setFocusStyle(String(mode)));
+  handle('setBackground', (mode) => setBackground(String(mode)));
+  handle('setKeyboard', (mode) => setKeyboard(String(mode)));
+  handle('setHomeProfiles', (on) => setHomeProfiles(on === true));
   handle('setSteamKey', (key) => setSteamKey(key));
   handle('findAutomatically', (id) => findAutomatically(String(id)));
   handle('redownloadCovers', redownloadCovers);
