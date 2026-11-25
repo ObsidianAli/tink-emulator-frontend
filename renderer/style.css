@@ -440,6 +440,10 @@ main.tray-focused #tray-label {
   mask-composite: exclude;
 }
 
+:is(.profile, .setup-row, .setup-next, .settings-category, .dialog button):focus {
+  outline: none;
+}
+
 :is(.tray-icon, .home-badge, .profile-option, .profile, .setup-row, .setup-next, .settings-category, .dialog button):focus .focus-glow,
 .setup-row:focus-within .focus-glow,
 #all-games.selected .focus-glow {
