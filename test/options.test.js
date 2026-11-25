@@ -49,13 +49,44 @@ test('favourite heart defaults to sticker and ignores unknown values', () => {
   assert.strictEqual(options.buildSettings(settings, {}, '1').heart, 'small');
 });
 
+test('game options default to beside the case and ignore unknown values', () => {
+  const settings = { consoles: {} };
+  assert.strictEqual(options.buildSettings(settings, {}, '1').gameOptions, 'case');
+  options.setGameOptions(settings, 'panel');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').gameOptions, 'panel');
+  options.setGameOptions(settings, 'popup');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').gameOptions, 'panel');
+});
+
+test('changing a cover defaults to the case and ignores unknown values', () => {
+  const settings = { consoles: {} };
+  assert.strictEqual(options.buildSettings(settings, {}, '1').coverPicker, 'case');
+  options.setCoverPicker(settings, 'page');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').coverPicker, 'page');
+  options.setCoverPicker(settings, 'window');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').coverPicker, 'page');
+});
+
 test('background defaults to tint and ignores unknown values', () => {
   const settings = { consoles: {} };
   assert.strictEqual(options.buildSettings(settings, {}, '1').background, 'tint');
-  options.setBackground(settings, 'drift');
-  assert.strictEqual(options.buildSettings(settings, {}, '1').background, 'drift');
+  for (const mode of ['flat', 'colour', 'picture', 'soft', 'art', 'tint', 'drift']) {
+    options.setBackground(settings, mode);
+    assert.strictEqual(options.buildSettings(settings, {}, '1').background, mode);
+  }
   options.setBackground(settings, 'video');
   assert.strictEqual(options.buildSettings(settings, {}, '1').background, 'drift');
+});
+
+test('text style defaults to plain and ignores unknown values', () => {
+  const settings = { consoles: {} };
+  assert.strictEqual(options.buildSettings(settings, {}, '1').textStyle, 'plain');
+  for (const mode of ['outline', 'pill', 'fade']) {
+    options.setTextStyle(settings, mode);
+    assert.strictEqual(options.buildSettings(settings, {}, '1').textStyle, mode);
+  }
+  options.setTextStyle(settings, 'bold');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').textStyle, 'fade');
 });
 
 test('highlight defaults to rim and ignores unknown values', () => {

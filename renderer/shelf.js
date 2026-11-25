@@ -142,15 +142,24 @@ function createShelf(canvas, { onTint, button, title }) {
   let textures = createTextures(renderer.capabilities.getMaxAnisotropy());
   const tau = durationMs('--duration-case') / 4.6;
   const heartMs = durationMs('--duration-ui');
+  const aloneMs = durationMs('--duration-ui');
 
   let games = [];
   let selected = 0;
   const live = new Map();
   const pools = new Map();
-  const motion = { focus: 0 };
+  const motion = { focus: 0, alone: 0 };
+  let aloneTo = 0;
   const hearts = new Map();
   let heartLook = 'sticker';
+  // A see-through case needs its own shaders, and compiling them during the fade would drop frames.
+  const seeThrough = [null, new THREE.Texture()].map((map) => new THREE.Mesh(new THREE.PlaneGeometry(), new THREE.MeshStandardMaterial({ map, transparent: true })));
+  for (const mesh of seeThrough) {
+    mesh.visible = false;
+    scene.add(mesh);
+  }
   let sharpIndex = -1;
+  let trying = null;
 
   const halfTan = () => Math.tan(THREE.MathUtils.degToRad(FOV / 2));
 
@@ -159,8 +168,8 @@ function createShelf(canvas, { onTint, button, title }) {
     return Math.max(1, Math.ceil((width - NEAR * LAYOUT.width) / (STEP * LAYOUT.width + LAYOUT.depth))) + 1 + SPARE;
   }
 
-  function sharpHeight() {
-    const { height, rim } = shapeOf(games[selected]);
+  function sharpHeight(game = games[selected]) {
+    const { height, rim } = shapeOf(game);
     const view = 2 * (camera.position.z - PULL) * halfTan();
     const pixels = ((height - rim * 2) / view) * renderer.getDrawingBufferSize(new THREE.Vector2()).y;
     return Math.min(SHARP_MAX, Math.ceil(pixels / SHARP_STEP) * SHARP_STEP);
@@ -196,6 +205,8 @@ function createShelf(canvas, { onTint, button, title }) {
     return textures.getSharp(game, coverAspect(shapeOf(game)), sharpHeight(), new Set([game.id]));
   }
 
+  const triedOn = (index) => (trying && games[index] && games[index].id === trying.id ? trying.made : null);
+
   function sharpen() {
     const before = sharpIndex;
     if (before !== selected && live.has(before)) {
@@ -209,7 +220,7 @@ function createShelf(canvas, { onTint, button, title }) {
     sharpIndex = item ? index : -1;
     if (!item) return;
     sharpCover().then((made) => {
-      if (!made || live.get(index) !== item || sharpIndex !== index) return;
+      if (!made || live.get(index) !== item || sharpIndex !== index || triedOn(index)) return;
       item.setCover(made.texture);
       requestRender();
     });
@@ -218,14 +229,48 @@ function createShelf(canvas, { onTint, button, title }) {
   function showCover(index, item) {
     coverOf(index).then((made) => {
       if (live.get(index) !== item || !made) return;
-      item.setCover(made.texture);
-      item.setSpine(made.spine);
-      if (index === selected) {
-        onTint(made.tint, made.art);
-        sharpen();
-      }
-      requestRender();
+      wear(index, item, triedOn(index) || made);
+      if (index === selected) sharpen();
     });
+  }
+
+  function wear(index, item, made, texture = made.texture) {
+    item.setCover(texture);
+    item.setSpine(made.spine);
+    if (index === selected) onTint(made.tint, made.art, games[index].id);
+    requestRender();
+  }
+
+  async function dress(index) {
+    const item = live.get(index);
+    if (!item) return;
+    const [made, sharp] = await Promise.all([coverOf(index), index === selected ? sharpCover() : null]);
+    if (!made || live.get(index) !== item || triedOn(index)) return;
+    wear(index, item, made, sharp && index === selected ? sharp.texture : made.texture);
+  }
+
+  async function drawCover(game, cover) {
+    const shape = shapeOf(game);
+    const made = await textures.make(game, coverAspect(shape), spineAspect(shape), sharpHeight(game), cover);
+    if (!asleep) made.textures.forEach((texture) => renderer.initTexture(texture));
+    return made;
+  }
+
+  function tryCover(id, made) {
+    trying = made ? { id, made } : null;
+    const index = games.findIndex((game) => game.id === id);
+    if (!made) return dress(index);
+    const item = live.get(index);
+    if (item) wear(index, item, made);
+  }
+
+  async function refreshCover(id) {
+    if (asleep) return;
+    const dispose = textures.take(id);
+    if (trying && trying.id === id) trying = null;
+    const index = games.findIndex((game) => game.id === id);
+    if (index >= 0) await dress(index);
+    dispose();
   }
 
   function updateWindow() {
@@ -246,14 +291,14 @@ function createShelf(canvas, { onTint, button, title }) {
     }
   }
 
-  function place(item, offset) {
+  function place(item, offset, shown) {
     const near = Math.min(1, Math.abs(offset));
     const side = Math.sign(offset);
     const clear = offset < 0 && leftEdge === 'slide' ? near * LEFT_CLEAR * LAYOUT.width : 0;
     item.group.position.set(slotX(offset) - clear, 0, PULL + near * (BACK - PULL));
     item.group.rotation.y = (1 - near) * SELECTED_TURN - side * near * SIDE_TURN;
     item.setDim(near * SIDE_DIM, near);
-    item.setFade(offset < 0 && leftEdge === 'fade' ? Math.max(0, 1 + offset) : 1);
+    item.setFade(shown * (offset < 0 && leftEdge === 'fade' ? Math.max(0, 1 + offset) : 1));
   }
 
   let leftEdge = 'slide';
@@ -261,6 +306,13 @@ function createShelf(canvas, { onTint, button, title }) {
     leftEdge = mode === 'peek' || mode === 'fade' ? mode : 'slide';
     requestRender();
   }
+
+  function setAlone(on) {
+    aloneTo = on ? 1 : 0;
+    if (!onScreen()) motion.alone = aloneTo;
+    requestRender();
+  }
+
   function setHeart(index, item, scale) {
     hearts.set(index, { scale, from: scale, to: scale, at: 1 });
     item.setHeart(heartLook, scale);
@@ -395,8 +447,12 @@ function createShelf(canvas, { onTint, button, title }) {
     const next = motion.focus + (selected - motion.focus) * (1 - Math.exp(-dt / tau));
     let moving = Math.abs(selected - next) >= SETTLED;
     motion.focus = moving ? next : selected;
+    if (motion.alone !== aloneTo) {
+      moving = true;
+      motion.alone = THREE.MathUtils.clamp(motion.alone + (aloneTo ? dt : -dt) / aloneMs, 0, 1);
+    }
     for (const [index, item] of live) {
-      place(item, index - motion.focus);
+      place(item, index - motion.focus, index === selected ? 1 : 1 - motion.alone);
       if (stepHeart(index, item, dt)) moving = true;
     }
     return moving;
@@ -496,7 +552,7 @@ function createShelf(canvas, { onTint, button, title }) {
     const item = live.get(selected);
     if (item) {
       coverOf(selected).then((made) => {
-        if (made && live.get(selected) === item) onTint(made.tint, made.art);
+        if (made && live.get(selected) === item) onTint(made.tint, made.art, games[selected].id);
       });
     }
     sharpen();
@@ -519,7 +575,7 @@ function createShelf(canvas, { onTint, button, title }) {
       textures.get(game, coverAspect(shape), spineAspect(shape), inUse),
       textures.getSharp(game, coverAspect(shape), height, inUse),
     ]);
-    if (cover) onTint(cover.tint, cover.art);
+    if (cover) onTint(cover.tint, cover.art, game.id);
     return sharp && { image: sharp.texture.image, aspect: coverAspect(shape) };
   }
 
@@ -534,6 +590,7 @@ function createShelf(canvas, { onTint, button, title }) {
     for (const pool of pools.values()) pool.forEach((item) => item.dispose());
     pools.clear();
     disposeShared();
+    for (const mesh of seeThrough) mesh.material.dispose();
     ring.dispose();
     textures.forget();
     scene.environment.dispose();
@@ -566,7 +623,7 @@ function createShelf(canvas, { onTint, button, title }) {
   screens.observe(canvas.parentElement, { attributes: true, attributeFilter: ['class'] });
   for (const section of canvas.parentElement.querySelectorAll(':scope > section')) screens.observe(section, { attributes: true, attributeFilter: ['hidden'] });
 
-  return { show, update, whenSettled, showRing, setLeftEdge, setHeartLook, setFocusStyle, ready, forgetCovers, art, sleep, wake, select, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
+  return { show, update, whenSettled, showRing, setLeftEdge, setHeartLook, setFocusStyle, setAlone, ready, forgetCovers, drawCover, tryCover, refreshCover, art, sleep, wake, select, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
 }
 
 export { createShelf };

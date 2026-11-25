@@ -51,7 +51,12 @@ async function main() {
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450"><rect width="300" height="450" fill="hsl(${hue} 45% 32%)"/><circle cx="150" cy="190" r="70" fill="hsl(${hue} 50% 55%)"/></svg>`;
       return { src: `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}` };
     });
-    stub('installGame', (appId) => { calls.installs.push(appId); return true; });
+    stub('getInstallDrives', () => [
+      { id: 'C:\\Steam', label: 'C: 3 GB free', fits: false },
+      { id: 'D:\\SteamLibrary', label: 'D: 412 GB free', fits: true },
+      { id: 'E:\\SteamLibrary', label: 'E: 96 GB free', fits: true },
+    ]);
+    stub('installGame', (appId, library) => { calls.installs.push([appId, library]); return true; });
     stub('getInstallProgress', () => ({ state: 'downloading', percent: 42 }));
     stub('findPcGames', () => [
       { title: 'Copper Sky', exe: 'D:\\Games\\Copper Sky\\sky.exe', folder: 'D:\\Games\\Copper Sky', source: 'epic' },
@@ -96,12 +101,16 @@ async function main() {
   assert.match(await page.textContent('.dialog p'), new RegExp(`Install ${name}\\?`));
   await shot('1-install-dialog');
   await key('Enter', 600);
+  assert.deepStrictEqual(await page.$$eval('#case-menu .setup-row', (rows) => rows.map((row) => row.textContent)), ['D: 412 GB free', 'E: 96 GB free']);
+  await shot('2-drives');
+  await key('ArrowDown');
+  await key('Enter', 600);
   await sleep(2600);
-  assert.deepStrictEqual(await app.evaluate(() => globalThis.storeCalls.installs), ['106']);
+  assert.deepStrictEqual(await app.evaluate(() => globalThis.storeCalls.installs), [['106', 'E:\\SteamLibrary']]);
   assert.strictEqual(await page.$$eval('.store-tile.installing', (t) => t.length), 1);
   assert.match(await page.textContent('.store-tile.installing .store-percent'), /42%/);
   assert.doesNotMatch(await hints(), /Install/);
-  await shot('2-progress');
+  await shot('3-progress');
 
   await key('Escape');
   await key('ArrowDown');
@@ -109,9 +118,9 @@ async function main() {
   await key('Enter');
   await key('Enter');
   assert.deepStrictEqual(await app.evaluate(() => globalThis.storeCalls.added), ['D:\\Games\\Copper Sky\\sky.exe']);
-  assert.match(await page.textContent('.setup-row'), /Added/);
+  assert.match(await page.textContent('#store .setup-row'), /Added/);
   assert.match(await hints(), /Remove/);
-  await shot('3-add-games');
+  await shot('4-add-games');
 
   await key('Escape');
   await key('Escape', 900);

@@ -33,9 +33,12 @@ const KEYBOARDS = { grid: 'Grid', full: 'Full' };
 const ICON_STYLES = { grey: 'Grey', disc: 'Colour when selected', glyph: 'Coloured icon' };
 const ICON_ROWS = { separate: 'Separate', bar: 'One bar' };
 const HEARTS = { sticker: 'Sticker', small: 'Small' };
-const BACKGROUNDS = { tint: 'Tint', art: 'Art', drift: 'Drift' };
+const BACKGROUNDS = { tint: 'Tint', flat: 'Flat', colour: 'Colour', picture: 'Picture', soft: 'Soft picture', art: 'Art', drift: 'Drift' };
+const TEXT_STYLES = { plain: 'Plain', outline: 'Outline', pill: 'Pill', fade: 'Fade' };
+const GAME_OPTIONS = { case: 'Beside the case', panel: 'Side panel' };
+const COVER_PICKERS = { page: 'Page', case: 'On the case' };
 
-export async function openSettings({ focusConsole } = {}) {
+export async function openSettings({ focusConsole, focusCategory } = {}) {
   let state = await window.tink.getSettings();
   let users = await window.tink.getProfiles();
   return new Promise((resolve) => {
@@ -342,6 +345,7 @@ export async function openSettings({ focusConsole } = {}) {
               await change(window.tink.redownloadCovers().then(() => undefined));
             },
           },
+          choose('coverPicker', 'Change cover', COVER_PICKERS, 'coverPicker', (value) => window.tink.setCoverPicker(value)),
         ],
         display: () => [
           {
@@ -364,7 +368,9 @@ export async function openSettings({ focusConsole } = {}) {
           choose('icons', 'Icons', ICON_STYLES, 'iconStyle', (value) => window.tink.setIconStyle(value)),
           choose('iconRow', 'Icon row', ICON_ROWS, 'iconRow', (value) => window.tink.setIconRow(value)),
           choose('background', 'Background', BACKGROUNDS, 'background', (value) => window.tink.setBackground(value)),
+          choose('text', 'Text', TEXT_STYLES, 'textStyle', (value) => window.tink.setTextStyle(value)),
           choose('heart', 'Favourite heart', HEARTS, 'heart', (value) => window.tink.setHeart(value)),
+          choose('gameOptions', 'Game options', GAME_OPTIONS, 'gameOptions', (value) => window.tink.setGameOptions(value)),
         ],
         sounds: soundRows,
         system: () => [
@@ -595,6 +601,9 @@ export async function openSettings({ focusConsole } = {}) {
         column = 'pane';
         view = 'emulators';
         pendingFocus = (row) => row.console === focusConsole;
+      } else if (focusCategory) {
+        category = CATEGORIES.findIndex((item) => item.id === focusCategory);
+        column = 'pane';
       }
       render();
       active.busy = false;

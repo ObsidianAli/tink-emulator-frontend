@@ -53,10 +53,19 @@ function loginAccounts(steamDir) {
   return Object.entries(users)
     .filter(([id, value]) => /^\d{17}$/.test(id) && value && typeof value === 'object')
     .map(([id, value]) => ({
+      id,
       account: String(BigInt(id) - STEAM_ID_BASE),
       recent: String(child(value, 'MostRecent')) === '1',
       time: Number(child(value, 'timestamp')) || 0,
+      asks: ['RememberPassword', 'AllowAutoLogin'].some((name) => String(child(value, name)) === '0'),
+      offline: String(child(value, 'WantsOfflineMode')) === '1',
     }));
+}
+
+// The account Steam signs in to by itself when it starts, or null when it would ask or stay offline.
+function autoLogin(steamDir) {
+  const login = loginAccounts(steamDir).find((entry) => entry.recent);
+  return login && !login.asks && !login.offline ? login.id : null;
 }
 
 function signedInAccount(steamDir, dirs, logins) {
@@ -187,4 +196,4 @@ function getOwnedStatus(steamDir, { hidden = [] } = {}) {
   return { accounts: found.accounts, signedIn: found.signedIn, sure: shown(found.sure), unsure: shown(found.unsure) };
 }
 
-module.exports = { getOwnedGames, getHiddenOwnedGames, getOwnedStatus };
+module.exports = { child, autoLogin, getOwnedGames, getHiddenOwnedGames, getOwnedStatus };

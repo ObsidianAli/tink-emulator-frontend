@@ -309,7 +309,7 @@ async function main() {
   assert.strictEqual(await gridTitle(), 'Aardvark Game', 'Home jumps to the first game');
 
   await key('s');
-  assert.strictEqual(await page.$$eval('#case-menu button', (els) => els.map((el) => el.textContent).join()), 'Favourite,Hide,Game info');
+  assert.strictEqual(await page.$$eval('#options .setup-row', (els) => els.map((el) => el.textContent).join()), 'FavouriteOff,Change cover,Hide,Game info');
   await key('Escape');
   assert.strictEqual(await hints(), 'APlay YSort BBack');
 

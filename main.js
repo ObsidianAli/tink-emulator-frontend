@@ -18,9 +18,12 @@ const { watchCombo, watchPress, learnButton, openButtons, loadPadReader } = requ
 const { captureWindow, shotName, safeName } = require('./src/capture');
 const { createAlbum } = require('./src/album');
 const { createCovers } = require('./src/covers');
+const { createHeroes } = require('./src/heroes');
+const { openChoices } = require('./src/coverchoices');
 const owned = require('./src/owned');
 const { updateFirstSeen } = require('./src/firstseen');
 const installs = require('./src/install');
+const { createSteamInstall } = require('./src/steaminstall');
 const pcgames = require('./src/pcgames');
 const pcadded = require('./src/pcadded');
 const { createGameInfo } = require('./src/gameinfo');
@@ -70,12 +73,22 @@ const settingsFile = () => path.join(DATA_DIR, 'settings.json');
 const firstSeenFile = () => path.join(DATA_DIR, 'firstseen.json');
 let firstSeen = {};
 let covers = null;
+let heroes = null;
 
 function makeCovers() {
   return createCovers({
     dir: path.join(DATA_DIR, 'covers'),
     enabled: settings.covers === true,
     steamGridKey: options.steamKey(settings),
+  });
+}
+
+function makeHeroes() {
+  const current = loadSettings(settingsFile());
+  return createHeroes({
+    dir: path.join(DATA_DIR, 'heroes'),
+    enabled: current.covers === true,
+    steamGridKey: options.steamKey(current),
   });
 }
 
@@ -113,6 +126,7 @@ async function getLibrary() {
   settings = loadSettings(settingsFile());
   emulators = detect();
   covers = makeCovers();
+  heroes = null;
   const steamDir = await steam.findSteamDir();
   lastSteamDir = steamDir;
   const steamGames = (steamDir ? steam.getSteamGames(steamDir) : []).map((game) => ({
@@ -178,13 +192,37 @@ async function getOwnedGames() {
   return list.map(({ id, appId, title }) => ({ id, appId, title }));
 }
 
-async function installGame(appId) {
+const steamInstall = createSteamInstall({
+  findSteamDir: steam.findSteamDir,
+  processes: steam.listProcesses,
+  runningAppId: steam.getRunningAppId,
+  open: (url) => shell.openExternal(url),
+  inGame: () => playing !== null,
+  log,
+});
+
+async function ownedAppId(appId) {
   const id = String(appId);
   if (!ownedById.has(`own:${id}`)) await getOwnedGames();
-  if (!ownedById.has(`own:${id}`)) return false;
-  const started = await installs.install(id, (url) => shell.openExternal(url));
-  if (started) bringBackWhenSteamTakesIt(id);
-  return started;
+  return ownedById.has(`own:${id}`) ? id : null;
+}
+
+async function getInstallDrives(appId) {
+  const id = await ownedAppId(appId);
+  return id ? steamInstall.drives(id) : [];
+}
+
+async function installGame(appId, library) {
+  const id = await ownedAppId(appId);
+  if (!id) return false;
+  const outcome = await steamInstall.install(id, typeof library === 'string' ? library : null);
+  if (outcome === 'placed') await comeBack();
+  else if (outcome === 'asked') bringBackWhenSteamTakesIt(id);
+  return Boolean(outcome);
+}
+
+async function comeBack() {
+  if (win && !win.isDestroyed() && !playing) await showTink();
 }
 
 const STEAM_ANSWER_MS = 3 * 60 * 1000;
@@ -198,7 +236,7 @@ async function bringBackWhenSteamTakesIt(appId) {
   while (Date.now() < until) {
     await sleep(STEAM_ANSWER_CHECK_MS);
     if (installs.progress(appId, steamDir).state !== 'none') {
-      if (win && !win.isDestroyed() && !playing) await showTink();
+      await comeBack();
       return;
     }
   }
@@ -310,6 +348,34 @@ async function getCover(id) {
   } catch {
     return { plain: { colour: coverColour(game.console) } };
   }
+}
+
+async function getHero(id) {
+  const game = lookup(id);
+  if (!game) return null;
+  if (!heroes) heroes = makeHeroes();
+  return heroes.getHero(game);
+}
+
+let picker = null;
+const pickerFor = (id) => (picker && picker.game.id === id ? picker : null);
+
+function getCoverChoices(id, known) {
+  const game = gamesById.get(id);
+  if (!game || !covers) return null;
+  if (!known) {
+    if (picker) picker.close();
+    picker = openChoices({ game, covers, steamGridKey: options.steamKey(loadSettings(settingsFile())) });
+  }
+  const open = pickerFor(id);
+  return open && open.more(known);
+}
+
+function closeCoverChoices(id) {
+  const open = pickerFor(id);
+  if (!open) return;
+  open.close();
+  picker = null;
 }
 
 async function getGameInfo(id) {
@@ -571,6 +637,7 @@ async function launchSteam(game) {
   if (!/^\d+$/.test(String(appId))) return;
   sendGame('loading', { id: game.id, title: game.title });
   try {
+    await steamInstall.settled();
     await shell.openExternal(`steam://rungameid/${appId}`);
   } catch (error) {
     sendGame('failed');
@@ -680,13 +747,19 @@ function setFullscreen(on) {
 const setLeftEdge = (mode) => changeSettings((current) => options.setLeftEdge(current, mode));
 const setFocusStyle = (mode) => changeSettings((current) => options.setFocusStyle(current, mode));
 const setBackground = (mode) => changeSettings((current) => options.setBackground(current, mode));
+const setTextStyle = (mode) => changeSettings((current) => options.setTextStyle(current, mode));
 const setKeyboard = (mode) => changeSettings((current) => options.setKeyboard(current, mode));
 const setIconStyle = (mode) => changeSettings((current) => options.setIconStyle(current, mode));
 const setSounds = (picked) => changeSettings((current) => options.setSounds(current, picked));
 const setIconRow = (mode) => changeSettings((current) => options.setIconRow(current, mode));
 const setHeart = (mode) => changeSettings((current) => options.setHeart(current, mode));
+const setGameOptions = (mode) => changeSettings((current) => options.setGameOptions(current, mode));
+const setCoverPicker = (mode) => changeSettings((current) => options.setCoverPicker(current, mode));
 const setHomeProfiles = (on) => changeSettings((current) => options.setHomeProfiles(current, on));
-const setSteamKey = (key) => changeSettings((current) => options.setSteamKey(current, key));
+const setSteamKey = (key) => {
+  heroes = null;
+  return changeSettings((current) => options.setSteamKey(current, key));
+};
 const findAutomatically = (id) => changeSettings((current) => options.clearEmulator(current, id));
 
 async function redownloadCovers() {
@@ -695,6 +768,8 @@ async function redownloadCovers() {
   saveSettings(settingsFile(), current);
   settings = current;
   await (covers || makeCovers()).redownload();
+  await (heroes || makeHeroes()).redownload();
+  heroes = null;
 }
 
 async function launchEmulated(game) {
@@ -814,11 +889,14 @@ app.whenReady().then(async () => {
   handle('setLeftEdge', (mode) => setLeftEdge(String(mode)));
   handle('setFocusStyle', (mode) => setFocusStyle(String(mode)));
   handle('setBackground', (mode) => setBackground(String(mode)));
+  handle('setTextStyle', (mode) => setTextStyle(String(mode)));
   handle('setKeyboard', (mode) => setKeyboard(String(mode)));
   handle('setIconStyle', (mode) => setIconStyle(String(mode)));
   handle('setSounds', (picked) => setSounds(picked && typeof picked === 'object' ? picked : {}));
   handle('setIconRow', (mode) => setIconRow(String(mode)));
   handle('setHeart', (mode) => setHeart(String(mode)));
+  handle('setGameOptions', (mode) => setGameOptions(String(mode)));
+  handle('setCoverPicker', (mode) => setCoverPicker(String(mode)));
   handle('setHomeProfiles', (on) => setHomeProfiles(on === true));
   handle('setSteamKey', (key) => setSteamKey(key));
   handle('findAutomatically', (id) => findAutomatically(String(id)));
@@ -852,13 +930,19 @@ app.whenReady().then(async () => {
   handle('getLibrary', getLibrary);
   handle('refreshLibrary', currentLibrary);
   handle('getCover', (id) => getCover(String(id)));
+  handle('getHero', (id) => getHero(String(id)));
+  handle('getCoverChoices', (id, known) => getCoverChoices(String(id), Number(known) || 0));
+  handle('getCoverChoice', (id, index, whole) => pickerFor(String(id))?.image(Number(index), whole === true) ?? null);
+  handle('useCoverChoice', (id, index) => pickerFor(String(id))?.use(Number(index)) ?? false);
+  handle('closeCoverChoices', (id) => closeCoverChoices(String(id)));
   handle('getGameInfo', (id) => getGameInfo(String(id)));
   handle('getNews', async (cachedOnly) => ({ items: await news().getNews({ cachedOnly: cachedOnly === true }), unread: await news().hasUnread() }));
   handle('getNewsImage', (id) => (typeof id === 'string' && id.length < 64 ? news().getNewsImage(id) : null));
   handle('markNewsSeen', () => news().markSeen());
   handle('launch', (id) => launch(String(id)));
   handle('getOwnedGames', getOwnedGames);
-  handle('installGame', (appId) => installGame(appId));
+  handle('getInstallDrives', (appId) => getInstallDrives(appId));
+  handle('installGame', (appId, library) => installGame(appId, library));
   handle('getInstallProgress', (appId) => getInstallProgress(appId));
   handle('findPcGames', findPcGames);
   handle('getFileIcon', (exe) => getFileIcon(exe));

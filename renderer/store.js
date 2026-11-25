@@ -1,5 +1,6 @@
 import { element, focusRow, focusGlow, scrollToNode } from './dom.js';
 import { screen } from './transition.js';
+import { openMenu } from './casemenu.js';
 
 const root = document.getElementById('store');
 const CATEGORIES = [
@@ -48,6 +49,7 @@ async function poll() {
     } else {
       entry.state = result.state;
       entry.percent = result.percent;
+      entry.since = Date.now();
     }
     if (active) active.paint(appId);
   }
@@ -56,6 +58,40 @@ async function poll() {
     else window.dispatchEvent(new Event('store-installed'));
   }
   schedulePoll();
+}
+
+async function startInstall(appId, library) {
+  pending.set(appId, { state: 'none', percent: 0, since: Date.now() });
+  active.paint(appId);
+  schedulePoll();
+  let started = false;
+  try {
+    started = await window.tink.installGame(appId, library);
+  } catch {
+  }
+  if (started) return;
+  pending.delete(appId);
+  if (!active) return;
+  active.paint(appId);
+  if (!active.busy) await showDialog({ message: "Steam couldn't start this install." });
+}
+
+// A drive without an id leaves the choice to Steam.
+async function pickDrive(appId) {
+  let drives = [];
+  try {
+    drives = await window.tink.getInstallDrives(appId);
+  } catch {
+  }
+  if (!drives.length) return { id: null };
+  const choices = drives.filter((drive) => drive.fits);
+  if (!choices.length) {
+    await showDialog({ message: 'Not enough space.' });
+    return null;
+  }
+  if (drives.length === 1) return drives[0];
+  const id = await openMenu({ choices });
+  return id === null ? null : { id };
 }
 
 export function openStore() {
@@ -138,18 +174,8 @@ export function openStore() {
       active.busy = true;
       try {
         if (!await showDialog({ message: `Install ${game.title}?`, confirm: 'Install', cancel: 'Cancel', sound: 'list' })) return;
-        let started = false;
-        try {
-          started = await window.tink.installGame(game.appId);
-        } catch {
-        }
-        if (!started) {
-          await showDialog({ message: "Steam couldn't start this install." });
-          return;
-        }
-        pending.set(game.appId, { state: 'none', percent: 0, since: Date.now() });
-        paint(game.appId);
-        schedulePoll();
+        const drive = await pickDrive(game.appId);
+        if (drive) startInstall(game.appId, drive.id);
       } finally {
         active.busy = false;
         hints();
