@@ -57,7 +57,7 @@ function draw() {
     observer.observe(tile);
     return tile;
   });
-  list.replaceChildren(...tiles);
+  list.replaceChildren(...(tiles.length ? tiles : [element('p', 'store-empty', 'No favourites')]));
 }
 
 function columns() {
@@ -82,12 +82,12 @@ function reveal(tile, smooth) {
 }
 
 function set(next, sort, id, otherwise = index) {
-  games = next;
+  games = sort === 'favourites' ? next.filter((game) => game.fav) : next;
   sortLabel.textContent = SORT_NAMES[sort];
   draw();
   const found = games.findIndex((game) => game.id === id);
   index = 0;
-  focus(found >= 0 ? found : Math.min(otherwise, games.length - 1), false);
+  focus(found >= 0 ? found : Math.max(0, Math.min(otherwise, games.length - 1)), false);
   if (tiles[index]) reveal(tiles[index], false);
 }
 
@@ -99,6 +99,13 @@ function move(action) {
   else if (action === 'up') next = index - across;
   else if (action === 'down') next = index + across < games.length ? index + across : Math.floor(index / across) < Math.floor((games.length - 1) / across) ? games.length - 1 : index;
   if (next < 0 || next >= games.length || next === index) return false;
+  focus(next);
+  return true;
+}
+
+function jump(action) {
+  const next = action === 'first' ? 0 : games.length - 1;
+  if (next < 0 || next === index) return false;
   focus(next);
   return true;
 }
@@ -119,6 +126,7 @@ function sleep() {
 export const grid = {
   set,
   move,
+  jump,
   nextSort,
   forgetCovers,
   sleep,

@@ -526,6 +526,11 @@ main.grid-open #all-games {
   mask-image: linear-gradient(to bottom, transparent, black calc(var(--grid-fade) - var(--space-2)), black calc(100% - var(--grid-fade) + var(--space-2)), transparent);
 }
 
+#grid-list .store-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+}
+
 .tile {
   position: relative;
   border-radius: var(--cover-radius);

@@ -19,7 +19,7 @@ test('old settings get one profile with nothing hidden, and the rest is kept', (
   assert.strictEqual(settings.profiles.length, 1);
   const [profile] = settings.profiles;
   assert.deepStrictEqual({ ...profile, id: undefined }, {
-    id: undefined, name: 'Player', colour: 'blue', avatar: null, icon: 'star', recent: [], favourites: [], hiddenConsoles: [], hiddenGames: [], sort: 'recent',
+    id: undefined, name: 'Player', colour: 'blue', avatar: null, icon: 'star', recent: [], favourites: [], hiddenConsoles: [], hiddenGames: [], playedAt: {}, sort: 'recent',
   });
   assert.ok(profile.id);
   assert.strictEqual(settings.lastProfile, profile.id);
@@ -111,6 +111,27 @@ test('a profile remembers its sort, and an unknown one falls back to last played
   assert.strictEqual(settings.profiles[0].sort, 'recent');
 });
 
+test('a game installed after one was played comes first, and a game played since comes before it', () => {
+  const profile = fresh().profiles[0];
+  const games = p.visibleGames(consoles, profile);
+  p.recordPlay(profile, 'gamecube:Beta', 1000);
+  const seen = { 'gamecube:Beta': 0, 'gamecube:Delta': 0, 'snes:Alpha': 0, 'snes:Gamma': 2000 };
+  assert.deepStrictEqual(titles(p.homeRow(games, profile, seen)), ['Gamma', 'Beta', 'Alpha', 'Delta']);
+  p.recordPlay(profile, 'snes:Alpha', 3000);
+  assert.deepStrictEqual(titles(p.sortGames(games, 'recent', profile, seen)), ['Alpha', 'Gamma', 'Beta', 'Delta']);
+  assert.deepStrictEqual(titles(p.sortGames(games, 'az', profile, seen)), ['Alpha', 'Beta', 'Delta', 'Gamma']);
+});
+
+test('games from the baseline scan do not outrank played ones, and ties fall back to play order then A to Z', () => {
+  const profile = fresh().profiles[0];
+  const games = p.visibleGames(consoles, profile);
+  profile.recent = ['snes:Gamma'];
+  const seen = Object.fromEntries(games.map((g) => [g.key, 0]));
+  assert.deepStrictEqual(titles(p.homeRow(games, profile, seen)), ['Gamma', 'Alpha', 'Beta', 'Delta']);
+  p.recordPlay(profile, 'gamecube:Delta', 5);
+  assert.deepStrictEqual(titles(p.homeRow(games, profile, seen)), ['Delta', 'Gamma', 'Alpha', 'Beta']);
+});
+
 test('hidden games and consoles leave the list, and come back', () => {
   const profile = fresh().profiles[0];
   p.hideGame(profile, 'gamecube:Beta');
@@ -140,6 +161,17 @@ test('one hidden game can come back, and the settings view lists the hidden ones
   p.showGame(profile, 'gamecube:Beta');
   assert.deepStrictEqual(profile.hiddenGames, ['snes:Gamma']);
   assert.ok(titles(p.visibleGames(consoles, profile)).includes('Beta'));
+});
+
+test('hidden store games share the hidden list and come back with showGame', () => {
+  const profile = fresh().profiles[0];
+  p.hideGame(profile, 'steam:20');
+  p.hideGame(profile, 'snes:Gamma');
+  const view = p.settingsView(profile, consoles, [{ appId: '20', title: 'Alpha Quest' }]);
+  assert.deepStrictEqual(view.hiddenList.map((g) => [g.key, g.title, g.consoleName]), [['steam:20', 'Alpha Quest', 'Steam'], ['snes:Gamma', 'Gamma', 'SNES']]);
+  p.showGame(profile, 'steam:20');
+  assert.deepStrictEqual(profile.hiddenGames, ['snes:Gamma']);
+  assert.strictEqual(p.settingsView(profile, consoles).hiddenList.length, 1);
 });
 
 test('favourites toggle on and off', () => {

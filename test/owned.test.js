@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { appInfo, packageInfo } = require('./binvdf');
 const { parseAppInfo, parsePackageInfo } = require('../src/steambin');
-const { getOwnedGames, getOwnedStatus } = require('../src/owned');
+const { getOwnedGames, getHiddenOwnedGames, getOwnedStatus } = require('../src/owned');
 
 const BASE = 76561197960265728n;
 const app = (name, type = 'game') => ({ common: { name, type } });
@@ -61,6 +61,20 @@ test('lists owned games that are not installed, without DLC, demos, soundtracks,
   const titles = getOwnedGames(dir, ['70']).map((game) => game.title);
   fs.rmSync(dir, { recursive: true, force: true });
   assert.deepStrictEqual(titles, ['Alpha Quest', 'Zebra Run']);
+});
+
+test('hidden store games leave the list and the counts, and are listed for Settings instead', () => {
+  const dir = steamDir({ packages: { 5: appids(10, 20), 6: appids(70) } });
+  const hidden = ['steam:20', 'steam:999'];
+  const shown = getOwnedGames(dir, [], { hidden }).map((game) => game.title);
+  const away = getHiddenOwnedGames(dir, [], hidden).map((game) => [game.appId, game.title]);
+  const status = [getOwnedStatus(dir).sure, getOwnedStatus(dir, { hidden }).sure];
+  const installed = getHiddenOwnedGames(dir, ['20'], hidden);
+  fs.rmSync(dir, { recursive: true, force: true });
+  assert.deepStrictEqual(shown, ['Beta Land', 'Zebra Run']);
+  assert.deepStrictEqual(away, [['20', 'Alpha Quest']]);
+  assert.deepStrictEqual(status, [3, 2]);
+  assert.deepStrictEqual(installed, []);
 });
 
 test('with one account every cached package counts', () => {

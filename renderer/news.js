@@ -188,6 +188,14 @@ export function openNews() {
           }
           return null;
         }
+        if ((action === 'first' || action === 'last') && nodes.length) {
+          const next = action === 'first' ? 0 : nodes.length - 1;
+          if (next === focus) return null;
+          focus = next;
+          nodes[focus].focus({ preventScroll: true });
+          scrollToNode(list, nodes[focus]);
+          return 'list';
+        }
         const move = { left: -1, right: 1, up: -COLUMNS, down: COLUMNS }[action];
         if (move !== undefined && nodes.length) {
           let next = focus + move;
