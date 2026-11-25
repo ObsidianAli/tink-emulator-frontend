@@ -14,17 +14,6 @@ listenForInput((action) => {
 
 export const caseMenuOpen = () => active !== null;
 
-export function openCaseMenu({ fav, removable = false }) {
-  return openMenu({
-    choices: [
-      { id: 'fav', label: fav ? 'Unfavourite' : 'Favourite' },
-      { id: 'hide', label: 'Hide' },
-      { id: 'info', label: 'Game info' },
-      ...(removable ? [{ id: 'remove', label: 'Remove' }] : []),
-    ],
-  });
-}
-
 export function openMenu({ choices, anchor = null }) {
   return new Promise((resolve) => {
     let focus = 0;

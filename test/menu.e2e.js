@@ -82,7 +82,7 @@ async function main() {
   };
   const hints = () => page.$$eval('#hints .hint', (els) => els.map((el) => el.textContent).join(' '));
   const visible = (selector) => page.$(`${selector}:not([hidden])`).then(Boolean);
-  const menuRows = () => page.$$eval('#case-menu button', (els) => els.map((el) => el.textContent));
+  const menuRows = () => page.$$eval('#options .setup-row', (els) => els.map((el) => el.textContent));
   const focused = () => page.evaluate(() => document.activeElement.textContent);
   const title = () => page.textContent('#title');
   const readSettings = () => JSON.parse(fs.readFileSync(path.join(data, 'settings.json'), 'utf8'));
@@ -92,23 +92,20 @@ async function main() {
   assert.strictEqual(await hints(), '', 'no hints on the shelf');
 
   await key('s');
-  assert.ok(await visible('#case-menu'), 'Menu opens the panel');
+  assert.ok(await visible('#options'), 'Menu opens the options');
   assert.ok(!(await visible('#settings')), 'Menu no longer opens Settings');
-  assert.deepStrictEqual(await menuRows(), ['Favourite', 'Hide', 'Game info']);
-  assert.strictEqual(await hints(), 'AChoose BClose');
+  assert.deepStrictEqual(await menuRows(), ['FavouriteOff', 'Change cover', 'Hide', 'Game info']);
+  assert.strictEqual(await hints(), 'ASwitch BBack');
   await shot('1-panel');
   await key('Escape');
-  assert.ok(!(await visible('#case-menu')), 'B closes the panel');
+  assert.ok(!(await visible('#options')), 'B closes the options');
   assert.strictEqual(await hints(), '', 'no hints on the shelf');
   assert.strictEqual(await title(), 'Luigis Mansion');
 
   await key('s');
   await key('Enter');
   assert.strictEqual(readSettings().profiles[0].favourites.length, 1);
-  await sleep(400);
-  assert.ok(!(await visible('#case-menu')));
-  await key('s');
-  assert.deepStrictEqual(await menuRows(), ['Unfavourite', 'Hide', 'Game info']);
+  assert.deepStrictEqual(await menuRows(), ['FavouriteOn', 'Change cover', 'Hide', 'Game info']);
   await key('Escape');
   await key('l');
   assert.strictEqual(readSettings().profiles[0].favourites.length, 0, 'L still favourites');
@@ -117,6 +114,7 @@ async function main() {
   await key('ArrowRight');
   assert.strictEqual(await title(), 'Wind Waker');
   await key('s');
+  await key('ArrowDown');
   await key('ArrowDown');
   await key('ArrowDown');
   assert.strictEqual(await focused(), 'Game info');
@@ -132,8 +130,11 @@ async function main() {
   await key('Escape');
   assert.ok(!(await visible('#info')));
   assert.strictEqual(await title(), 'Wind Waker', 'B returns to the same game');
+  assert.strictEqual(await focused(), 'Game info', 'B returns to the same row');
+  await key('Escape');
 
   await key('s');
+  await key('ArrowDown');
   await key('ArrowDown');
   await key('Enter');
   await sleep(500);
@@ -169,6 +170,7 @@ async function main() {
   await sleep(700);
   while ((await title()) !== 'Portal 2') await key('ArrowRight');
   await key('s');
+  await key('ArrowDown');
   await key('ArrowDown');
   await key('ArrowDown');
   await key('Enter');

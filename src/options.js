@@ -13,8 +13,11 @@ const leftEdge = (settings) => (LEFT_EDGES.includes(settings.leftEdge) ? setting
 const FOCUS_STYLES = ['rim', 'snake', 'under'];
 const focusStyle = (settings) => (FOCUS_STYLES.includes(settings.focusStyle) ? settings.focusStyle : 'rim');
 
-const BACKGROUNDS = ['tint', 'art', 'drift'];
+const BACKGROUNDS = ['tint', 'flat', 'colour', 'picture', 'soft', 'art', 'drift'];
 const background = (settings) => (BACKGROUNDS.includes(settings.background) ? settings.background : 'tint');
+
+const TEXT_STYLES = ['plain', 'outline', 'pill', 'fade'];
+const textStyle = (settings) => (TEXT_STYLES.includes(settings.textStyle) ? settings.textStyle : 'plain');
 
 const KEYBOARDS = ['grid', 'full'];
 const keyboard = (settings) => (KEYBOARDS.includes(settings.keyboard) ? settings.keyboard : 'grid');
@@ -27,6 +30,12 @@ const iconRow = (settings) => (ICON_ROWS.includes(settings.iconRow) ? settings.i
 
 const HEARTS = ['sticker', 'small'];
 const heart = (settings) => (HEARTS.includes(settings.heart) ? settings.heart : 'sticker');
+
+const GAME_OPTIONS = ['case', 'panel'];
+const gameOptions = (settings) => (GAME_OPTIONS.includes(settings.gameOptions) ? settings.gameOptions : 'case');
+
+const COVER_PICKERS = ['page', 'case'];
+const coverPicker = (settings) => (COVER_PICKERS.includes(settings.coverPicker) ? settings.coverPicker : 'case');
 
 const isSound = (name, id) => Object.hasOwn(SOUND_CHOICES, name) && SOUND_CHOICES[name].options.some(([option]) => option === id);
 const sounds = (settings) => Object.fromEntries(Object.entries(settings.sounds || {}).filter(([name, id]) => isSound(name, id)));
@@ -64,10 +73,13 @@ function buildSettings(settings, detected, version) {
     leftEdge: leftEdge(settings),
     focusStyle: focusStyle(settings),
     background: background(settings),
+    textStyle: textStyle(settings),
     keyboard: keyboard(settings),
     iconStyle: iconStyle(settings),
     iconRow: iconRow(settings),
     heart: heart(settings),
+    gameOptions: gameOptions(settings),
+    coverPicker: coverPicker(settings),
     sounds: sounds(settings),
     homeProfiles: showsHomeProfiles(settings),
     screenshotButton: screenshotButton(settings),
@@ -106,6 +118,10 @@ function setBackground(settings, mode) {
   if (BACKGROUNDS.includes(mode)) settings.background = mode;
 }
 
+function setTextStyle(settings, mode) {
+  if (TEXT_STYLES.includes(mode)) settings.textStyle = mode;
+}
+
 function setKeyboard(settings, mode) {
   if (KEYBOARDS.includes(mode)) settings.keyboard = mode;
 }
@@ -120,6 +136,14 @@ function setIconRow(settings, mode) {
 
 function setHeart(settings, mode) {
   if (HEARTS.includes(mode)) settings.heart = mode;
+}
+
+function setGameOptions(settings, mode) {
+  if (GAME_OPTIONS.includes(mode)) settings.gameOptions = mode;
+}
+
+function setCoverPicker(settings, mode) {
+  if (COVER_PICKERS.includes(mode)) settings.coverPicker = mode;
 }
 
 function setSounds(settings, picked) {
@@ -137,4 +161,4 @@ function setScreenshotButton(settings, id) {
   else delete settings.screenshotButton;
 }
 
-module.exports = { buildSettings, clearEmulator, setFullscreen, setLeftEdge, setFocusStyle, setBackground, setKeyboard, setIconStyle, setIconRow, setHeart, setSounds, setHomeProfiles, setSteamKey, setScreenshotButton, screenshotButton, wantsFullscreen, steamKey };
+module.exports = { buildSettings, clearEmulator, setFullscreen, setLeftEdge, setFocusStyle, setBackground, setTextStyle, setKeyboard, setIconStyle, setIconRow, setHeart, setGameOptions, setCoverPicker, setSounds, setHomeProfiles, setSteamKey, setScreenshotButton, screenshotButton, wantsFullscreen, steamKey };

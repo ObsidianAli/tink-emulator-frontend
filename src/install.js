@@ -15,12 +15,24 @@ async function install(appId, open) {
   return true;
 }
 
-function findManifest(steamDir, appId) {
-  for (const folder of libraryFolders(steamDir)) {
-    const file = path.join(folder, 'steamapps', `appmanifest_${appId}.acf`);
-    if (fs.existsSync(file)) return readVdfFile(file);
+const manifestFile = (folder, appId) => path.join(folder, 'steamapps', `appmanifest_${appId}.acf`);
+
+const findManifest = (steamDir, appId) => libraryFolders(steamDir).map((folder) => manifestFile(folder, appId)).find((file) => fs.existsSync(file));
+
+function readDir(dir) {
+  try {
+    return fs.readdirSync(dir);
+  } catch {
+    return [];
   }
-  return null;
+}
+
+function isDownloading(folder) {
+  const dir = path.join(folder, 'steamapps');
+  return readDir(dir).filter((file) => /^appmanifest_\d+\.acf$/.test(file)).some((file) => {
+    const state = (readVdfFile(path.join(dir, file)) || {}).AppState;
+    return Boolean(state && Number(state.StateFlags) & (UPDATE_RUNNING | FINISHING));
+  });
 }
 
 const percentOf = (done, total) => (total > 0 ? Math.max(0, Math.min(100, Math.floor((done / total) * 100))) : 0);
@@ -28,7 +40,8 @@ const percentOf = (done, total) => (total > 0 ? Math.max(0, Math.min(100, Math.f
 function progress(appId, steamDir) {
   const none = { state: 'none', percent: 0 };
   if (!isAppId(appId) || !steamDir) return none;
-  const state = (findManifest(steamDir, Number(appId)) || {}).AppState;
+  const file = findManifest(steamDir, Number(appId));
+  const state = file && (readVdfFile(file) || {}).AppState;
   if (!state) return none;
   const flags = Number(state.StateFlags) || 0;
   const downloaded = Number(state.BytesDownloaded) || 0;
@@ -41,4 +54,4 @@ function progress(appId, steamDir) {
   return { state: 'queued', percent: 0 };
 }
 
-module.exports = { install, progress, isAppId };
+module.exports = { install, progress, isAppId, manifestFile, findManifest, isDownloading };

@@ -46,6 +46,7 @@ test('art is the library image with the header image as fallback', () => {
   const art = artUrls('620');
   assert.match(art.cover, /\/apps\/620\/library_600x900\.jpg$/);
   assert.match(art.fallback, /\/apps\/620\/header\.jpg$/);
+  assert.match(art.hero, /\/apps\/620\/library_hero\.jpg$/);
   assert.ok(art.cover.startsWith('https://'));
 });
 

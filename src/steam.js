@@ -46,18 +46,17 @@ function readVdfFile(file) {
   }
 }
 
-function libraryFolders(steamDir) {
-  const folders = [steamDir];
+function listedFolders(steamDir) {
   const vdf = readVdfFile(path.join(steamDir, 'steamapps', 'libraryfolders.vdf'));
   // Newer Steam calls the root "libraryfolders", older Steam "LibraryFolders". Folders are numbered "0", "1", ...
   const root = vdf && (vdf.libraryfolders || vdf.LibraryFolders);
   const entries = root ? Object.entries(root).filter(([key]) => /^\d+$/.test(key)).map(([, value]) => value) : [];
-  for (const entry of entries) {
-    // Newer Steam writes an object with a "path"; older Steam wrote just the path.
-    const folder = typeof entry === 'string' ? entry : entry && entry.path;
-    if (folder && path.resolve(folder) !== path.resolve(steamDir)) folders.push(folder);
-  }
-  return folders;
+  // Newer Steam writes an object with a "path"; older Steam wrote just the path.
+  return entries.map((entry) => (typeof entry === 'string' ? entry : entry && entry.path)).filter((folder) => typeof folder === 'string' && folder);
+}
+
+function libraryFolders(steamDir) {
+  return [steamDir, ...listedFolders(steamDir).filter((folder) => path.resolve(folder) !== path.resolve(steamDir))];
 }
 
 // StateFlags bit 4 means "fully installed"; half-downloaded or uninstalling games don't have it.
@@ -90,7 +89,7 @@ function getSteamGames(steamDir) {
 
 function artUrls(appId) {
   const base = `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}`;
-  return { cover: `${base}/library_600x900.jpg`, fallback: `${base}/header.jpg` };
+  return { cover: `${base}/library_600x900.jpg`, fallback: `${base}/header.jpg`, hero: `${base}/library_hero.jpg` };
 }
 
 const STEAM_REGISTRY_KEY = 'HKCU\\Software\\Valve\\Steam';
@@ -192,4 +191,4 @@ async function closeSteamGame(target, { waitMs = CLOSE_WAIT_MS, list = listProce
   await Promise.all(left.map((pid) => kill(['/PID', String(pid), '/T', '/F'])));
 }
 
-module.exports = { parseVdf, readVdfFile, libraryFolders, isSkippedApp, getSteamGames, artUrls, findSteamDir, getRunningAppId, isSteamRunning, gameProcesses, listProcesses, closeSteamGame };
+module.exports = { parseVdf, readVdfFile, listedFolders, libraryFolders, isSkippedApp, getSteamGames, artUrls, findSteamDir, getRunningAppId, isSteamRunning, gameProcesses, listProcesses, closeSteamGame };

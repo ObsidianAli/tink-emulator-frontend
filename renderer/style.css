@@ -16,6 +16,15 @@ body {
   transition: --tint var(--duration-case) var(--ease-out);
 }
 
+body:is([data-background=flat], [data-background=picture], [data-background=soft]) {
+  background: var(--flat-colour);
+  transition: none;
+}
+
+body[data-background=colour] {
+  background: color-mix(in oklab, var(--tint) var(--colour-strength), var(--colour-base));
+}
+
 body.profile-tint {
   --tint: var(--profile-tint) !important;
 }
@@ -37,6 +46,9 @@ body:not([data-background=art]) .backdrop-art,
 body:not([data-background=drift]) .backdrop-blob,
 body:not([data-background=art]) .backdrop-shade,
 body:not([data-background=drift]) .backdrop-vignette,
+body:not([data-text=fade]) .backdrop-fade,
+body:not([data-background=picture], [data-background=soft]) .backdrop-picture,
+body:not([data-background=colour], [data-background=picture], [data-background=soft]) .backdrop-dim,
 body.resting #backdrop {
   display: none;
 }
@@ -67,6 +79,67 @@ body.resting #backdrop {
   inset: 0;
   z-index: 2;
   background: var(--art-shade);
+}
+
+.backdrop-picture {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity var(--duration-case) step-end;
+  will-change: opacity;
+}
+
+.backdrop-picture.shown {
+  z-index: 1;
+  opacity: 1;
+  transition: opacity var(--duration-case) var(--ease-out);
+}
+
+.backdrop-picture > :is(img, canvas) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center calc(var(--picture-focus) * 100%);
+}
+
+.backdrop-picture-shade {
+  position: absolute;
+  inset: 0;
+  background: var(--picture-shade);
+}
+
+canvas + .backdrop-picture-shade {
+  display: none;
+}
+
+.backdrop-dim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--flat-colour);
+  opacity: 0;
+  transition: opacity var(--duration-screen-in) var(--ease-screen);
+}
+
+.backdrop-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--home-fade);
+  transition: opacity var(--duration-screen-in) var(--ease-screen);
+}
+
+body:has(main > section:not([hidden])) .backdrop-fade {
+  opacity: 0;
+}
+
+body:has(main > section:not([hidden]), main.beside:not(.picking)) .backdrop-dim {
+  opacity: var(--picture-dim-behind);
+}
+
+body:is([data-background=colour], [data-background=soft]):has(main > section:not([hidden]), main.beside:not(.picking)) .backdrop-dim {
+  opacity: var(--soft-dim-behind);
 }
 
 .backdrop-blob {
@@ -189,16 +262,26 @@ main:has(> #loading:not([hidden])) > :not(#loading) {
   position: absolute;
   left: 0;
   top: 0;
+  display: flex;
   max-width: var(--title-home-width);
   margin: 0;
-  overflow: hidden;
   color: var(--label-colour);
   font-size: var(--title-home-size);
   font-weight: var(--weight-regular);
-  text-overflow: ellipsis;
   white-space: nowrap;
   translate: -50% calc(-100% - var(--title-home-gap));
   transition: opacity var(--duration-title-in) var(--ease-out);
+}
+
+.title-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.title-note {
+  flex: none;
+  margin-left: var(--title-note-gap);
+  color: var(--muted);
 }
 
 #title.away,
@@ -310,7 +393,43 @@ main.top-focused #home-label {
   opacity: 1;
 }
 
-#grid-title {
+body[data-text=outline] :is(#title, #tray-label, #home-label, #clock) {
+  -webkit-text-stroke: var(--outline-width) var(--outline-colour);
+  paint-order: stroke fill;
+}
+
+body[data-text=outline] .title-name {
+  overflow: clip;
+  overflow-clip-margin: var(--outline-width);
+}
+
+body[data-text=outline] #clock {
+  -webkit-text-stroke-width: var(--outline-width-clock);
+}
+
+body[data-text=outline] .clock-period {
+  -webkit-text-stroke-width: var(--outline-width-period);
+}
+
+body[data-text=outline] #wifi {
+  filter: var(--outline-icon);
+}
+
+body[data-text=pill] :is(#title, #tray-label, #home-label):not(:empty) {
+  padding: var(--pill-padding);
+  border-radius: var(--radius-round);
+  background: var(--pill-colour);
+}
+
+body[data-text=pill] #clock {
+  margin: var(--pill-margin-clock);
+  padding: var(--pill-padding-clock);
+  border-radius: var(--radius-round);
+  background: var(--pill-colour);
+}
+
+#grid-title,
+#covers-title {
   position: absolute;
   left: var(--space-8);
   right: var(--space-8);
@@ -499,22 +618,26 @@ main.grid-open #all-games {
   visibility: hidden;
 }
 
-#grid {
+#grid,
+#covers {
   position: absolute;
   inset: 0;
 }
 
-#grid[hidden] {
+#grid[hidden],
+#covers[hidden] {
   display: none;
 }
 
-#grid-sort {
+#grid-sort,
+#covers-heading {
   margin: 0;
   padding: var(--space-6) var(--space-8) 0;
   font-weight: var(--weight-bold);
 }
 
-#grid-list {
+#grid-list,
+#covers-list {
   position: absolute;
   left: 0;
   right: 0;
@@ -531,6 +654,18 @@ main.grid-open #all-games {
   overflow-y: auto;
   scrollbar-width: none;
   mask-image: linear-gradient(to bottom, transparent, black calc(var(--grid-fade) - var(--space-2)), black calc(100% - var(--grid-fade) + var(--space-2)), transparent);
+}
+
+main:has(> #covers:not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, #tray, #all-games, #message, #notice) {
+  visibility: hidden;
+}
+
+body:has(main > #covers:not([hidden])) .backdrop-art.shown {
+  opacity: var(--art-opacity-behind);
+}
+
+body:has(main > #covers:not([hidden])) .backdrop-blob {
+  opacity: var(--drift-opacity-behind);
 }
 
 #grid-list .store-empty {
@@ -1302,19 +1437,26 @@ main.grid-open #all-games {
   color: var(--on-light);
 }
 
-#settings .setup-row {
+#settings .setup-row,
+#options .setup-row {
   padding: var(--settings-row-padding);
   background: transparent;
 }
 
-#settings .setup-row:focus {
+#settings .setup-row:focus,
+#options .setup-row:focus {
   background: var(--text);
 }
 
 .setup-pills {
   display: flex;
-  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--space);
+}
+
+.setup-name:has(+ .setup-pills) {
+  flex: none;
 }
 
 .setup-pill {
@@ -1390,6 +1532,104 @@ main.grid-open #all-games {
 .menu-scrim.open {
   opacity: 1;
   pointer-events: auto;
+}
+
+#options {
+  position: absolute;
+  z-index: var(--layer-dialog);
+  box-sizing: border-box;
+}
+
+#options[hidden] {
+  display: none;
+}
+
+#options:not(.open) {
+  pointer-events: none;
+}
+
+#options h1 {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+  text-overflow: ellipsis;
+}
+
+#options.side {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--options-width);
+  padding: var(--options-padding);
+  border-left: var(--line-width) solid var(--line);
+  background: var(--surface);
+  translate: 100%;
+  transition: translate var(--duration-ui) var(--ease-out);
+}
+
+#options.side.open {
+  translate: none;
+}
+
+#options.beside {
+  top: var(--options-beside-top);
+  left: var(--options-beside-left);
+  right: var(--home-margin);
+  opacity: 0;
+  transition: opacity var(--duration-ui) var(--ease-out);
+}
+
+#options.beside.open {
+  opacity: 1;
+}
+
+#options.beside h1 {
+  margin-bottom: var(--options-beside-gap);
+  padding: 0 var(--space-3);
+  white-space: nowrap;
+}
+
+#options.side .options-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+#options.side h1 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.options-cover {
+  flex: none;
+  width: var(--options-cover-width);
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+
+.options-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+main > :is(#all-games, #tray, #clock, #home-profiles) {
+  transition: opacity var(--duration-ui) var(--ease-out);
+}
+
+main.beside > :is(#all-games, #tray, #clock, #home-profiles),
+main.beside:not(.picking) > #title {
+  opacity: 0;
+}
+
+main:has(> :is(#info, #covers, #settings, #profiles):not([hidden])) > :is(#options, .menu-scrim, #grid) {
+  visibility: hidden;
 }
 
 html.settling *,

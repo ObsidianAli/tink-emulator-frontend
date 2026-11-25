@@ -82,6 +82,35 @@
   --art-opacity-behind: 0.15;
   --art-shade: linear-gradient(to bottom, rgba(15, 17, 21, 0.3), rgba(15, 17, 21, 0) 35%, rgba(15, 17, 21, 0.75));
 
+  --flat-colour: #101216;
+
+  --colour-base: #14161b;
+  --colour-strength: 78%;
+
+  --picture-focus: 0.2;
+  --picture-shade: linear-gradient(0deg, rgba(15, 17, 21, 0.96) 6%, rgba(15, 17, 21, 0.62) 45%, rgba(15, 17, 21, 0.42) 100%);
+  --picture-rest: 200ms;
+  --picture-wait: 250ms;
+  --soft-zoom: 1.2;
+  --soft-blur: 6px;
+  --soft-saturate: 1.2;
+  --soft-shade: rgba(15, 17, 21, 0.38);
+  --soft-dim-behind: 0.7;
+  --picture-dim-behind: 0.8;
+
+  --outline-width: 5px;
+  --outline-width-clock: 3px;
+  --outline-width-period: 2px;
+  --outline-colour: rgba(12, 14, 18, 0.9);
+  --outline-icon: drop-shadow(0 0 1px var(--outline-colour)) drop-shadow(0 0 2px var(--outline-colour));
+  --pill-colour: rgba(15, 17, 21, 0.78);
+  --pill-padding: calc(var(--space) / 2) var(--space-2);
+  --pill-padding-clock: calc(var(--space) / 2) calc(var(--space) * 2.25);
+  --pill-margin-clock: calc(var(--space) / -2) calc(var(--space) * -2.25);
+  --home-fade:
+    linear-gradient(180deg, rgba(12, 14, 18, 0.86) 0, rgba(12, 14, 18, 0.7) 24%, rgba(12, 14, 18, 0) 52%),
+    linear-gradient(0deg, rgba(12, 14, 18, 0.9) 0, rgba(12, 14, 18, 0.55) 14%, rgba(12, 14, 18, 0) 34%);
+
   --drift-neutral: #3b4b6e;
   --drift-lightness: 0.5;
   --drift-chroma: 0.12;
@@ -154,6 +183,7 @@
   --title-home-size: var(--text-body);
   --title-home-gap: calc(var(--space) * 1.5);
   --title-home-width: calc(var(--space) * 70);
+  --title-note-gap: calc(var(--space) * 1.75);
   --home-top: var(--space-4);
   --home-badge-size: calc(var(--space) * 4);
   --home-badge-gap: var(--space-2);
@@ -225,6 +255,12 @@
   --icon-stroke: 5;
   --menu-width: calc(var(--space) * 28);
   --menu-offset: 22vh;
+  --options-width: calc(var(--space) * 70);
+  --options-padding: var(--space-6) calc(var(--space) * 5);
+  --options-cover-width: calc(var(--space) * 12);
+  --options-beside-top: 24.25vh;
+  --options-beside-left: calc(var(--home-margin) + 43vh);
+  --options-beside-gap: calc(var(--space) * 2.5);
   --info-cover-height: 44vh;
   --info-shot-height: 22vh;
   --tray-size: calc(var(--space) * 8);

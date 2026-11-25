@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { CONSOLES, coverColour } = require('./presets');
@@ -96,7 +97,7 @@ function limiter(limit) {
   });
 }
 
-function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.fetch, timeoutMs = TIMEOUT_MS }) {
+function createCovers({ dir, pickedDir = `${dir}-picked`, enabled, steamGridKey, sources, fetch: fetchFn = globalThis.fetch, timeoutMs = TIMEOUT_MS }) {
   const missesFile = path.join(dir, 'misses.json');
   const inFlight = new Map();
   const queue = limiter(PARALLEL);
@@ -119,10 +120,11 @@ function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.
 
   const coverBase = (game) => path.join(dir, game.console, libretroSafe(game.fileName));
   const missKey = (game) => `${game.console}/${game.fileName}`;
+  const pickedBase = (game) => path.join(pickedDir, crypto.createHash('sha1').update(game.key || missKey(game)).digest('hex'));
 
-  async function cached(game) {
+  async function saved(base) {
     for (const type of IMAGE_TYPES) {
-      const file = coverBase(game) + type.ext;
+      const file = base + type.ext;
       try {
         await fs.access(file);
         return { file, mime: type.mime };
@@ -151,15 +153,19 @@ function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.
     return firstImage(game, nameVariants(game.fileName).map((name) => libretroUrl(system, name)));
   }
 
-  async function fromGridDb(game) {
+  async function askGridDb(game, kind, query) {
     const ask = (route) => queue(() => griddbJson(fetchFn, steamGridKey, route, timeoutMs));
     const matches = await ask(`/search/autocomplete/${encodeURIComponent(game.title || game.fileName)}`);
-    if (!matches || !matches.length) return null;
-    const grids = await ask(`/grids/game/${encodeURIComponent(matches[0].id)}?dimensions=600x900&types=static`);
-    return firstImage(game, (grids || []).map((grid) => String(grid.url)));
+    if (!matches || !matches.length) return [];
+    return (await ask(`/${kind}/game/${encodeURIComponent(matches[0].id)}?${query}`)) || [];
   }
 
-  function sources(game) {
+  async function fromGridDb(game) {
+    const grids = await askGridDb(game, 'grids', 'dimensions=600x900&types=static');
+    return firstImage(game, grids.map((grid) => String(grid.url)));
+  }
+
+  function coverSources(game) {
     if (game.art) return [() => firstImage(game, [game.art.cover, game.art.fallback])];
     const system = CONSOLES[game.console] && CONSOLES[game.console].libretro;
     return [system && (() => fromLibretro(system, game)), steamGridKey && (() => fromGridDb(game))].filter(Boolean);
@@ -167,9 +173,9 @@ function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.
 
   async function resolve(game) {
     const plain = { plain: { colour: coverColour(game.console) } };
-    const found = await cached(game);
+    const found = await saved(coverBase(game));
     if (found) return found;
-    const lookups = sources(game);
+    const lookups = (sources || coverSources)(game, { firstImage, askGridDb });
     if (!enabled || !lookups.length || (await loadMisses()).has(missKey(game))) return plain;
     try {
       for (const lookup of lookups) {
@@ -182,7 +188,7 @@ function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.
     return plain;
   }
 
-  function getCover(game) {
+  function getDefault(game) {
     const key = missKey(game);
     if (!inFlight.has(key)) {
       inFlight.set(key, resolve(game).finally(() => inFlight.delete(key)));
@@ -190,12 +196,31 @@ function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.
     return inFlight.get(key);
   }
 
+  const getPicked = (game) => saved(pickedBase(game));
+  const getCover = async (game) => await getPicked(game) || getDefault(game);
+
+  async function pickedFrom(game) {
+    if (!await getPicked(game)) return null;
+    return fs.readFile(`${pickedBase(game)}.url`, 'utf8').catch(() => '');
+  }
+
+  async function pick(game, { data, type }, url) {
+    const base = pickedBase(game);
+    await writeAtomic(`${base}.url`, url);
+    await writeAtomic(base + type.ext, data);
+    for (const other of IMAGE_TYPES) if (other !== type) await fs.rm(base + other.ext, { force: true });
+  }
+
+  async function unpick(game) {
+    for (const ext of [...IMAGE_TYPES.map((type) => type.ext), '.url']) await fs.rm(pickedBase(game) + ext, { force: true });
+  }
+
   async function redownload() {
     await fs.rm(dir, { recursive: true, force: true });
     misses = null;
   }
 
-  return { getCover, redownload };
+  return { getCover, getDefault, pickedFrom, pick, unpick, redownload };
 }
 
-module.exports = { createCovers, download, writeAtomic, Rejected };
+module.exports = { createCovers, download, griddbJson, writeAtomic, libretroUrl, nameVariants, limiter, Rejected, PARALLEL, TIMEOUT_MS };

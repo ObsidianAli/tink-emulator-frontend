@@ -3,19 +3,21 @@ import { grid } from './grid.js';
 import { runSetup } from './setup.js';
 import { openSettings, hideSettings, settingsOpen } from './settings.js';
 import { openStore, hideStore } from './store.js';
-import { openCaseMenu, openMenu, caseMenuOpen } from './casemenu.js';
+import { openMenu, caseMenuOpen } from './casemenu.js';
+import { openOptions, optionsOpen, leaveOptions } from './options.js';
 import { openAlbum, hideAlbum } from './album.js';
 import { openNews, hideNews, checkNews, newsTrayIcon } from './news.js';
 import { openInfo, infoOpen } from './info.js';
+import { openCovers, coversOpen, leaveCovers } from './covers.js';
 import { chooseProfile, closeProfiles } from './profiles.js';
 import { badge } from './badge.js';
-import { focusGlow } from './dom.js';
+import { element, focusGlow } from './dom.js';
 import { transition, screen, changingScreen, fadeToBlack } from './transition.js';
 import { openPanel, updatePanel, panelOpen } from './panel.js';
 import { showLoading, hideLoading, loadingOpen } from './loading.js';
 import { trayDrawing } from './icons.js';
 import './clock.js';
-import { setBackground, setArt, rest } from './backdrop.js';
+import { setBackground, setArt, forgetPictures, rest } from './backdrop.js';
 
 const main = document.querySelector('main');
 const allGamesButton = document.getElementById('all-games');
@@ -44,6 +46,8 @@ let inMenu = false;
 let running = null;
 let asleep = false;
 let cancelled = false;
+let gameOptions = 'case';
+let coverPicker = 'case';
 
 const reported = new Set();
 function report(reason) {
@@ -69,27 +73,34 @@ const titleOutMs = parseFloat(getComputedStyle(document.documentElement).getProp
 let titleKey = null;
 let titleTimer = 0;
 
-function swapTitle(text) {
-  const key = `${shelf.selected()} ${text}`;
+function setTitle(text, note) {
+  title.textContent = '';
+  if (text) title.append(element('span', 'title-name', text));
+  if (text && note) title.append(element('span', 'title-note', note));
+}
+
+function swapTitle(text, note = '') {
+  const key = `${shelf.selected()} ${text} ${note}`;
   if (key === titleKey) return;
   titleKey = key;
   clearTimeout(titleTimer);
   title.classList.add('away');
   const reveal = () => shelf.whenSettled(() => title.classList.remove('away'));
   if (!title.textContent) {
-    title.textContent = text;
+    setTitle(text, note);
     reveal();
     return;
   }
   titleTimer = setTimeout(() => {
-    title.textContent = text;
+    setTitle(text, note);
     reveal();
   }, titleOutMs);
 }
 
 function showTitle() {
   const game = shelf.game();
-  swapTitle(shelf.onButton() ? 'All games' : game ? game.title : '');
+  if (shelf.onButton()) swapTitle('All games');
+  else swapTitle(game ? game.title : '', game && running && running.id === game.id ? 'Playing' : '');
   allGamesButton.classList.toggle('selected', shelf.onButton() && trayFocus < 0 && topFocus < 0);
   main.classList.toggle('tray-focused', trayFocus >= 0);
   main.classList.toggle('top-focused', topFocus >= 0);
@@ -138,9 +149,9 @@ const blocks = () => icon(
 allGamesButton.append(blocks(), focusGlow());
 
 const shelf = createShelf(document.getElementById('shelf'), {
-  onTint: (colour, art) => {
+  onTint: (colour, art, id) => {
     document.body.style.setProperty('--tint', colour);
-    setArt(art);
+    setArt(art, colour, id);
   },
   button: allGamesButton,
   title,
@@ -269,7 +280,10 @@ async function renderTray() {
   renderTop(profiles, profile, shown.homeProfiles !== false);
   tray.dataset.icons = shown.iconStyle;
   tray.dataset.row = shown.iconRow;
+  document.body.dataset.text = shown.textStyle;
   setSounds(shown.sounds);
+  gameOptions = shown.gameOptions;
+  coverPicker = shown.coverPicker;
   shelf.setHeartLook(shown.heart);
   grid.setHeartLook(shown.heart);
   tray.replaceChildren(...trayIcons.map((icon) => {
@@ -339,29 +353,61 @@ function showFavourites(library) {
   return true;
 }
 
-async function changeGame(change) {
-  const game = focusedGame();
+async function showChanges() {
+  const library = await window.tink.refreshLibrary();
+  if (!showFavourites(library)) showLibrary(library);
+}
+
+async function changeGame(change, game = focusedGame()) {
   if (changing || !game) return;
   changing = true;
   try {
     await change(game.id);
-    const library = await window.tink.refreshLibrary();
-    if (!showFavourites(library)) showLibrary(library);
+    await showChanges();
   } finally {
     changing = false;
   }
+}
+
+function markFavourite(id, fav) {
+  const mark = (list) => list.map((game) => (game.id === id ? { ...game, fav } : game));
+  row = mark(row);
+  games = mark(games);
+  shelf.update(row);
+  if (inGrid) grid.update(games, sort);
+}
+
+async function changeCover(game, makeRoom) {
+  const refresh = () => Promise.all([shelf.refreshCover(game.id), grid.refreshCover(game.id)]);
+  const problem = await openCovers(game, { onCase: !inGrid && coverPicker === 'case', shelf, refresh, makeRoom });
+  if (problem === 'none') await showDialog({ message: 'No other covers found.' });
+  if (problem !== 'key') return null;
+  const ok = await showDialog({ message: 'Other covers need a SteamGridDB key.', confirm: 'Open Settings', cancel: 'Not now' });
+  return ok ? 'settings' : null;
 }
 
 async function openGameMenu() {
   const game = focusedGame();
   if (inMenu || changing || launching || !game) return;
   inMenu = true;
+  let marked = false;
   try {
-    const choice = await openCaseMenu({ fav: game.fav, removable: game.console === 'pc' });
-    if (choice === 'fav') await changeGame(window.tink.toggleFavourite);
-    else if (choice === 'hide') await changeGame(window.tink.hideGame);
-    else if (choice === 'info') await openInfo(game);
-    else if (choice === 'remove') await changeGame(window.tink.removePcGame);
+    const choice = await openOptions(game, {
+      beside: !inGrid && gameOptions === 'case',
+      removable: game.console === 'pc',
+      shelf,
+      toggle: async (fav) => {
+        await window.tink.toggleFavourite(game.id);
+        marked = true;
+        markFavourite(game.id, fav);
+      },
+      cover: (makeRoom) => changeCover(game, makeRoom),
+      info: () => openInfo(game),
+    });
+    if (choice === 'hide') await changeGame(window.tink.hideGame, game);
+    else if (choice === 'remove') await changeGame(window.tink.removePcGame, game);
+    else if (marked) await showChanges();
+    if (choice === 'settings') await goToSettings(null, 'covers');
   } finally {
     inMenu = false;
     showHints();
@@ -371,6 +417,8 @@ async function openGameMenu() {
 function sleep() {
   if (asleep) return;
   asleep = true;
+  leaveCovers();
+  leaveOptions();
   rest(true);
   hideLoading();
   shelf.sleep();
@@ -381,6 +429,8 @@ function sleep() {
 
 async function wake({ played = false } = {}) {
   hideLoading();
+  leaveCovers();
+  leaveOptions();
   if (!asleep && !played) {
     showHints();
     return;
@@ -390,6 +440,11 @@ async function wake({ played = false } = {}) {
   shelf.wake();
   showLibrary(await window.tink.refreshLibrary(), { played });
   await shelf.ready();
+}
+
+function setRunning(game) {
+  running = game;
+  grid.setPlaying(game ? game.id : null);
 }
 
 // States arrive while earlier ones are still fading, so they run one after another.
@@ -432,18 +487,19 @@ async function play() {
   if (launching) return;
   launching = true;
   cancelled = false;
-  running = game;
+  setRunning(game);
   const stop = window.tink.onGame?.(onGameState);
   try {
     shownLoading = false;
     const result = await window.tink.launch(game.id);
     await states;
     const played = !cancelled && !(result && result.error);
+    setRunning(null);
     if (shownLoading) await transition(() => wake({ played }));
     if (result && result.error) await explain(result);
   } finally {
     if (stop) stop();
-    running = null;
+    setRunning(null);
     launching = false;
   }
 }
@@ -492,11 +548,11 @@ async function goToNews() {
   }
 }
 
-async function goToSettings(focusConsole) {
+async function goToSettings(focusConsole, focusCategory) {
   if (inSettings) return;
   inSettings = true;
   try {
-    const changed = await openSettings({ focusConsole });
+    const changed = await openSettings({ focusConsole, focusCategory });
     const shown = await window.tink.getSettings();
     shelf.setLeftEdge(shown.leftEdge);
     shelf.setFocusStyle(shown.focusStyle);
@@ -506,6 +562,7 @@ async function goToSettings(focusConsole) {
       if (changed) {
         shelf.forgetCovers();
         grid.forgetCovers();
+        forgetPictures();
         await loadLibrary();
       } else {
         await renderTray().catch(report);
@@ -551,7 +608,7 @@ listenForInput((action) => {
     window.tink.cancelLaunch();
     return 'back';
   }
-  if (changingScreen() || settingsOpen() || inSettings || inPicker || inMenu || caseMenuOpen() || infoOpen() || panelOpen() || inPanel) return null;
+  if (changingScreen() || settingsOpen() || inSettings || inPicker || inMenu || caseMenuOpen() || optionsOpen() || infoOpen() || coversOpen() || panelOpen() || inPanel) return null;
   if (action === 'view') {
     switchProfile();
     return 'confirm';
@@ -657,8 +714,7 @@ listenForInput((action) => {
 });
 
 function gridAction(action) {
-  if (['left', 'right', 'up', 'down'].includes(action)) return grid.move(action) ? 'move' : null;
-  if (action === 'first' || action === 'last') return grid.jump(action) ? 'move' : null;
+  if (['left', 'right', 'up', 'down', 'first', 'last'].includes(action)) return grid.move(action) ? 'move' : null;
   if (action === 'fav' || action === 'hide') {
     if (changing || !grid.game()) return null;
     changeGame(action === 'fav' ? window.tink.toggleFavourite : window.tink.hideGame);
@@ -779,6 +835,7 @@ async function start() {
   const setup = await window.tink.getSetup();
   if (setup.needed) await runSetup(setup);
   inPicker = true;
+  playSound('startup');
   try {
     await chooseProfile({ stay: true });
   } finally {

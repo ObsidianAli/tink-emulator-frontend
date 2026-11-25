@@ -135,8 +135,8 @@ function fontFor(size, weight) {
   return `${token(weight)} ${Math.round(size)}px Inter`;
 }
 
-async function coverCanvas(game, aspect, height) {
-  const cover = await window.tink.getCover(game.id);
+async function coverCanvas(game, aspect, height, given) {
+  const cover = given || await window.tink.getCover(game.id);
   try {
     if (cover && cover.src) return { canvas: drawImage(await loadImage(cover.src), aspect, height), art: true };
   } catch {
@@ -170,6 +170,12 @@ function createCache(keep, make) {
     return entry;
   }
 
+  get.take = (id) => {
+    const entry = entries.get(id);
+    entries.delete(id);
+    return () => entry && entry.then((made) => made && made.textures.forEach((texture) => texture.dispose()));
+  };
+
   get.clear = () => {
     for (const entry of entries.values()) entry.then((made) => made && made.textures.forEach((texture) => texture.dispose()));
     entries.clear();
@@ -181,13 +187,15 @@ function createTextures(maxAnisotropy) {
   // Side Cases are seen at a steep angle, where anisotropic filtering keeps their Covers from smearing.
   const anisotropy = Math.min(8, maxAnisotropy);
 
-  const covers = createCache(KEEP, async (game, aspect, spineAspect) => {
-    const { canvas, art } = await coverCanvas(game, aspect, TEXTURE_HEIGHT);
+  async function make(game, aspect, spineAspect, height = TEXTURE_HEIGHT, given) {
+    const { canvas, art } = await coverCanvas(game, aspect, height, given);
     const tint = averageColour(canvas);
     const texture = makeTexture(canvas, anisotropy);
     const spine = makeTexture(await drawSpine(game.title, tint, spineAspect), anisotropy);
     return { texture, spine, tint, art: art ? canvas : null, textures: [texture, spine] };
-  });
+  }
+
+  const covers = createCache(KEEP, make);
 
   const sharp = createCache(KEEP_SHARP, async (game, aspect, height) => {
     const texture = makeTexture((await coverCanvas(game, aspect, height)).canvas, anisotropy);
@@ -202,12 +210,17 @@ function createTextures(maxAnisotropy) {
     return sharp(game.id, inUse, game, aspect, height);
   }
 
+  function take(id) {
+    const drop = [covers.take(id), sharp.take(id)];
+    return () => drop.forEach((dispose) => dispose());
+  }
+
   function forget() {
     covers.clear();
     sharp.clear();
   }
 
-  return { get, getSharp, forget };
+  return { get, getSharp, make, take, forget };
 }
 
 export { createTextures };
