@@ -175,7 +175,6 @@
   --duration-title-out: 100ms;
   --duration-title-in: 100ms;
   --duration-case: 500ms;
-  --duration-case-slow: 600ms;
   --duration-to-black: 120ms;
   --duration-from-black: 250ms;
   --ease-fade: cubic-bezier(0, 0, 0.58, 1);

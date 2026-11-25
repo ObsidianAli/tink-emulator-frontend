@@ -613,13 +613,13 @@ listenForInput((action) => {
     return null;
   }
   if (inGrid) return gridAction(action);
-  if (action === 'down' && (!row.length || shelf.caseState() === 'front')) {
+  if (action === 'down') {
     trayFocus = 0;
     showTitle();
     focusTray();
     return 'move';
   }
-  if (action === 'up' && topProfiles.length && (!row.length || shelf.caseState() === 'front')) {
+  if (action === 'up' && topProfiles.length) {
     topFocus = 0;
     showTitle();
     focusTop();
@@ -653,10 +653,7 @@ listenForInput((action) => {
     play();
     return sound;
   }
-  const moves = { y: shelf.flip, x: shelf.open, b: shelf.back };
-  if (!moves[action] || !moves[action]()) return null;
-  showHints();
-  return { y: 'flip', x: 'open', b: 'back' }[action];
+  return null;
 });
 
 function gridAction(action) {

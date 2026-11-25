@@ -135,7 +135,7 @@ function currentLibrary() {
   profiles.ensureProfiles(current);
   const profile = profiles.activeProfile(current);
   const visible = profiles.visibleGames(allConsoles, profile);
-  const show = ({ id, key, title, console, consoleName }) => ({ id, title, console, consoleName, fav: profile.favourites.includes(key) });
+  const show = ({ id, key, title, console }) => ({ id, title, console, fav: profile.favourites.includes(key) });
   return {
     row: profiles.homeRow(visible, profile, firstSeen).map(show),
     games: profiles.sortGames(visible, profile.sort, profile, firstSeen).map(show),

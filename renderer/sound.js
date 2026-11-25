@@ -37,9 +37,6 @@ const SOUNDS = {
   list: [[0, 740, 0.05, 0.4, 'sine']],
   confirm: [[0, 784, 0.07, 0.6, 'sine'], [0.06, 1175, 0.1, 0.6, 'sine']],
   back: [[0, 880, 0.07, 0.5, 'sine'], [0.06, 587, 0.1, 0.5, 'sine']],
-  flip: [[0, 500, 0.11, 0.5, 'sine', 900], [0, 250, 0.11, 0.3, 'triangle', 450]],
-  open: [[0, 523, 0.09, 0.5, 'sine'], [0.07, 659, 0.09, 0.5, 'sine'], [0.14, 784, 0.12, 0.5, 'sine']],
-  discOut: [[0, 1200, 0.12, 0.35, 'sine', 1800], [0, 2400, 0.12, 0.1, 'sine', 3600]],
   toggle: [[0, 600, 0.04, 0.5, 'triangle'], [0.04, 900, 0.07, 0.5, 'triangle']],
   error: [[0, 392, 0.11, 0.5, 'sine'], [0.1, 311, 0.14, 0.5, 'sine']],
   profiles: [[0, 659, 0.09, 0.5, 'sine'], [0.08, 988, 0.16, 0.5, 'sine']],
@@ -92,8 +89,6 @@ const SOUND_CHOICES = {
   list: { label: 'Move in lists', options: soft([[0, 784, 0.045, 0.28, 'sine'], [0, 1568, 0.02, 0.04, 'sine']]) },
   confirm: { label: 'OK', options: soft([...mallet(0, 784, 0.11, 0.5), ...mallet(0.06, 1175, 0.22, 0.5)]) },
   back: { label: 'Back', options: soft([...mallet(0, 784, 0.09, 0.4), ...mallet(0.06, 587, 0.18, 0.42)]) },
-  flip: { label: 'Flip case', options: soft(SOUNDS.flip) },
-  open: { label: 'Open case', options: soft([...mallet(0, 587, 0.12, 0.42), ...mallet(0.07, 784, 0.12, 0.42), ...mallet(0.14, 988, 0.28, 0.45)]) },
   toggle: { label: 'Switch', options: soft([[0, 784, 0.05, 0.4, 'sine'], [0.04, 1175, 0.1, 0.42, 'sine'], [0.04, 2350, 0.03, 0.05, 'sine']]) },
   error: { label: 'Error', options: soft([[0, 392, 0.12, 0.42, 'sine'], [0.1, 330, 0.18, 0.42, 'sine']]) },
   profiles: { label: 'Profiles', options: soft([...box(0, 784, 0.14, 0.42), ...box(0.08, 1175, 0.3, 0.42)]) },
@@ -114,7 +109,6 @@ function chosenNotes(name) {
 }
 
 const CAMERA_MS = 600;
-const FOLLOWED_BY = { open: ['discOut', 0.26] };
 
 const lastPlayed = new Map();
 let audio = null;
@@ -207,8 +201,6 @@ function playSound(name, { hidden = false } = {}) {
     const picked = chosenNotes(name);
     if (picked) playNotes(picked, audio.currentTime, airyOutput());
     else playNotes(SOUNDS[name], audio.currentTime);
-    const follow = FOLLOWED_BY[name];
-    if (follow) playNotes(SOUNDS[follow[0]], audio.currentTime + follow[1]);
   } catch {
   }
 }
@@ -229,5 +221,10 @@ function playCamera() {
   }, CAMERA_MS);
 }
 
-if (typeof window !== 'undefined') window.tink?.onShot?.(playCamera);
+if (typeof window !== 'undefined') {
+  window.tink?.onShot?.(playCamera);
+  // Opening the sound device blocks for about 60 ms, which would otherwise land on the first move.
+  startAudio();
+  suspendSound();
+}
 if (typeof module !== 'undefined') module.exports = { soundDue, SOUND_CHOICES };

@@ -177,18 +177,6 @@ async function main() {
   const buttonSelected = () => page.$eval('#all-games', (el) => el.classList.contains('selected'));
   const visibleWindow = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((w) => w.isVisible() && w.isFocusable()));
 
-  const caseSteps = async (prefix) => {
-    await page.keyboard.press('f');
-    await shot(`${prefix}-back`);
-    await page.keyboard.press(' ');
-    await sleep(450);
-    await shot(`${prefix}-disc-out`);
-    for (const step of ['closed', 'flipped', 'front-again']) {
-      await page.keyboard.press('Escape');
-      await shot(`${prefix}-${step}`);
-    }
-  };
-
   await page.waitForSelector('#title:not(:empty)');
   assert.strictEqual(await title(), 'Aardvark Game', 'a profile that has played nothing sees games A to Z');
   assert.strictEqual(await page.$('#shelves'), null, 'no shelf names');
@@ -207,21 +195,8 @@ async function main() {
   assert.strictEqual(await page.$eval('#title', (el) => getComputedStyle(el).opacity), '1', 'the title returns once the row has settled');
   await page.keyboard.press('ArrowLeft');
   await sleep(1200);
-  await caseSteps('case-art');
-
-  const flipping = await frameTimes(page, async () => {
-    await page.keyboard.press('f');
-    await sleep(700);
-    await page.keyboard.press(' ');
-    await sleep(1500);
-    for (let i = 0; i < 3; i++) {
-      await page.keyboard.press('Escape');
-      await sleep(800);
-    }
-  });
-  console.log('flip, open and back again:', JSON.stringify(flipping));
   const settled = await frameTimes(page, () => sleep(1000));
-  console.log('settled second after that:', JSON.stringify(settled));
+  console.log('settled second:', JSON.stringify(settled));
   const rest = await drawing(page, 1000);
   console.log('at rest, drawn:', JSON.stringify(rest));
   assert.ok(rest.framesPerSecond <= 31, 'at rest only the focus outline is redrawn, at a lower rate');
