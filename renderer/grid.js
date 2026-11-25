@@ -1,7 +1,7 @@
 import { element, focusGlow, scrollToNode } from './dom.js';
 import { heartDrawing } from './icons.js';
 
-const SORT_NAMES = { recent: 'Last played', az: 'A–Z', console: 'Console', favourites: 'Favourites' };
+const SORT_NAMES = { az: 'A–Z', favourites: 'Favourites' };
 const SORTS = Object.keys(SORT_NAMES);
 const CROP_LIMIT = 0.25;
 const TILE_ASPECT = 3 / 4;

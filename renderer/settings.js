@@ -28,10 +28,7 @@ export function hideSettings() {
 }
 
 const HIGHLIGHTS = { rim: 'Rim', snake: 'Snake', under: 'Under' };
-const EDGES = { slide: 'Slide off', peek: 'Peek', fade: 'Fade' };
 const KEYBOARDS = { grid: 'Grid', full: 'Full' };
-const ICON_STYLES = { grey: 'Grey', disc: 'Colour when selected', glyph: 'Coloured icon' };
-const ICON_ROWS = { separate: 'Separate', bar: 'One bar' };
 const HEARTS = { sticker: 'Sticker', small: 'Small' };
 const BACKGROUNDS = { tint: 'Tint', flat: 'Flat', colour: 'Colour', picture: 'Picture', soft: 'Soft picture', art: 'Art', drift: 'Drift' };
 const TEXT_STYLES = { plain: 'Plain', outline: 'Outline', pill: 'Pill', fade: 'Fade' };
@@ -85,35 +82,23 @@ export async function openSettings({ focusConsole, focusCategory } = {}) {
       },
     });
 
-    const softable = Object.keys(SOUND_CHOICES).filter((name) => SOUND_CHOICES[name].options.some(([id]) => id === 'soft'));
     const soundOf = (name) => state.sounds[name] || 'now';
 
-    function pickSounds(names, id) {
-      const picked = Object.fromEntries(names.map((name) => [name, id]));
-      state.sounds = { ...state.sounds, ...picked };
+    function pickSound(name, id) {
+      state.sounds = { ...state.sounds, [name]: id };
       setSounds(state.sounds);
       for (const row of rows) row.paint?.();
-      window.tink.setSounds(picked);
+      window.tink.setSounds({ [name]: id });
     }
 
-    const soundRow = (label, names, options, sound, group) => ({
+    const soundRows = () => Object.entries(SOUND_CHOICES).map(([name, { label, options }]) => ({
       label,
-      group,
-      sound,
+      sound: name,
       options,
       hint: 'Play',
-      current: () => (names.every((name) => soundOf(name) === soundOf(names[0])) ? soundOf(names[0]) : null),
-      choose: (id) => pickSounds(names, id),
-    });
-
-    function soundRows() {
-      const single = (name, group) => soundRow(SOUND_CHOICES[name].label, [name], SOUND_CHOICES[name].options, name, group);
-      return [
-        ...Object.keys(SOUND_CHOICES).filter((name) => !softable.includes(name)).map((name) => single(name)),
-        soundRow('All others', softable, SOUND_CHOICES.confirm.options, 'confirm', true),
-        ...softable.map((name, index) => single(name, index === 0)),
-      ];
-    }
+      current: () => soundOf(name),
+      choose: (id) => pickSound(name, id),
+    }));
 
     function addPills(row, node) {
       const pills = element('span', 'setup-pills');
@@ -355,7 +340,6 @@ export async function openSettings({ focusConsole, focusCategory } = {}) {
             sound: 'toggle',
             activate: () => change(window.tink.setFullscreen(!state.fullscreen), { reload: false }),
           },
-          choose('edge', 'Left edge', EDGES, 'leftEdge', (value) => window.tink.setLeftEdge(value)),
           choose('highlight', 'Highlight', HIGHLIGHTS, 'focusStyle', (value) => window.tink.setFocusStyle(value)),
           choose('keyboard', 'Keyboard', KEYBOARDS, 'keyboard', (value) => window.tink.setKeyboard(value)),
           {
@@ -365,8 +349,6 @@ export async function openSettings({ focusConsole, focusCategory } = {}) {
             sound: 'toggle',
             activate: () => change(window.tink.setHomeProfiles(!state.homeProfiles), { reload: false }),
           },
-          choose('icons', 'Icons', ICON_STYLES, 'iconStyle', (value) => window.tink.setIconStyle(value)),
-          choose('iconRow', 'Icon row', ICON_ROWS, 'iconRow', (value) => window.tink.setIconRow(value)),
           choose('background', 'Background', BACKGROUNDS, 'background', (value) => window.tink.setBackground(value)),
           choose('text', 'Text', TEXT_STYLES, 'textStyle', (value) => window.tink.setTextStyle(value)),
           choose('heart', 'Favourite heart', HEARTS, 'heart', (value) => window.tink.setHeart(value)),

@@ -31,15 +31,6 @@ test('profiles on Home are on unless turned off', () => {
   assert.strictEqual(options.buildSettings(settings, {}, '1').homeProfiles, true);
 });
 
-test('left edge defaults to slide and ignores unknown values', () => {
-  const settings = { consoles: {} };
-  assert.strictEqual(options.buildSettings(settings, {}, '1').leftEdge, 'slide');
-  options.setLeftEdge(settings, 'fade');
-  assert.strictEqual(options.buildSettings(settings, {}, '1').leftEdge, 'fade');
-  options.setLeftEdge(settings, 'nonsense');
-  assert.strictEqual(options.buildSettings(settings, {}, '1').leftEdge, 'fade');
-});
-
 test('favourite heart defaults to sticker and ignores unknown values', () => {
   const settings = { consoles: {} };
   assert.strictEqual(options.buildSettings(settings, {}, '1').heart, 'sticker');
@@ -154,16 +145,8 @@ test('keyboard defaults to grid and ignores unknown values', () => {
   assert.strictEqual(options.buildSettings(settings, {}, '1').keyboard, 'full');
 });
 
-test('icon style and row have defaults and ignore unknown values', () => {
-  const settings = { consoles: {} };
-  const read = () => options.buildSettings(settings, {}, '1');
-  assert.deepStrictEqual([read().iconStyle, read().iconRow], ['disc', 'separate']);
+test('sounds ignore unknown values', () => {
+  const settings = { consoles: {}, sounds: { move: 'soft' } };
   options.setSounds(settings, { store: 'b', album: 'zzz', nope: 'a' });
-  options.setSounds(settings, { move: 'soft' });
-  assert.deepStrictEqual(read().sounds, { store: 'b', move: 'soft' });
-  options.setIconStyle(settings, 'glyph');
-  options.setIconRow(settings, 'bar');
-  options.setIconStyle(settings, 'rainbow');
-  options.setIconRow(settings, 'circle');
-  assert.deepStrictEqual([read().iconStyle, read().iconRow], ['glyph', 'bar']);
+  assert.deepStrictEqual(options.buildSettings(settings, {}, '1').sounds, { store: 'b' });
 });

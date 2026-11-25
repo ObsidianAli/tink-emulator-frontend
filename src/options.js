@@ -8,8 +8,6 @@ const wantsFullscreen = (settings) => settings.fullscreen !== false;
 
 const showsHomeProfiles = (settings) => settings.homeProfiles !== false;
 
-const LEFT_EDGES = ['slide', 'peek', 'fade'];
-const leftEdge = (settings) => (LEFT_EDGES.includes(settings.leftEdge) ? settings.leftEdge : 'slide');
 const FOCUS_STYLES = ['rim', 'snake', 'under'];
 const focusStyle = (settings) => (FOCUS_STYLES.includes(settings.focusStyle) ? settings.focusStyle : 'rim');
 
@@ -21,12 +19,6 @@ const textStyle = (settings) => (TEXT_STYLES.includes(settings.textStyle) ? sett
 
 const KEYBOARDS = ['grid', 'full'];
 const keyboard = (settings) => (KEYBOARDS.includes(settings.keyboard) ? settings.keyboard : 'grid');
-
-const ICON_STYLES = ['grey', 'disc', 'glyph'];
-const iconStyle = (settings) => (ICON_STYLES.includes(settings.iconStyle) ? settings.iconStyle : 'disc');
-
-const ICON_ROWS = ['separate', 'bar'];
-const iconRow = (settings) => (ICON_ROWS.includes(settings.iconRow) ? settings.iconRow : 'separate');
 
 const HEARTS = ['sticker', 'small'];
 const heart = (settings) => (HEARTS.includes(settings.heart) ? settings.heart : 'sticker');
@@ -70,13 +62,10 @@ function buildSettings(settings, detected, version) {
   return {
     version,
     fullscreen: wantsFullscreen(settings),
-    leftEdge: leftEdge(settings),
     focusStyle: focusStyle(settings),
     background: background(settings),
     textStyle: textStyle(settings),
     keyboard: keyboard(settings),
-    iconStyle: iconStyle(settings),
-    iconRow: iconRow(settings),
     heart: heart(settings),
     gameOptions: gameOptions(settings),
     coverPicker: coverPicker(settings),
@@ -106,10 +95,6 @@ function setHomeProfiles(settings, on) {
   settings.homeProfiles = on === true;
 }
 
-function setLeftEdge(settings, mode) {
-  if (LEFT_EDGES.includes(mode)) settings.leftEdge = mode;
-}
-
 function setFocusStyle(settings, mode) {
   if (FOCUS_STYLES.includes(mode)) settings.focusStyle = mode;
 }
@@ -124,14 +109,6 @@ function setTextStyle(settings, mode) {
 
 function setKeyboard(settings, mode) {
   if (KEYBOARDS.includes(mode)) settings.keyboard = mode;
-}
-
-function setIconStyle(settings, mode) {
-  if (ICON_STYLES.includes(mode)) settings.iconStyle = mode;
-}
-
-function setIconRow(settings, mode) {
-  if (ICON_ROWS.includes(mode)) settings.iconRow = mode;
 }
 
 function setHeart(settings, mode) {
@@ -161,4 +138,4 @@ function setScreenshotButton(settings, id) {
   else delete settings.screenshotButton;
 }
 
-module.exports = { buildSettings, clearEmulator, setFullscreen, setLeftEdge, setFocusStyle, setBackground, setTextStyle, setKeyboard, setIconStyle, setIconRow, setHeart, setGameOptions, setCoverPicker, setSounds, setHomeProfiles, setSteamKey, setScreenshotButton, screenshotButton, wantsFullscreen, steamKey };
+module.exports = { buildSettings, clearEmulator, setFullscreen, setFocusStyle, setBackground, setTextStyle, setKeyboard, setHeart, setGameOptions, setCoverPicker, setSounds, setHomeProfiles, setSteamKey, setScreenshotButton, screenshotButton, wantsFullscreen, steamKey };

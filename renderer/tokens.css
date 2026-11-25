@@ -267,6 +267,7 @@
   --tray-bottom: var(--space-8);
   --tray-label-gap: var(--space-2);
   --tray-label-size: var(--text-body);
+  --press-hold: 220ms;
   --press-duration: 260ms;
   --press-scale: 0.9;
   --press-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -336,13 +337,12 @@
   --news-read-picture: calc(var(--space) * 30);
   --news-dot-size: calc(var(--space) * 1.5);
   --news-dot-inset: var(--space-2);
-  --press-page-duration: 500ms;
+  --press-page-duration: 420ms;
   --press-page-angle: -50deg;
   --press-page-depth: calc(var(--space) * 12);
   --icon-line: 2.6;
   --icon-cut: 1.8;
   --icon-edge: 1.5;
-  --icon-tint: 72%;
   --tray-bar-padding: calc(var(--space) * 1.5);
   --album-gap: var(--space-3);
   --album-radius: var(--radius-large);
@@ -355,7 +355,7 @@
   --album-press-duration: 420ms;
   --album-press-front: -9deg;
   --album-press-rear: 9deg;
-  --press-store-duration: 500ms;
+  --press-store-duration: 420ms;
   --press-store-drop: -9px;
   --press-store-settle: 1px;
   --press-store-handle: 1.5px;

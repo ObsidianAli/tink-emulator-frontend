@@ -187,9 +187,6 @@ async function main() {
     assert.strictEqual(readSettings()[settingsKey], stored);
   };
 
-  await key('ArrowDown');
-  await pickValue('Left edge', 'Slide off', 'Peek', 'leftEdge', 'peek');
-  await pickValue('Left edge', 'Peek', 'Slide off', 'leftEdge', 'slide');
   await shot('6-display');
 
   await key('ArrowDown');
@@ -207,10 +204,6 @@ async function main() {
   assert.ok((await focusedRow()).startsWith('Profiles on Home | On'), await focusedRow());
   assert.strictEqual(readSettings().homeProfiles, true);
   await key('ArrowDown');
-  await pickValue('Icons', 'Colour when selected', 'Coloured icon', 'iconStyle', 'glyph');
-  await key('ArrowDown');
-  await pickValue('Icon row', 'Separate', 'One bar', 'iconRow', 'bar');
-  await key('ArrowDown');
   await pickValue('Background', 'Tint', 'Drift', 'background', 'drift');
 
   await key('Escape');
@@ -223,10 +216,7 @@ async function main() {
   await key('ArrowRight');
   assert.strictEqual(await chosenPill(), 'Higher');
   assert.strictEqual(storedSound('store'), 'b');
-  await down(3);
-  assert.ok((await focusedRow()).startsWith('All others'), await focusedRow());
-  await key('ArrowRight');
-  assert.strictEqual(storedSound('launch'), 'soft');
+  assert.strictEqual(await page.$$eval('#settings .settings-pane .setup-row', (nodes) => nodes.length), 3);
   await shot('7-sounds');
   await key('Escape');
   await key('ArrowDown');

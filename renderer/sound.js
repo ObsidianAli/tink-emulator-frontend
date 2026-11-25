@@ -58,7 +58,6 @@ const SOUNDS = {
 };
 const storeAt = (by) => [[0, 1480 * by, 0.13, 0.35, 'sine', 740 * by], [0.13, 233, 0.1, 0.7, 'sine', 167], [0.13, 900 * by, 0.03, 0.25, 'noise'], ...box(0.21, 1047 * by, 0.3, 0.34)];
 const now = ['now', 'Now'];
-const soft = (notes) => [now, ['soft', 'Softer', notes]];
 
 const SOUND_CHOICES = {
   store: { label: 'Store', options: [now, ['a', 'Slightly higher', storeAt(1.19)], ['b', 'Higher', storeAt(1.335)], ['c', 'Highest', storeAt(1.5)]] },
@@ -86,17 +85,6 @@ const SOUND_CHOICES = {
       ['c', 'Page and ping', [[0, 900, 0.16, 0.65, 'noise', 3200], ...bell(0.13, 1568, 0.12, 0.3), ...bell(0.2, 2349, 0.45, 0.26)]],
     ],
   },
-  move: { label: 'Move', options: soft([[0, 1175, 0.05, 0.3, 'sine', 1140], [0, 2350, 0.02, 0.04, 'sine']]) },
-  list: { label: 'Move in lists', options: soft([[0, 784, 0.045, 0.28, 'sine'], [0, 1568, 0.02, 0.04, 'sine']]) },
-  confirm: { label: 'OK', options: soft([...mallet(0, 784, 0.11, 0.5), ...mallet(0.06, 1175, 0.22, 0.5)]) },
-  back: { label: 'Back', options: soft([...mallet(0, 784, 0.09, 0.4), ...mallet(0.06, 587, 0.18, 0.42)]) },
-  toggle: { label: 'Switch', options: soft([[0, 784, 0.05, 0.4, 'sine'], [0.04, 1175, 0.1, 0.42, 'sine'], [0.04, 2350, 0.03, 0.05, 'sine']]) },
-  error: { label: 'Error', options: soft([[0, 392, 0.12, 0.42, 'sine'], [0.1, 330, 0.18, 0.42, 'sine']]) },
-  profiles: { label: 'Profiles', options: soft([...box(0, 784, 0.14, 0.42), ...box(0.08, 1175, 0.3, 0.42)]) },
-  controllers: { label: 'Controllers', options: soft([...wood(0, 784), ...wood(0.08, 1175)]) },
-  settings: { label: 'Settings', options: soft(SOUNDS.settings) },
-  power: { label: 'Power', options: soft([...bell(0, 1175, 0.3, 0.34), ...bell(0.1, 988, 0.3, 0.36), ...bell(0.2, 784, 0.6, 0.42)]) },
-  launch: { label: 'Launch', options: soft([...mallet(0, 587, 0.14, 0.4), ...mallet(0.08, 784, 0.14, 0.42), ...mallet(0.16, 988, 0.16, 0.44), ...mallet(0.24, 1175, 0.5, 0.48)]) },
 };
 
 let chosen = {};

@@ -15,7 +15,6 @@ const NEAR = 1.02;
 const STEP = 0.26;
 const SIDE_DIM = 0.35;
 const SPARE = 2;
-const LEFT_CLEAR = 0.7;
 const SETTLED = 0.0005;
 const TITLE_NEAR = 0.05;
 const LAYOUT = SHAPES.dvd;
@@ -294,17 +293,10 @@ function createShelf(canvas, { onTint, button, title }) {
   function place(item, offset, shown) {
     const near = Math.min(1, Math.abs(offset));
     const side = Math.sign(offset);
-    const clear = offset < 0 && leftEdge === 'slide' ? near * LEFT_CLEAR * LAYOUT.width : 0;
-    item.group.position.set(slotX(offset) - clear, 0, PULL + near * (BACK - PULL));
+    item.group.position.set(slotX(offset), 0, PULL + near * (BACK - PULL));
     item.group.rotation.y = (1 - near) * SELECTED_TURN - side * near * SIDE_TURN;
     item.setDim(near * SIDE_DIM, near);
-    item.setFade(shown * (offset < 0 && leftEdge === 'fade' ? Math.max(0, 1 + offset) : 1));
-  }
-
-  let leftEdge = 'slide';
-  function setLeftEdge(mode) {
-    leftEdge = mode === 'peek' || mode === 'fade' ? mode : 'slide';
-    requestRender();
+    item.setFade(shown);
   }
 
   function setAlone(on) {
@@ -350,7 +342,6 @@ function createShelf(canvas, { onTint, button, title }) {
     requestRender();
   }
   window.tink.getSettings().then((state) => {
-    setLeftEdge(state.leftEdge);
     setFocusStyle(state.focusStyle);
   });
 
@@ -623,7 +614,7 @@ function createShelf(canvas, { onTint, button, title }) {
   screens.observe(canvas.parentElement, { attributes: true, attributeFilter: ['class'] });
   for (const section of canvas.parentElement.querySelectorAll(':scope > section')) screens.observe(section, { attributes: true, attributeFilter: ['hidden'] });
 
-  return { show, update, whenSettled, showRing, setLeftEdge, setHeartLook, setFocusStyle, setAlone, ready, forgetCovers, drawCover, tryCover, refreshCover, art, sleep, wake, select, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
+  return { show, update, whenSettled, showRing, setHeartLook, setFocusStyle, setAlone, ready, forgetCovers, drawCover, tryCover, refreshCover, art, sleep, wake, select, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
 }
 
 export { createShelf };

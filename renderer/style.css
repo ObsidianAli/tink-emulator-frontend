@@ -447,10 +447,15 @@ body[data-text=pill] #clock {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: var(--tray-bottom);
+  bottom: calc(var(--tray-bottom) - var(--tray-bar-padding));
   display: flex;
   justify-content: center;
   gap: var(--space-2);
+  width: fit-content;
+  margin-inline: auto;
+  padding: var(--tray-bar-padding) calc(var(--tray-bar-padding) * 2);
+  border-radius: var(--radius-round);
+  background: var(--surface-raised);
 }
 
 #tray-label {
@@ -2012,21 +2017,8 @@ main:has(> #news:not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, #t
   --icon-colour: var(--profile-red);
 }
 
-#tray[data-icons='disc'] .tray-icon:focus {
+#tray .tray-icon:focus {
   --disc: var(--icon-colour, var(--surface-raised));
-}
-
-#tray[data-icons='glyph'] .tray-icon {
-  color: color-mix(in oklab, var(--icon-colour, var(--text)) var(--icon-tint), white);
-}
-
-#tray[data-row='bar'] {
-  width: fit-content;
-  margin-inline: auto;
-  bottom: calc(var(--tray-bottom) - var(--tray-bar-padding));
-  padding: var(--tray-bar-padding) calc(var(--tray-bar-padding) * 2);
-  border-radius: var(--radius-round);
-  background: var(--surface-raised);
 }
 
 .tray-drawing {

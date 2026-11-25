@@ -245,7 +245,7 @@ async function main() {
   await key('Enter');
   const total = 40 + 24 + 24 + 16 + 12 + 12 + 12 + 2;
   assert.strictEqual(await page.$$eval('#grid-list .tile', (tiles) => tiles.length), total, 'every game is in the grid');
-  assert.strictEqual(await sortName(), 'Last played');
+  assert.strictEqual(await sortName(), 'A–Z');
   assert.strictEqual(await hints(), 'APlay YSort BBack');
   assert.strictEqual(await page.$eval('#shelf', (el) => getComputedStyle(el).visibility), 'hidden');
   assert.strictEqual(await gridTitle(), 'Aardvark Game');
@@ -271,23 +271,21 @@ async function main() {
   }), 'the focused game is scrolled into view');
 
   const sorts = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 2; i++) {
     await key('f');
     sorts.push(await sortName());
-    if (sorts.length === 3) {
+    if (sorts.length === 1) {
       assert.strictEqual(await page.$$eval('#grid-list .tile', (els) => els.length), 0, 'Favourites shows only favourites');
       assert.strictEqual(await page.textContent('#grid-list .store-empty'), 'No favourites');
     }
   }
-  assert.deepStrictEqual(sorts, ['A–Z', 'Console', 'Favourites', 'Last played']);
-  await key('f');
+  assert.deepStrictEqual(sorts, ['Favourites', 'A–Z']);
   assert.strictEqual(readSettings().profiles[0].sort, 'az');
 
   const tileCount = () => page.$$eval('#grid-list .tile', (els) => els.length);
   const allTiles = await tileCount();
   await key('l');
   await sleep(500);
-  await key('f');
   await key('f');
   assert.strictEqual(await sortName(), 'Favourites');
   assert.strictEqual(await tileCount(), 1, 'only the favourite is listed');
@@ -298,9 +296,7 @@ async function main() {
   await key('ArrowRight');
   await key('l');
   await key('f');
-  assert.strictEqual(await sortName(), 'Last played', 'sorting still works when empty');
-  await key('f');
-  assert.strictEqual(await sortName(), 'A–Z');
+  assert.strictEqual(await sortName(), 'A–Z', 'sorting still works when empty');
   assert.strictEqual(await tileCount(), allTiles);
   await key('End');
   assert.strictEqual(await page.$eval('#grid-list .tile.focused', (el) => el === el.parentElement.lastElementChild), true, 'End jumps to the last game');
@@ -429,7 +425,7 @@ async function main() {
   for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowRight');
   await sleep(500);
   await key('Enter');
-  assert.strictEqual(await sortName(), 'Last played', 'another profile has its own sort');
+  assert.strictEqual(await sortName(), 'A–Z', 'another profile has its own sort');
   await key('Escape');
 
   console.log('errors:', errors.length ? errors : 'none');
