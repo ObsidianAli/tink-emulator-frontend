@@ -284,3 +284,16 @@ test('a download that is already waiting is not fetched twice', async () => {
   await t.updater.checkInBackground();
   assert.strictEqual(t.read('Tink.new/marker'), 'marker');
 });
+
+test('two checks at once download only once', async () => {
+  let downloads = 0;
+  const t = setup();
+  const updater = t.make({ getFile: async (_url, dest) => {
+    downloads++;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    fs.writeFileSync(dest, ZIP);
+  } });
+  await Promise.all([updater.checkInBackground(), updater.checkNow()]);
+  assert.strictEqual(downloads, 1);
+  assert.strictEqual(t.read('Tink/data/update-pending.txt'), '0.3.0');
+});

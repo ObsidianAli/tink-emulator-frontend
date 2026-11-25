@@ -153,7 +153,7 @@ function createUpdater({
 
   const looksRight = (folder) => startsWithMZ(path.join(folder, 'Tink.exe')) && fs.existsSync(path.join(folder, 'resources', 'app.asar'));
 
-  async function check() {
+  async function runCheck() {
     const release = await getJson(releaseUrl, { loopback });
     const latest = release && release.tag_name;
     const newer = compareVersions(latest, version);
@@ -179,6 +179,12 @@ function createUpdater({
     } finally {
       remove(zip);
     }
+  }
+
+  let checking = null;
+  function check() {
+    checking ??= runCheck().finally(() => { checking = null; });
+    return checking;
   }
 
   async function checkInBackground() {
