@@ -219,10 +219,13 @@ function createNews({ dir, fetch: fetchFn = globalThis.fetch, getGames = () => [
     return collect(cache, games);
   }
 
-  async function getNews() {
+  async function getNews({ cachedOnly = false } = {}) {
     try {
+      if (cachedOnly) return (await readItems()).map(publicItem);
       if (!running) running = refresh().finally(() => { running = null; });
-      return (await running).map(publicItem);
+      const items = await running;
+      await startSeen(items);
+      return items.map(publicItem);
     } catch {
       return [];
     }
@@ -264,6 +267,15 @@ function createNews({ dir, fetch: fetchFn = globalThis.fetch, getGames = () => [
       return Number.isFinite(date) ? date : 0;
     } catch {
       return 0;
+    }
+  }
+
+  async function startSeen(items) {
+    if (items.length === 0) return;
+    try {
+      await fs.access(seenFile);
+    } catch {
+      await writeAtomic(seenFile, JSON.stringify({ date: items[0].date }));
     }
   }
 

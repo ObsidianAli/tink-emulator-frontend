@@ -275,4 +275,25 @@
   --layer-dialog: 10;
   --layer-hints: 20;
   --layer-blackout: 30;
+
+  --news-feature-height: calc(var(--space) * 36);
+  --news-card-height: calc(var(--space) * 26);
+  --news-card-picture: calc(var(--space) * 14);
+  --news-gap: var(--space-3);
+  --news-radius: var(--radius-large);
+  --news-angle: 140deg;
+  --news-sat-from: 60%;
+  --news-sat-to: 50%;
+  --news-hue-shift: 50;
+  --news-light-from: 50%;
+  --news-light-to: 18%;
+  --news-tink-from: var(--accent);
+  --news-tink-to: color-mix(in srgb, var(--accent) 25%, var(--bg));
+  --news-read-width: calc(var(--space) * 90);
+  --news-read-picture: calc(var(--space) * 30);
+  --news-dot-size: calc(var(--space) * 1.5);
+  --news-dot-inset: var(--space-2);
+  --press-page-duration: 500ms;
+  --press-page-angle: -50deg;
+  --press-page-depth: calc(var(--space) * 12);
 }

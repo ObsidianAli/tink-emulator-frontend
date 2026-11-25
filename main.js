@@ -600,7 +600,7 @@ app.whenReady().then(async () => {
   handle('refreshLibrary', currentLibrary);
   handle('getCover', (id) => getCover(String(id)));
   handle('getGameInfo', (id) => getGameInfo(String(id)));
-  handle('getNews', async () => ({ items: await news().getNews(), unread: await news().hasUnread() }));
+  handle('getNews', async (cachedOnly) => ({ items: await news().getNews({ cachedOnly: cachedOnly === true }), unread: await news().hasUnread() }));
   handle('getNewsImage', (id) => (typeof id === 'string' && id.length < 64 ? news().getNewsImage(id) : null));
   handle('markNewsSeen', () => news().markSeen());
   handle('launch', (id) => launch(String(id)));

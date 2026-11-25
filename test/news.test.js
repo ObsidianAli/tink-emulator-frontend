@@ -181,26 +181,29 @@ test('an image that is not a picture or is too big gives nothing', async () => {
   assert.strictEqual(await second.news.getNewsImage('game:620:1'), null);
 });
 
-test('unread follows the newest seen date', async () => {
-  const { news } = setup(routesOk());
-  assert.strictEqual(await news.hasUnread(), false);
-  await news.getNews();
-  assert.strictEqual(await news.hasUnread(), true);
-  assert.strictEqual(await news.markSeen(), true);
-  assert.strictEqual(await news.hasUnread(), false);
-});
-
-test('a newer item after markSeen is unread again', async () => {
+test('on the first run nothing is unread, later items are', async () => {
   const dir = tempDir();
   const games = [{ appId: '620', title: 'Portal 2' }];
   const first = createNews({ dir, fetch: fakeNet(routesOk()).fetch, getGames: () => games, now: () => NOW });
+  assert.strictEqual(await first.hasUnread(), false);
   await first.getNews();
-  await first.markSeen();
+  assert.strictEqual(await first.hasUnread(), false);
   const routes = routesOk();
   routes[RELEASES] = [release('v0.8.0', 'Newer', { published_at: new Date(NOW + 8 * 3600000).toISOString() })];
   const later = createNews({ dir, fetch: fakeNet(routes).fetch, getGames: () => games, now: () => NOW + 9 * 3600000 });
   await later.getNews();
   assert.strictEqual(await later.hasUnread(), true);
+  assert.strictEqual(await later.markSeen(), true);
+  assert.strictEqual(await later.hasUnread(), false);
+});
+
+test('cached-only answers without any request', async () => {
+  const { news, net } = setup(routesOk());
+  assert.deepStrictEqual(await news.getNews({ cachedOnly: true }), []);
+  await news.getNews();
+  const before = net.requests.length;
+  assert.strictEqual((await news.getNews({ cachedOnly: true })).length, 3);
+  assert.strictEqual(net.requests.length, before);
 });
 
 test('games that left the library drop out', async () => {

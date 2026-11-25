@@ -32,7 +32,7 @@ contextBridge.exposeInMainWorld('tink', {
   refreshLibrary: () => ipcRenderer.invoke('refreshLibrary'),
   getCover: (id) => ipcRenderer.invoke('getCover', id),
   getGameInfo: (id) => ipcRenderer.invoke('getGameInfo', id),
-  getNews: () => ipcRenderer.invoke('getNews'),
+  getNews: (cachedOnly) => ipcRenderer.invoke('getNews', cachedOnly === true),
   getNewsImage: (id) => ipcRenderer.invoke('getNewsImage', id),
   markNewsSeen: () => ipcRenderer.invoke('markNewsSeen'),
   getUpdate: () => ipcRenderer.invoke('getUpdate'),

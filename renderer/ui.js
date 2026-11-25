@@ -3,6 +3,7 @@ import { grid } from './grid.js';
 import { runSetup } from './setup.js';
 import { openSettings, hideSettings, settingsOpen } from './settings.js';
 import { openCaseMenu, openMenu, caseMenuOpen } from './casemenu.js';
+import { openNews, hideNews, checkNews, newsTrayIcon } from './news.js';
 import { openInfo, infoOpen } from './info.js';
 import { chooseProfile, closeProfiles } from './profiles.js';
 import { badge } from './badge.js';
@@ -99,6 +100,7 @@ function showHints() {
 
 const trayIcons = [
   { name: 'Profiles', sound: 'profiles', draw: (profile) => badge(profile), activate: () => switchProfile() },
+  { name: 'News', sound: 'news', draw: () => newsTrayIcon(), activate: () => goToNews() },
   { name: 'Controllers', sound: 'controllers', draw: () => controller(), activate: () => showControllers() },
   { name: 'Settings', sound: 'settings', draw: () => gear(), activate: () => goToSettings() },
   { name: 'Power', sound: 'power', draw: () => power(), activate: () => showPower() },
@@ -453,6 +455,22 @@ async function explain({ error, fix, console }) {
   }
 }
 
+async function goToNews() {
+  if (inSettings) return;
+  inSettings = true;
+  try {
+    await openNews();
+    await screen(async () => {
+      hideNews();
+      await renderTray().catch(report);
+      showTitle();
+      showHints();
+    });
+  } finally {
+    inSettings = false;
+  }
+}
+
 async function goToSettings(focusConsole) {
   if (inSettings) return;
   inSettings = true;
@@ -710,6 +728,7 @@ async function start() {
   });
   showNotice().catch(() => {});
   offerUpdate();
+  checkNews().then(() => renderTray()).catch(() => {});
 }
 
 start();
