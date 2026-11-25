@@ -68,7 +68,7 @@ function getEmulatedGames(settings) {
 }
 
 function groupConsoles(games) {
-  const order = [...Object.keys(CONSOLES), 'steam'];
+  const order = [...Object.keys(CONSOLES), 'steam', 'pc'];
   const found = new Map();
   for (const game of games) {
     if (!found.has(game.console)) found.set(game.console, { console: game.console, name: game.consoleName, games: [] });

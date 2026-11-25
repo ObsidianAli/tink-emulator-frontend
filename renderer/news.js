@@ -1,15 +1,11 @@
 import { element, focusGlow, scrollToNode } from './dom.js';
 import { screen } from './transition.js';
+import { trayDrawing } from './icons.js';
 
 const root = document.getElementById('news');
 const COLUMNS = 3;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAY_MS = 24 * 60 * 60 * 1000;
-const NEWS_ICON = [
-  'M4 5h13v14H6a2 2 0 0 1-2-2z',
-  'M17 9h3v8a2 2 0 0 1-2 2',
-  'M7.5 9h6M7.5 12.5h6M7.5 16h4',
-];
 
 let active = null;
 let unread = false;
@@ -37,17 +33,8 @@ export async function checkNews() {
 }
 
 export function newsTrayIcon() {
-  const ns = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(ns, 'svg');
-  const attributes = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
-  for (const [name, value] of Object.entries(attributes)) svg.setAttribute(name, value);
-  for (const d of NEWS_ICON) {
-    const path = document.createElementNS(ns, 'path');
-    path.setAttribute('d', d);
-    svg.append(path);
-  }
   const parts = document.createDocumentFragment();
-  parts.append(svg);
+  parts.append(trayDrawing('news'));
   if (unread) parts.append(element('span', 'news-dot'));
   return parts;
 }

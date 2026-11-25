@@ -29,6 +29,8 @@ export function hideSettings() {
 const HIGHLIGHTS = { rim: 'Rim', snake: 'Snake', under: 'Under' };
 const EDGES = { slide: 'Slide off', peek: 'Peek', fade: 'Fade' };
 const KEYBOARDS = { grid: 'Grid', full: 'Full' };
+const ICON_STYLES = { grey: 'Grey', disc: 'Colour when selected', glyph: 'Coloured icon' };
+const ICON_ROWS = { separate: 'Separate', bar: 'One bar' };
 const BACKGROUNDS = { tint: 'Tint', art: 'Art', drift: 'Drift' };
 
 export async function openSettings({ focusConsole } = {}) {
@@ -50,6 +52,7 @@ export async function openSettings({ focusConsole } = {}) {
     let pane = null;
     let user = null;
     let choice = null;
+    let learning = false;
 
     async function change(request, { reload = true, swap = false } = {}) {
       active.busy = true;
@@ -85,6 +88,13 @@ export async function openSettings({ focusConsole } = {}) {
     }
 
     const link = (name, label, status) => ({ id: name, label, status, hint: 'Open', activate: () => { view = name; focus = 0; render({ swap: true }); } });
+
+    async function learnButton() {
+      if (learning) return;
+      learning = true;
+      render();
+      await change(window.tink.learnScreenshotButton().finally(() => { learning = false; }), { reload: false });
+    }
 
     async function checkUpdates() {
       if (update === 'Checking…') return;
@@ -296,11 +306,21 @@ export async function openSettings({ focusConsole } = {}) {
             sound: 'toggle',
             activate: () => change(window.tink.setHomeProfiles(!state.homeProfiles), { reload: false }),
           },
+          choose('icons', 'Icons', ICON_STYLES, state.iconStyle, (value) => window.tink.setIconStyle(value)),
+          choose('iconRow', 'Icon row', ICON_ROWS, state.iconRow, (value) => window.tink.setIconRow(value)),
           choose('background', 'Background', BACKGROUNDS, state.background, (value) => window.tink.setBackground(value)),
         ],
         system: () => [
           { label: 'Version', status: state.version, plain: true },
           { id: 'update', label: 'Check for updates', status: update, hint: 'Check', activate: checkUpdates },
+          {
+            id: 'screenshot',
+            label: 'Screenshot button',
+            status: learning ? 'Press a button' : state.screenshotButton ? state.screenshotButton.label : 'None',
+            hint: 'Set',
+            second: state.screenshotButton ? { label: 'Clear', run: () => change(window.tink.clearScreenshotButton(), { reload: false }) } : null,
+            activate: learnButton,
+          },
         ],
       };
       return panes[CATEGORIES[category].id]();

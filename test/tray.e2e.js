@@ -55,7 +55,7 @@ async function main() {
   assert.strictEqual(await hints(), 0, 'the shelf has no hints');
   assert.deepStrictEqual(
     await page.$$eval('.tray-icon', (nodes) => nodes.map((n) => n.getAttribute('aria-label'))),
-    ['Profiles', 'Controllers', 'Settings', 'Power'],
+    ['Profiles', 'Store', 'Album', 'News', 'Controllers', 'Settings', 'Power'],
   );
   const title = await page.textContent('#title');
   await shot('1-shelf');
@@ -78,7 +78,7 @@ async function main() {
   await key('ArrowLeft');
   assert.strictEqual(await focusedIcon(), 'Profiles', 'the row stops at its first icon');
   await key('ArrowRight');
-  assert.strictEqual(await focusedIcon(), 'Controllers');
+  assert.strictEqual(await focusedIcon(), 'Store');
   await key('ArrowUp');
   assert.strictEqual(await focusedIcon(), null);
   assert.strictEqual(await page.textContent('#title'), title);
@@ -91,7 +91,7 @@ async function main() {
   assert.ok(!(await visible('#profiles')));
   assert.strictEqual(await focusedIcon(), 'Profiles');
 
-  await key('ArrowRight');
+  for (let i = 0; i < 4; i++) await key('ArrowRight');
   await key('Enter');
   await page.waitForSelector('#panel:not([hidden])');
   await sleep(500);

@@ -212,10 +212,12 @@ test('the running game can be brought back to front, even with a new window', as
   world.windows = [{ hwnd: 12, pid: 100 }];
   assert.strictEqual(session.focus(), true);
   assert.deepStrictEqual(world.fronted, [9, 12]);
+  assert.strictEqual(session.window(), 12);
   game.exit();
   await session.done;
   assert.strictEqual(session.alive(), false);
   assert.strictEqual(session.focus(), false);
+  assert.strictEqual(session.window(), null);
 });
 
 test('without the renderer answering, the handoff goes ahead after 300 ms', async () => {

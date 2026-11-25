@@ -161,7 +161,7 @@ function createCovers({ dir, enabled, steamGridKey, fetch: fetchFn = globalThis.
 
   function sources(game) {
     if (game.art) return [() => firstImage(game, [game.art.cover, game.art.fallback])];
-    const system = CONSOLES[game.console].libretro;
+    const system = CONSOLES[game.console] && CONSOLES[game.console].libretro;
     return [system && (() => fromLibretro(system, game)), steamGridKey && (() => fromGridDb(game))].filter(Boolean);
   }
 

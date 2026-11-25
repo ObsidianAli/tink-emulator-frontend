@@ -5,6 +5,9 @@ const { pickGameWindow, descendants } = require('./win32');
 const POLL_MS = 250;
 const PLAIN_POLL_MS = 500;
 const STEAM_GRACE_MS = 750;
+// A PC game's launcher can quit a few seconds before the game itself starts.
+const PC_GRACE_MS = 3000;
+const PC_GIVE_UP_MS = 10 * 1000;
 // Some Steam games start through another company's launcher installed outside their own folder.
 const LAUNCHER_AFTER_MS = 20 * 1000;
 const PLAIN_HANDOFF_MS = 800;
@@ -49,8 +52,16 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
     onState(next, info);
   }
 
+  function rememberExe(hwnd) {
+    const processes = attempt(platform.processes);
+    const window = (attempt(platform.windows) || []).find((w) => w.hwnd === hwnd);
+    const owner = processes && window ? processes.find((row) => row.pid === window.pid) : null;
+    if (owner && owner.exe) attempt(target.onExe, owner.exe);
+  }
+
   async function handoff(hwnd) {
     set('handoff');
+    if (target.kind === 'pc' && hwnd !== null) rememberExe(hwnd);
     await Promise.race([acked, clock.sleep(ACK_TIMEOUT_MS)]);
     gameWindow = hwnd;
     const front = hwnd === null ? null : Boolean(attempt(platform.bringToFront, hwnd));
@@ -64,11 +75,22 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
 
   function steamPids() {
     const processes = attempt(platform.processes);
-    return processes ? new Set(gameProcesses(processes, target.installDir)) : null;
+    return processes ? new Set(target.match ? target.match(processes) : gameProcesses(processes, target.installDir)) : null;
   }
 
   const appId = () => Promise.resolve(attempt(platform.runningAppId)).catch(() => null);
   const findWindow = (pids) => (pids && pids.size ? pickGameWindow(attempt(platform.windows), pids) : null);
+
+  // A game seen before keeps the window of the exe that really showed it, not a launcher's.
+  function windowOf(processes, pids) {
+    const real = target.realExe && target.realExe();
+    if (real) {
+      const own = new Set(processes.filter((row) => pids.has(row.pid) && row.exe && row.exe.toLowerCase() === real.toLowerCase()).map((row) => row.pid));
+      const hwnd = findWindow(own);
+      if (hwnd !== null) return hwnd;
+    }
+    return findWindow(pids);
+  }
 
   async function watchEmulator() {
     let exit = null;
@@ -94,6 +116,7 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
 
   async function watchSteamNative() {
     const start = clock.now();
+    const pc = target.kind === 'pc';
     let seen = false;
     let lastSeen = 0;
     let viaLauncher = false;
@@ -102,20 +125,20 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
       const now = clock.now();
       const processes = attempt(platform.processes);
       if (processes) {
-        const pids = new Set(gameProcesses(processes, target.installDir));
+        const pids = new Set(target.match ? target.match(processes) : gameProcesses(processes, target.installDir));
         if (pids.size) {
           seen = true;
           lastSeen = now;
           if (state === 'loading') {
-            const hwnd = findWindow(pids);
+            const hwnd = windowOf(processes, pids);
             if (hwnd !== null || now - start >= LAUNCHER_AFTER_MS) {
               await handoff(hwnd);
               continue;
             }
           }
         } else if (seen) {
-          if (now - lastSeen >= STEAM_GRACE_MS || (await appId()) === 0) return { status: 'ended' };
-        } else if (now - start >= LAUNCHER_AFTER_MS) {
+          if (now - lastSeen >= (pc ? PC_GRACE_MS : STEAM_GRACE_MS) || (!pc && (await appId()) === 0)) return { status: 'ended' };
+        } else if (!pc && now - start >= LAUNCHER_AFTER_MS) {
           const running = await appId();
           const steamUp = processes.some(({ exe }) => exe && path.basename(exe).toLowerCase() === 'steam.exe');
           if (running) viaLauncher = true;
@@ -126,7 +149,8 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
           }
         }
       }
-      if (!seen && !viaLauncher && now - start >= START_TIMEOUT_MS) return { status: 'failed', timedOut: true };
+      const patience = pc && target.child && target.child.exitCode !== null ? PC_GIVE_UP_MS : START_TIMEOUT_MS;
+      if (!seen && !viaLauncher && now - start >= patience) return { status: 'failed', timedOut: true };
       await nap(POLL_MS);
     }
   }
@@ -156,7 +180,7 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
     set('loading');
     let outcome;
     try {
-      if (target.kind === 'emulator') outcome = await watchEmulator();
+      if (target.kind === 'emulator' || (target.kind === 'pc' && !native)) outcome = await watchEmulator();
       else outcome = await (native ? watchSteamNative() : watchSteamPlain());
     } catch (error) {
       outcome = { status: 'failed', error };
@@ -169,6 +193,14 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
       set('idle');
     }
     return outcome;
+  }
+
+  function currentWindow() {
+    if (!native) return gameWindow;
+    if (target.kind === 'emulator') return findWindow(emulatorPids()) ?? gameWindow;
+    const processes = attempt(platform.processes);
+    const pids = steamPids();
+    return (processes && pids && pids.size ? windowOf(processes, pids) : findWindow(pids)) ?? gameWindow;
   }
 
   const done = run();
@@ -190,9 +222,10 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
       const pids = steamPids();
       return pids === null || pids.size > 0 || gameWindow === null;
     },
+    window: () => (state === 'playing' ? currentWindow() : null),
     focus() {
       if (state !== 'playing') return false;
-      const hwnd = native ? findWindow(target.kind === 'emulator' ? emulatorPids() : steamPids()) ?? gameWindow : gameWindow;
+      const hwnd = currentWindow();
       return hwnd !== null && Boolean(attempt(platform.bringToFront, hwnd));
     },
   };

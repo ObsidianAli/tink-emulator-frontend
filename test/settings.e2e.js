@@ -219,6 +219,10 @@ async function main() {
   assert.ok((await focusedRow()).startsWith('Profiles on Home | On'), await focusedRow());
   assert.strictEqual(readSettings().homeProfiles, true);
   await key('ArrowDown');
+  await pickValue('Icons', 'Colour when selected', 'Coloured icon', 'iconStyle', 'glyph');
+  await key('ArrowDown');
+  await pickValue('Icon row', 'Separate', 'One bar', 'iconRow', 'bar');
+  await key('ArrowDown');
   await pickValue('Background', 'Tint', 'Drift', 'background', 'drift');
 
   await key('Escape');

@@ -1641,3 +1641,530 @@ main:has(> #news:not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, #t
     transform: perspective(var(--press-page-depth)) rotateY(var(--press-page-angle));
   }
 }
+
+.tray-icon {
+  --disc: var(--surface-raised);
+  background: var(--disc);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.tray-icon[data-icon='Store'] {
+  --icon-colour: var(--profile-blue);
+}
+
+.tray-icon[data-icon='Album'] {
+  --icon-colour: var(--profile-purple);
+}
+
+.tray-icon[data-icon='News'] {
+  --icon-colour: var(--profile-orange);
+}
+
+.tray-icon[data-icon='Controllers'] {
+  --icon-colour: var(--profile-green);
+}
+
+.tray-icon[data-icon='Settings'] {
+  --icon-colour: var(--profile-teal);
+}
+
+.tray-icon[data-icon='Power'] {
+  --icon-colour: var(--profile-red);
+}
+
+#tray[data-icons='disc'] .tray-icon:focus {
+  --disc: var(--icon-colour, var(--surface-raised));
+}
+
+#tray[data-icons='glyph'] .tray-icon {
+  color: color-mix(in oklab, var(--icon-colour, var(--text)) var(--icon-tint), white);
+}
+
+#tray[data-row='bar'] {
+  width: fit-content;
+  margin-inline: auto;
+  bottom: calc(var(--tray-bottom) - var(--tray-bar-padding));
+  padding: var(--tray-bar-padding) calc(var(--tray-bar-padding) * 2);
+  border-radius: var(--radius-round);
+  background: var(--surface-raised);
+}
+
+.tray-drawing {
+  overflow: visible;
+}
+
+.icon-fill {
+  fill: currentColor;
+}
+
+.icon-line,
+.icon-cut {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--icon-line);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-cut {
+  stroke: var(--disc);
+  stroke-width: var(--icon-cut);
+}
+
+.icon-hole {
+  fill: var(--disc);
+}
+
+.icon-edge {
+  stroke: var(--disc);
+  stroke-width: var(--icon-edge);
+}
+
+.icon-round {
+  stroke: currentColor;
+  stroke-width: var(--icon-edge);
+  stroke-linejoin: round;
+}
+
+.icon-hole,
+.icon-cut,
+.icon-edge {
+  transition: fill var(--duration-fast) var(--ease-out), stroke var(--duration-fast) var(--ease-out);
+}
+
+#album {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-8) var(--hints-height);
+}
+
+#album[hidden] {
+  display: none;
+}
+
+main:has(> #album:not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, #tray, #all-games, #message, #notice) {
+  visibility: hidden;
+}
+
+#album h1 {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.album-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: min-content;
+  gap: var(--album-gap);
+  padding: var(--space);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.album-shot {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  border-radius: var(--album-radius);
+  background: var(--surface);
+  outline: none;
+}
+
+.album-shot img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--album-radius);
+  object-fit: cover;
+}
+
+.album-shot:focus .focus-glow {
+  opacity: 1;
+  animation: focus-breath calc(var(--focus-period) / 2) var(--focus-ease) infinite alternate;
+}
+
+.album-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--album-fade-height);
+  background: linear-gradient(transparent, var(--album-fade-colour) 70%);
+  pointer-events: none;
+}
+
+.album-caption {
+  position: absolute;
+  left: var(--album-caption-inset);
+  bottom: var(--hints-height);
+  pointer-events: none;
+}
+
+.album-caption[hidden] {
+  display: none;
+}
+
+.album-caption-text,
+.album-viewer-caption {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-body);
+}
+
+.album-caption-text em,
+.album-viewer-caption em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: var(--text-small);
+}
+
+.album-empty {
+  margin: var(--space-4) var(--space);
+  color: var(--muted);
+  font-size: var(--text-body);
+}
+
+.album-viewer {
+  position: absolute;
+  inset: 0;
+  background: var(--album-viewer-bg);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.album-viewer.open {
+  opacity: 1;
+}
+
+.album-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity var(--album-viewer-fade) var(--ease-out);
+}
+
+.album-layer.shown {
+  opacity: 1;
+}
+
+.album-layer img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.album-viewer-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: calc(var(--space) * 10) var(--album-caption-inset) var(--hints-height);
+  background: linear-gradient(transparent, var(--album-viewer-shade));
+}
+
+.album-viewer-caption .album-caption-text {
+  display: contents;
+}
+
+.tray-icon.pressed[data-icon='Album'] :is(.icon-front, .icon-rear) {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.tray-icon.pressed[data-icon='Album'] .icon-front {
+  animation: tray-album-front var(--album-press-duration) var(--ease-out);
+}
+
+.tray-icon.pressed[data-icon='Album'] .icon-rear {
+  animation: tray-album-rear var(--album-press-duration) var(--ease-out);
+}
+
+@keyframes tray-album-front {
+  40% {
+    transform: rotate(var(--album-press-front));
+  }
+}
+
+@keyframes tray-album-rear {
+  40% {
+    transform: rotate(var(--album-press-rear));
+  }
+}
+
+#store {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: var(--settings-side-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  box-sizing: border-box;
+  padding: var(--space-6) var(--space-8) calc(var(--space-3) + var(--hints-height));
+}
+
+#store[hidden] {
+  display: none;
+}
+
+#store h1 {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--weight-bold);
+}
+
+#store .settings-categories h1 {
+  margin-bottom: var(--space-3);
+}
+
+#store .settings-pane {
+  position: relative;
+  gap: var(--space-2);
+}
+
+main:has(> #store:not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, #tray, #all-games, #message, #notice) {
+  visibility: hidden;
+}
+
+body:has(main > #store:not([hidden])) .backdrop-art.shown {
+  opacity: var(--art-opacity-behind);
+}
+
+body:has(main > #store:not([hidden])) .backdrop-blob {
+  opacity: var(--drift-opacity-behind);
+}
+
+.store-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#store .setup-row {
+  padding: var(--settings-row-padding);
+  background: transparent;
+}
+
+#store .setup-row:focus {
+  background: var(--text);
+}
+
+#store .setup-row.group-start {
+  margin-top: var(--space-4);
+}
+
+.store-covers {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(var(--store-columns), minmax(0, 1fr));
+  grid-auto-rows: min-content;
+  gap: var(--store-gap);
+  min-height: 0;
+  margin-bottom: var(--space-6);
+  padding: var(--space-2);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.store-tile {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--cover-radius);
+  outline: none;
+  opacity: var(--tile-dim);
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.store-tile.focused {
+  opacity: 1;
+}
+
+.store-art {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-tile);
+}
+
+.store-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.store-tile.installing .store-art {
+  opacity: var(--store-wait-dim);
+}
+
+.store-tile.focused .focus-glow {
+  opacity: 1;
+  animation: focus-breath calc(var(--focus-period) / 2) var(--focus-ease) infinite alternate;
+}
+
+.store-progress {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.store-ring {
+  grid-area: 1 / 1;
+  width: var(--store-ring-size);
+  height: var(--store-ring-size);
+  border-radius: var(--radius-round);
+  background: conic-gradient(var(--text) calc(var(--p) * 1%), var(--store-ring-track) 0);
+  mask: radial-gradient(circle, transparent calc(var(--store-ring-size) / 2 - var(--store-ring-width) - var(--line-width)), black calc(var(--store-ring-size) / 2 - var(--store-ring-width)));
+}
+
+.store-progress.waiting .store-ring {
+  --p: 25;
+  animation: loading-spin var(--store-spin-period) linear infinite;
+}
+
+.store-percent {
+  grid-area: 1 / 1;
+  font-size: var(--text-small);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+#store .setup-name {
+  display: flex;
+  align-items: center;
+}
+
+.store-name {
+  position: absolute;
+  left: calc(var(--space-6) + var(--space-2));
+  right: 0;
+  bottom: 0;
+  max-width: calc(var(--space) * 70);
+  margin: 0;
+  overflow: hidden;
+  color: var(--accent);
+  font-size: var(--text-body);
+  font-weight: var(--weight-bold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.store-empty {
+  margin: 0;
+  padding: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-body);
+}
+
+.store-path {
+  margin: 0 0 var(--space-2);
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.store-icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--store-icon-size);
+  height: var(--store-icon-size);
+  margin-right: var(--space-2);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  vertical-align: middle;
+}
+
+.store-icon.folder {
+  background: var(--surface-raised);
+  box-shadow: inset 0 0 0 var(--line-width) var(--line);
+}
+
+.store-icon img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+}
+
+.store-spinner {
+  align-self: flex-start;
+  box-sizing: border-box;
+  width: var(--loading-spinner-size);
+  height: var(--loading-spinner-size);
+  margin: var(--space-2);
+  border: var(--loading-spinner-line) solid var(--loading-spinner-track);
+  border-top-color: var(--loading-spinner-colour);
+  border-radius: var(--radius-round);
+  animation: loading-spin var(--loading-spinner-period) linear infinite;
+}
+
+.tray-icon[data-icon='Store'] svg g {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+.tray-icon.pressed[data-icon='Store'] .icon-arrow {
+  animation: store-arrow var(--press-store-duration) var(--ease-out);
+}
+
+.tray-icon.pressed[data-icon='Store'] .icon-bag {
+  animation: store-bag var(--press-store-duration) var(--ease-out);
+}
+
+.tray-icon.pressed[data-icon='Store'] .icon-handle {
+  animation: store-handle var(--press-store-duration) var(--ease-out);
+}
+
+@keyframes store-arrow {
+  0% {
+    opacity: 0;
+    transform: translateY(var(--press-store-drop));
+  }
+  30% {
+    opacity: 1;
+  }
+  55% {
+    transform: translateY(var(--press-store-settle));
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes store-bag {
+  0%, 45% {
+    transform: none;
+  }
+  60% {
+    transform: scaleY(0.9) scaleX(1.04);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes store-handle {
+  0%, 50% {
+    transform: none;
+  }
+  62% {
+    transform: translateY(var(--press-store-handle));
+  }
+  100% {
+    transform: none;
+  }
+}
