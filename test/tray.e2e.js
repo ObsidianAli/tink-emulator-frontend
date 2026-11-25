@@ -86,6 +86,7 @@ async function main() {
 
   await key('ArrowDown');
   await key('Enter');
+  await sleep(300);
   assert.ok(await visible('#profiles'), 'the picker opens');
   await key('Escape');
   assert.ok(!(await visible('#profiles')));

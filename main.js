@@ -744,14 +744,11 @@ function setFullscreen(on) {
   return state;
 }
 
-const setLeftEdge = (mode) => changeSettings((current) => options.setLeftEdge(current, mode));
 const setFocusStyle = (mode) => changeSettings((current) => options.setFocusStyle(current, mode));
 const setBackground = (mode) => changeSettings((current) => options.setBackground(current, mode));
 const setTextStyle = (mode) => changeSettings((current) => options.setTextStyle(current, mode));
 const setKeyboard = (mode) => changeSettings((current) => options.setKeyboard(current, mode));
-const setIconStyle = (mode) => changeSettings((current) => options.setIconStyle(current, mode));
 const setSounds = (picked) => changeSettings((current) => options.setSounds(current, picked));
-const setIconRow = (mode) => changeSettings((current) => options.setIconRow(current, mode));
 const setHeart = (mode) => changeSettings((current) => options.setHeart(current, mode));
 const setGameOptions = (mode) => changeSettings((current) => options.setGameOptions(current, mode));
 const setCoverPicker = (mode) => changeSettings((current) => options.setCoverPicker(current, mode));
@@ -886,14 +883,11 @@ app.whenReady().then(async () => {
   handle('finishSetup', (wantsCovers) => finishSetup(wantsCovers === true));
   handle('getSettings', getSettings);
   handle('setFullscreen', (on) => setFullscreen(on === true));
-  handle('setLeftEdge', (mode) => setLeftEdge(String(mode)));
   handle('setFocusStyle', (mode) => setFocusStyle(String(mode)));
   handle('setBackground', (mode) => setBackground(String(mode)));
   handle('setTextStyle', (mode) => setTextStyle(String(mode)));
   handle('setKeyboard', (mode) => setKeyboard(String(mode)));
-  handle('setIconStyle', (mode) => setIconStyle(String(mode)));
   handle('setSounds', (picked) => setSounds(picked && typeof picked === 'object' ? picked : {}));
-  handle('setIconRow', (mode) => setIconRow(String(mode)));
   handle('setHeart', (mode) => setHeart(String(mode)));
   handle('setGameOptions', (mode) => setGameOptions(String(mode)));
   handle('setCoverPicker', (mode) => setCoverPicker(String(mode)));

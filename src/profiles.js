@@ -4,7 +4,7 @@ const COLOURS = ['blue', 'green', 'orange', 'red', 'purple', 'teal'];
 const RECENT_MAX = 200;
 const NAME_MAX = 10;
 const PROFILES_MAX = 8;
-const SORTS = ['recent', 'az', 'console', 'favourites'];
+const SORTS = ['az', 'favourites'];
 const ROW_MAX = 12;
 
 const cleanName = (name) => (typeof name === 'string' ? name.trim().slice(0, NAME_MAX) : '');
@@ -114,16 +114,12 @@ function sortByRecency(games, profile, seen) {
 }
 
 function sortGames(games, sort, profile, seen = {}) {
-  const recent = sortByRecency(games, profile, seen);
   if (sort === 'az') return [...games].sort(byTitle);
-  if (sort === 'console') return games;
-  if (sort === 'favourites') {
-    return [...recent.filter((g) => profile.favourites.includes(g.key)), ...recent.filter((g) => !profile.favourites.includes(g.key))];
-  }
-  return recent;
+  const recent = sortByRecency(games, profile, seen);
+  return [...recent.filter((g) => profile.favourites.includes(g.key)), ...recent.filter((g) => !profile.favourites.includes(g.key))];
 }
 
-const homeRow = (games, profile, seen = {}) => sortGames(games, 'recent', profile, seen).slice(0, ROW_MAX);
+const homeRow = (games, profile, seen = {}) => sortByRecency(games, profile, seen).slice(0, ROW_MAX);
 
 function settingsView(profile, consoles, hiddenOwned = []) {
   return {

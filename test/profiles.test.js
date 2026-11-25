@@ -19,7 +19,7 @@ test('old settings get one profile with nothing hidden, and the rest is kept', (
   assert.strictEqual(settings.profiles.length, 1);
   const [profile] = settings.profiles;
   assert.deepStrictEqual({ ...profile, id: undefined }, {
-    id: undefined, name: 'Player', colour: 'blue', avatar: null, recent: [], favourites: [], hiddenConsoles: [], hiddenGames: [], playedAt: {}, sort: 'recent',
+    id: undefined, name: 'Player', colour: 'blue', avatar: null, recent: [], favourites: [], hiddenConsoles: [], hiddenGames: [], playedAt: {}, sort: 'az',
   });
   assert.ok(profile.id);
   assert.strictEqual(settings.lastProfile, profile.id);
@@ -87,28 +87,26 @@ test('sorting by history ignores unknown keys and leaves never-played games in p
   assert.deepStrictEqual(p.sortByHistory(list, ['d', 'gone', 'b']).map((g) => g.key), ['d', 'b', 'a', 'c']);
 });
 
-test('the All games orders: last played, A to Z, console, favourites first', () => {
+test('the All games orders: A to Z and favourites first', () => {
   const profile = fresh().profiles[0];
   const games = p.visibleGames(consoles, profile);
   p.recordPlay(profile, 'snes:Gamma');
   p.recordPlay(profile, 'gamecube:Beta');
   p.toggleFavourite(profile, 'gamecube:Delta');
   p.toggleFavourite(profile, 'snes:Gamma');
-  assert.deepStrictEqual(titles(p.sortGames(games, 'recent', profile)), ['Beta', 'Gamma', 'Alpha', 'Delta']);
   assert.deepStrictEqual(titles(p.sortGames(games, 'az', profile)), ['Alpha', 'Beta', 'Delta', 'Gamma']);
-  assert.deepStrictEqual(titles(p.sortGames(games, 'console', profile)), ['Beta', 'Delta', 'Alpha', 'Gamma']);
   assert.deepStrictEqual(titles(p.sortGames(games, 'favourites', profile)), ['Gamma', 'Delta', 'Beta', 'Alpha']);
 });
 
-test('a profile remembers its sort, and an unknown one falls back to last played', () => {
+test('a profile remembers its sort, and an unknown one falls back to A to Z', () => {
   const settings = fresh();
-  assert.strictEqual(settings.profiles[0].sort, 'recent');
-  settings.profiles[0].sort = 'az';
+  assert.strictEqual(settings.profiles[0].sort, 'az');
+  settings.profiles[0].sort = 'favourites';
+  p.ensureProfiles(settings);
+  assert.strictEqual(settings.profiles[0].sort, 'favourites');
+  settings.profiles[0].sort = 'console';
   p.ensureProfiles(settings);
   assert.strictEqual(settings.profiles[0].sort, 'az');
-  settings.profiles[0].sort = 'sideways';
-  p.ensureProfiles(settings);
-  assert.strictEqual(settings.profiles[0].sort, 'recent');
 });
 
 test('a game installed after one was played comes first, and a game played since comes before it', () => {
@@ -118,7 +116,7 @@ test('a game installed after one was played comes first, and a game played since
   const seen = { 'gamecube:Beta': 0, 'gamecube:Delta': 0, 'snes:Alpha': 0, 'snes:Gamma': 2000 };
   assert.deepStrictEqual(titles(p.homeRow(games, profile, seen)), ['Gamma', 'Beta', 'Alpha', 'Delta']);
   p.recordPlay(profile, 'snes:Alpha', 3000);
-  assert.deepStrictEqual(titles(p.sortGames(games, 'recent', profile, seen)), ['Alpha', 'Gamma', 'Beta', 'Delta']);
+  assert.deepStrictEqual(titles(p.homeRow(games, profile, seen)), ['Alpha', 'Gamma', 'Beta', 'Delta']);
   assert.deepStrictEqual(titles(p.sortGames(games, 'az', profile, seen)), ['Alpha', 'Beta', 'Delta', 'Gamma']);
 });
 

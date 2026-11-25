@@ -32,13 +32,14 @@ trayLabel.id = 'tray-label';
 
 let row = [];
 let games = [];
-let sort = 'recent';
+let sort = 'az';
 let inGrid = false;
 let sorting = false;
 let launching = false;
 let inSettings = false;
 let inPicker = false;
 let inPanel = false;
+let pressing = false;
 // False until the library has loaded once, so keys meant for setup don't move into the icon row.
 let ready = false;
 let changing = false;
@@ -70,6 +71,7 @@ function showMessage(text) {
 const focusedGame = () => (inGrid ? grid.game() : shelf.game());
 
 const titleOutMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--duration-title-out'));
+const pressHoldMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--press-hold'));
 let titleKey = null;
 let titleTimer = 0;
 
@@ -113,11 +115,11 @@ function showHints() {
 }
 
 const trayIcons = [
-  { name: 'Profiles', sound: 'profiles', draw: (profile) => badge(profile), activate: () => switchProfile() },
-  { name: 'Store', sound: 'store', draw: () => trayDrawing('store'), activate: () => goToStore() },
-  { name: 'Album', sound: 'album', draw: () => trayDrawing('album'), activate: () => goToAlbum() },
-  { name: 'News', sound: 'news', draw: () => newsTrayIcon(), activate: () => goToNews() },
-  { name: 'Controllers', sound: 'controllers', draw: () => trayDrawing('controllers'), activate: () => showControllers() },
+  { name: 'Profiles', sound: 'profiles', hold: true, draw: (profile) => badge(profile), activate: () => switchProfile() },
+  { name: 'Store', sound: 'store', hold: true, draw: () => trayDrawing('store'), activate: () => goToStore() },
+  { name: 'Album', sound: 'album', hold: true, draw: () => trayDrawing('album'), activate: () => goToAlbum() },
+  { name: 'News', sound: 'news', hold: true, draw: () => newsTrayIcon(), activate: () => goToNews() },
+  { name: 'Controllers', sound: 'controllers', hold: true, draw: () => trayDrawing('controllers'), activate: () => showControllers() },
   { name: 'Settings', sound: 'settings', draw: () => trayDrawing('settings'), activate: () => goToSettings() },
   { name: 'Power', sound: 'power', draw: () => trayDrawing('power'), activate: () => showPower() },
 ];
@@ -224,7 +226,7 @@ function renderTop(profiles, current, shown) {
     node.setAttribute('aria-label', profile.name);
     node.append(badge(profile), focusGlow());
     node.addEventListener('click', () => {
-      if (!ready || inMenu || inPicker || inPanel || inSettings || launching || settingsOpen() || document.querySelector('.dialog-scrim')) return;
+      if (!ready || pressing || inMenu || inPicker || inPanel || inSettings || launching || settingsOpen() || document.querySelector('.dialog-scrim')) return;
       topFocus = index;
       trayFocus = -1;
       showTitle();
@@ -278,8 +280,6 @@ async function renderTray() {
   const profile = profiles.find((p) => p.id === last) || profiles[0];
   currentProfile = profile;
   renderTop(profiles, profile, shown.homeProfiles !== false);
-  tray.dataset.icons = shown.iconStyle;
-  tray.dataset.row = shown.iconRow;
   document.body.dataset.text = shown.textStyle;
   setSounds(shown.sounds);
   gameOptions = shown.gameOptions;
@@ -293,7 +293,7 @@ async function renderTray() {
     node.dataset.icon = icon.name;
     node.append(icon.draw(profile), focusGlow());
     node.addEventListener('click', () => {
-      if (!ready || inMenu || inPicker || inPanel || inSettings || launching || settingsOpen() || document.querySelector('.dialog-scrim')) return;
+      if (!ready || pressing || inMenu || inPicker || inPanel || inSettings || launching || settingsOpen() || document.querySelector('.dialog-scrim')) return;
       trayFocus = trayIcons.indexOf(icon);
       topFocus = -1;
       showTitle();
@@ -309,7 +309,13 @@ function pressTray(icon) {
   node.classList.remove('pressed');
   void node.offsetWidth;
   node.classList.add('pressed');
-  icon.activate();
+  if (icon.hold) {
+    pressing = true;
+    setTimeout(() => {
+      pressing = false;
+      icon.activate();
+    }, pressHoldMs);
+  } else icon.activate();
   return icon.sound;
 }
 
@@ -554,7 +560,6 @@ async function goToSettings(focusConsole, focusCategory) {
   try {
     const changed = await openSettings({ focusConsole, focusCategory });
     const shown = await window.tink.getSettings();
-    shelf.setLeftEdge(shown.leftEdge);
     shelf.setFocusStyle(shown.focusStyle);
     await screen(async () => {
       hideSettings();
@@ -608,7 +613,7 @@ listenForInput((action) => {
     window.tink.cancelLaunch();
     return 'back';
   }
-  if (changingScreen() || settingsOpen() || inSettings || inPicker || inMenu || caseMenuOpen() || optionsOpen() || infoOpen() || coversOpen() || panelOpen() || inPanel) return null;
+  if (pressing || changingScreen() || settingsOpen() || inSettings || inPicker || inMenu || caseMenuOpen() || optionsOpen() || infoOpen() || coversOpen() || panelOpen() || inPanel) return null;
   if (action === 'view') {
     switchProfile();
     return 'confirm';
