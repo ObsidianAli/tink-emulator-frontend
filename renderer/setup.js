@@ -1,4 +1,4 @@
-import { element, focusRow, shortPath } from './dom.js';
+import { element, focusGlow, focusRow, shortPath } from './dom.js';
 
 const root = document.getElementById('setup');
 let active = null;
@@ -90,6 +90,7 @@ export function runSetup(initial) {
         if (item.sub) name.append(element('span', 'setup-sub', item.sub));
         row.append(name);
         if (item.status) row.append(element('span', item.found ? 'setup-status found' : 'setup-status', item.status));
+        row.append(focusGlow());
         return row;
       });
       list.append(...buttons);
@@ -98,6 +99,7 @@ export function runSetup(initial) {
       if (next) {
         const button = element('button', 'setup-next', next);
         button.type = 'button';
+        button.append(focusGlow());
         buttons.push(button);
         children.push(button);
       }

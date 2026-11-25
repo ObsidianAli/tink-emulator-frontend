@@ -80,6 +80,10 @@ function showAllGames(profile) {
   profile.hiddenGames = [];
 }
 
+function showGame(profile, key) {
+  profile.hiddenGames = profile.hiddenGames.filter((k) => k !== key);
+}
+
 function toggleConsole(profile, id) {
   const hidden = profile.hiddenConsoles.includes(id);
   profile.hiddenConsoles = hidden ? profile.hiddenConsoles.filter((c) => c !== id) : [...profile.hiddenConsoles, id];
@@ -116,10 +120,14 @@ function settingsView(profile, consoles) {
   return {
     consoleList: consoles.map((item) => ({ id: item.console, name: item.name, hidden: profile.hiddenConsoles.includes(item.console) })),
     hiddenGames: profile.hiddenGames.length,
+    hiddenList: consoles
+      .flatMap((item) => item.games.map((game) => ({ key: game.key, title: game.title, consoleName: item.name })))
+      .filter((game) => profile.hiddenGames.includes(game.key))
+      .sort((a, b) => a.title.localeCompare(b.title, 'en', { numeric: true })),
   };
 }
 
 module.exports = {
   COLOURS, ICONS, DEFAULT_ICON, RECENT_MAX, PROFILES_MAX, SORTS, ROW_MAX, ensureProfiles, activeProfile, addProfile, editProfile, removeProfile, recordPlay, toggleFavourite,
-  hideGame, showAllGames, toggleConsole, visibleGames, sortGames, homeRow, sortByHistory, settingsView,
+  hideGame, showGame, showAllGames, toggleConsole, visibleGames, sortGames, homeRow, sortByHistory, settingsView,
 };

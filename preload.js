@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('tink', {
   hideGame: (id) => ipcRenderer.invoke('hideGame', id),
   toggleConsole: (id) => ipcRenderer.invoke('toggleConsole', id),
   setSort: (sort) => ipcRenderer.invoke('setSort', sort),
+  showGame: (key) => ipcRenderer.invoke('showGame', key),
   showHiddenGames: () => ipcRenderer.invoke('showHiddenGames'),
   getLibrary: () => ipcRenderer.invoke('getLibrary'),
   refreshLibrary: () => ipcRenderer.invoke('refreshLibrary'),

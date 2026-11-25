@@ -1,4 +1,4 @@
-import { element } from './dom.js';
+import { element, focusGlow } from './dom.js';
 
 const root = document.getElementById('case-menu');
 const scrim = element('div', 'menu-scrim');
@@ -30,6 +30,7 @@ export function openMenu({ choices, anchor = null }) {
     const nodes = choices.map((choice, index) => {
       const node = element('button', 'setup-row', choice.label);
       node.type = 'button';
+      node.append(focusGlow());
       node.addEventListener('click', () => {
         focus = index;
         active.handle('a');

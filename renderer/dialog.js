@@ -30,6 +30,10 @@ function showDialog({ message, confirm = 'OK', cancel, sound = 'error' }) {
       const button = document.createElement('button');
       button.type = 'button';
       button.textContent = label;
+      const glow = document.createElement('span');
+      glow.className = 'focus-glow';
+      glow.append(document.createElement('span'));
+      button.append(glow);
       button.addEventListener('click', () => close(value));
       return button;
     });

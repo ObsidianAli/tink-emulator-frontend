@@ -595,6 +595,7 @@ app.whenReady().then(async () => {
     changeActive((profile) => { if (profiles.SORTS.includes(sort)) profile.sort = sort; });
     return currentLibrary();
   });
+  handle('showGame', (key) => { changeActive((profile) => profiles.showGame(profile, String(key))); return getSettings(); });
   handle('showHiddenGames', () => { changeActive(profiles.showAllGames); return getSettings(); });
   handle('getLibrary', getLibrary);
   handle('refreshLibrary', currentLibrary);
@@ -609,7 +610,7 @@ app.whenReady().then(async () => {
   handle('handoffReady', () => {
     if (session) session.ready();
   });
-  handle('power', (action) => (action === 'close' ? app.quit() : powerAction(String(action))));
+  handle('power', (action) => (action === 'close' ? app.quit() : app.isPackaged && powerAction(String(action))));
   ipcMain.handle('logError', (_event, text) => log('Screen error', String(text).slice(0, 2000)));
   createWindow();
 });

@@ -1,6 +1,6 @@
-import { element, focusRow, shortPath } from './dom.js';
+import { element, focusGlow, focusRow, shortPath } from './dom.js';
 import { screen } from './transition.js';
-import { badge } from './badge.js';
+import { badge, tick } from './badge.js';
 import { editProfile, closeProfiles, PROFILES_MAX } from './profiles.js';
 
 const root = document.getElementById('settings');
@@ -27,12 +27,9 @@ export function hideSettings() {
 }
 
 const HIGHLIGHTS = { rim: 'Rim', snake: 'Snake', under: 'Under' };
-const NEXT_HIGHLIGHT = { rim: 'snake', snake: 'under', under: 'rim' };
 const EDGES = { slide: 'Slide off', peek: 'Peek', fade: 'Fade' };
 const KEYBOARDS = { grid: 'Grid', full: 'Full' };
-const NEXT_EDGE = { slide: 'peek', peek: 'fade', fade: 'slide' };
 const BACKGROUNDS = { tint: 'Tint', art: 'Art', drift: 'Drift' };
-const NEXT_BACKGROUND = { tint: 'art', art: 'drift', drift: 'tint' };
 
 export async function openSettings({ focusConsole } = {}) {
   let state = await window.tink.getSettings();
@@ -52,8 +49,9 @@ export async function openSettings({ focusConsole } = {}) {
     let categoryNodes = [];
     let pane = null;
     let user = null;
+    let choice = null;
 
-    async function change(request, { reload = true } = {}) {
+    async function change(request, { reload = true, swap = false } = {}) {
       active.busy = true;
       try {
         const result = await request;
@@ -63,7 +61,27 @@ export async function openSettings({ focusConsole } = {}) {
         active.busy = false;
       }
       state = await window.tink.getSettings();
-      render();
+      render({ swap });
+    }
+
+    const choose = (id, label, options, current, set) => ({
+      id,
+      label,
+      status: options[current] || Object.values(options)[0],
+      hint: 'Open',
+      activate: () => {
+        view = 'choice';
+        choice = { id, label, options, current: options[current] ? current : Object.keys(options)[0], set };
+        focus = Object.keys(options).indexOf(choice.current);
+        render({ swap: true });
+      },
+    });
+
+    function pick(value) {
+      const { id, set } = choice;
+      view = 'top';
+      pendingFocus = (row) => row.id === id;
+      return change(set(value), { reload: false, swap: true });
     }
 
     const link = (name, label, status) => ({ id: name, label, status, hint: 'Open', activate: () => { view = name; focus = 0; render({ swap: true }); } });
@@ -154,6 +172,27 @@ export async function openSettings({ focusConsole } = {}) {
           activate: () => change(window.tink.pickFolder(item.id)),
         }));
       }
+      if (view === 'choice') {
+        return Object.entries(choice.options).map(([value, label]) => ({
+          id: value,
+          label,
+          tick: value === choice.current,
+          hint: 'Choose',
+          activate: () => pick(value),
+        }));
+      }
+      if (view === 'hidden') {
+        return [
+          { id: 'all', label: 'Show all', hint: 'Show', activate: () => change(window.tink.showHiddenGames()) },
+          ...state.hiddenList.map((game) => ({
+            id: game.key,
+            label: game.title,
+            status: game.consoleName,
+            hint: 'Show',
+            activate: () => change(window.tink.showGame(game.key)),
+          })),
+        ];
+      }
       if (view === 'consoles') {
         return state.consoleList.map((item) => ({
           label: item.name,
@@ -189,12 +228,17 @@ export async function openSettings({ focusConsole } = {}) {
           link('folders', 'Games folders', `${foldersSet} of ${state.consoles.length} set`),
           link('consoles', 'Consoles', `${shown} of ${state.consoleList.length} shown`),
           {
+            id: 'hidden',
             label: 'Hidden games',
             group: true,
-            status: state.hiddenGames ? String(state.hiddenGames) : 'None',
-            hint: 'Show all',
-            sound: 'toggle',
-            activate: () => (state.hiddenGames ? change(window.tink.showHiddenGames()) : undefined),
+            status: state.hiddenList.length ? String(state.hiddenList.length) : 'None',
+            hint: 'Open',
+            activate: () => {
+              if (!state.hiddenList.length) return;
+              view = 'hidden';
+              focus = 0;
+              render({ swap: true });
+            },
           },
           {
             label: 'Rescan games',
@@ -242,27 +286,9 @@ export async function openSettings({ focusConsole } = {}) {
             sound: 'toggle',
             activate: () => change(window.tink.setFullscreen(!state.fullscreen), { reload: false }),
           },
-          {
-            label: 'Left edge',
-            status: EDGES[state.leftEdge] || EDGES.slide,
-            hint: 'Switch',
-            sound: 'toggle',
-            activate: () => change(window.tink.setLeftEdge(NEXT_EDGE[state.leftEdge] || 'peek'), { reload: false }),
-          },
-          {
-            label: 'Highlight',
-            status: HIGHLIGHTS[state.focusStyle] || HIGHLIGHTS.rim,
-            hint: 'Switch',
-            sound: 'toggle',
-            activate: () => change(window.tink.setFocusStyle(NEXT_HIGHLIGHT[state.focusStyle] || 'snake'), { reload: false }),
-          },
-          {
-            label: 'Keyboard',
-            status: KEYBOARDS[state.keyboard] || KEYBOARDS.grid,
-            hint: 'Switch',
-            sound: 'toggle',
-            activate: () => change(window.tink.setKeyboard(state.keyboard === 'full' ? 'grid' : 'full'), { reload: false }),
-          },
+          choose('edge', 'Left edge', EDGES, state.leftEdge, (value) => window.tink.setLeftEdge(value)),
+          choose('highlight', 'Highlight', HIGHLIGHTS, state.focusStyle, (value) => window.tink.setFocusStyle(value)),
+          choose('keyboard', 'Keyboard', KEYBOARDS, state.keyboard, (value) => window.tink.setKeyboard(value)),
           {
             label: 'Profiles on Home',
             status: state.homeProfiles ? 'On' : 'Off',
@@ -270,13 +296,7 @@ export async function openSettings({ focusConsole } = {}) {
             sound: 'toggle',
             activate: () => change(window.tink.setHomeProfiles(!state.homeProfiles), { reload: false }),
           },
-          {
-            label: 'Background',
-            status: BACKGROUNDS[state.background] || BACKGROUNDS.tint,
-            hint: 'Switch',
-            sound: 'toggle',
-            activate: () => change(window.tink.setBackground(NEXT_BACKGROUND[state.background] || 'art'), { reload: false }),
-          },
+          choose('background', 'Background', BACKGROUNDS, state.background, (value) => window.tink.setBackground(value)),
         ],
         system: () => [
           { label: 'Version', status: state.version, plain: true },
@@ -313,7 +333,7 @@ export async function openSettings({ focusConsole } = {}) {
       categoryNodes = CATEGORIES.map((item, index) => {
         const node = element('button', 'settings-category', item.name);
         node.type = 'button';
-        node.append(element('span', 'settings-bar'));
+        node.append(focusGlow());
         node.addEventListener('click', () => {
           if (typing) return;
           const swap = index !== category || view !== 'top';
@@ -330,6 +350,10 @@ export async function openSettings({ focusConsole } = {}) {
     }
 
     function render({ swap = false } = {}) {
+      if (view === 'hidden' && !state.hiddenList.length) {
+        view = 'top';
+        pendingFocus = (row) => row.id === 'hidden';
+      }
       rows = buildRows();
       if (pendingFocus) {
         focus = rows.filter((row) => !row.plain).findIndex(pendingFocus);
@@ -350,6 +374,7 @@ export async function openSettings({ focusConsole } = {}) {
         if (row.badge) name.prepend(badge(row.badge, { className: 'small' }));
         node.append(name);
         if (row.side) node.append(badge(row.side, { className: 'small' }));
+        if (row.tick) node.append(tick());
         if (row.key) {
           const input = element('input', 'settings-key');
           input.type = 'password';
@@ -367,6 +392,7 @@ export async function openSettings({ focusConsole } = {}) {
         } else if (row.status) {
           node.append(element('span', row.found ? 'setup-status found' : 'setup-status', row.status));
         }
+        if (!row.plain) node.append(focusGlow());
         list.append(node);
         if (row.plain) continue;
         node.addEventListener('click', () => {
@@ -378,7 +404,7 @@ export async function openSettings({ focusConsole } = {}) {
         focusable.push(row);
       }
       rows = focusable;
-      const titles = { emulators: 'Emulators', folders: 'Games folders', consoles: 'Consoles' };
+      const titles = { emulators: 'Emulators', folders: 'Games folders', consoles: 'Consoles', hidden: 'Hidden games', choice: choice && choice.label };
       const heading = element('h1', '', view === 'top' ? CATEGORIES[category].name : view === 'user' ? userProfile().name : titles[view]);
       if (swap) {
         heading.classList.add('settings-swap');
@@ -469,7 +495,7 @@ export async function openSettings({ focusConsole } = {}) {
             column = 'categories';
             focusColumn();
           } else {
-            const id = view === 'user' ? user : view;
+            const id = view === 'user' ? user : view === 'choice' ? choice.id : view;
             view = 'top';
             pendingFocus = (row) => row.id === id;
             render({ swap: true });

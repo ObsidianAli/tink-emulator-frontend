@@ -68,6 +68,7 @@ async function main() {
       APPDATA: empty,
     },
   });
+  await app.evaluate(() => { process.mainModule.require('./src/steam').findSteamDir = async () => null; });
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -141,8 +142,23 @@ async function main() {
 
   await key(',');
   assert.ok(await visible('#settings'), 'comma opens Settings');
+  await key('ArrowDown');
+  await key('ArrowRight');
+  for (let i = 0; i < 3; i++) await key('ArrowDown');
+  assert.ok((await focused()).startsWith('Hidden games1'), await focused());
+  await key('Enter');
+  assert.strictEqual(await page.textContent('#settings .settings-pane h1'), 'Hidden games');
+  assert.deepStrictEqual(await page.$$eval('#settings .setup-row', (rows) => rows.map((r) => r.textContent)), ['Show all', 'Wind WakerGameCube']);
+  await key('ArrowDown');
+  await key('Enter');
+  await sleep(300);
+  assert.strictEqual(readSettings().profiles[0].hiddenGames.length, 0, 'one game can be shown again');
+  assert.strictEqual(await page.textContent('#settings .settings-pane h1'), 'Library', 'the empty list goes back');
   await key('Escape');
+  await key('Escape');
+  await sleep(800);
   assert.ok(!(await visible('#settings')));
+  assert.strictEqual(await title(), 'Luigis Mansion');
 
   await app.evaluate((_electron, dir) => {
     const steam = process.mainModule.require('./src/steam');

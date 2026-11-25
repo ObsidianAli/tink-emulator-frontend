@@ -35,6 +35,7 @@ async function main() {
       APPDATA: empty,
     },
   });
+  await app.evaluate(() => { process.mainModule.require('./src/steam').findSteamDir = async () => null; });
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -70,6 +71,7 @@ async function main() {
   await shot('1-shelf-with-settings-hint');
 
   await key('Enter');
+
   assert.strictEqual(await dialogText(), "Dolphin isn't set up.");
   console.log('error 1:', await dialogText(), '| hints:', await hints());
   await shot('2-error-not-set-up');
@@ -174,37 +176,40 @@ async function main() {
   await key('Enter');
   assert.strictEqual(await isFullscreen(), true);
 
-  await key('ArrowDown');
-  assert.ok((await focusedRow()).startsWith('Left edge | Slide off'), await focusedRow());
-  await key('Enter');
-  assert.ok((await focusedRow()).startsWith('Left edge | Peek'), await focusedRow());
-  assert.strictEqual(readSettings().leftEdge, 'peek');
-  await key('Enter');
-  assert.ok((await focusedRow()).startsWith('Left edge | Fade'), await focusedRow());
-  assert.strictEqual(readSettings().leftEdge, 'fade');
-  await key('Enter');
-  assert.ok((await focusedRow()).startsWith('Left edge | Slide off'), await focusedRow());
-  assert.strictEqual(readSettings().leftEdge, 'slide');
+  const pickValue = async (row, current, target, settingsKey, stored, shotName) => {
+    assert.ok((await focusedRow()).startsWith(`${row} | ${current}`), await focusedRow());
+    await key('Enter');
+    assert.strictEqual(await heading(), row);
+    assert.strictEqual(await focusedRow(), current, 'the list opens on the current value');
+    assert.strictEqual(await page.$$eval('#settings .setup-row > .tick', (ticks) => ticks.length), 1, 'one tick');
+    assert.ok(await page.$eval('#settings .setup-row:focus > .tick', () => true).catch(() => false), 'the tick is on the current value');
+    assert.ok((await hints()).includes('Choose'), await hints());
+    if (shotName) await shot(shotName);
+    const names = await page.$$eval('#settings .setup-row', (rows) => rows.map((row) => row.innerText));
+    const steps = names.indexOf(target) - names.indexOf(current);
+    for (let i = 0; i < Math.abs(steps); i++) await key(steps > 0 ? 'ArrowDown' : 'ArrowUp');
+    assert.strictEqual(await focusedRow(), target);
+    await key('Enter');
+    assert.strictEqual(await heading(), 'Display', 'A picks and goes back');
+    assert.ok((await focusedRow()).startsWith(`${row} | ${target}`), await focusedRow());
+    assert.strictEqual(readSettings()[settingsKey], stored);
+  };
 
   await key('ArrowDown');
-  assert.ok((await focusedRow()).startsWith('Highlight | Rim'), await focusedRow());
+  await pickValue('Left edge', 'Slide off', 'Peek', 'leftEdge', 'peek');
   await key('Enter');
-  assert.ok((await focusedRow()).startsWith('Highlight | Snake'), await focusedRow());
-  assert.strictEqual(readSettings().focusStyle, 'snake');
-  await key('Enter');
-  assert.ok((await focusedRow()).startsWith('Highlight | Under'), await focusedRow());
-  assert.strictEqual(readSettings().focusStyle, 'under');
-  await key('Enter');
-  assert.ok((await focusedRow()).startsWith('Highlight | Rim'), await focusedRow());
-  assert.strictEqual(readSettings().focusStyle, 'rim');
+  await key('Escape');
+  assert.strictEqual(await heading(), 'Display', 'B leaves the list without changing it');
+  assert.ok((await focusedRow()).startsWith('Left edge | Peek'), await focusedRow());
+  assert.strictEqual(readSettings().leftEdge, 'peek');
+  await pickValue('Left edge', 'Peek', 'Slide off', 'leftEdge', 'slide', '6-value-list');
+
   await key('ArrowDown');
-  assert.ok((await focusedRow()).startsWith('Keyboard | Grid'), await focusedRow());
-  await key('Enter');
-  assert.ok((await focusedRow()).startsWith('Keyboard | Full'), await focusedRow());
-  assert.strictEqual(readSettings().keyboard, 'full');
-  await key('Enter');
-  assert.ok((await focusedRow()).startsWith('Keyboard | Grid'), await focusedRow());
-  assert.strictEqual(readSettings().keyboard, 'grid');
+  await pickValue('Highlight', 'Rim', 'Snake', 'focusStyle', 'snake');
+  await pickValue('Highlight', 'Snake', 'Rim', 'focusStyle', 'rim');
+  await key('ArrowDown');
+  await pickValue('Keyboard', 'Grid', 'Full', 'keyboard', 'full');
+  await pickValue('Keyboard', 'Full', 'Grid', 'keyboard', 'grid');
   await key('ArrowDown');
   assert.ok((await focusedRow()).startsWith('Profiles on Home | On'), await focusedRow());
   await key('Enter');
@@ -214,13 +219,7 @@ async function main() {
   assert.ok((await focusedRow()).startsWith('Profiles on Home | On'), await focusedRow());
   assert.strictEqual(readSettings().homeProfiles, true);
   await key('ArrowDown');
-  assert.ok((await focusedRow()).startsWith('Background | Tint'), await focusedRow());
-  await key('Enter');
-  assert.ok((await focusedRow()).startsWith('Background | Art'), await focusedRow());
-  assert.strictEqual(readSettings().background, 'art');
-  await key('Enter');
-  assert.ok((await focusedRow()).startsWith('Background | Drift'), await focusedRow());
-  assert.strictEqual(readSettings().background, 'drift');
+  await pickValue('Background', 'Tint', 'Drift', 'background', 'drift');
 
   await key('Escape');
   await key('ArrowDown');
