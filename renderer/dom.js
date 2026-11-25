@@ -5,6 +5,12 @@ export function element(tag, className, text) {
   return node;
 }
 
+export function focusGlow() {
+  const glow = element('span', 'focus-glow');
+  glow.append(document.createElement('span'));
+  return glow;
+}
+
 export function shortPath(folder) {
   const parts = folder.split(/[\\/]/).filter(Boolean);
   return parts.length > 2 ? `…\\${parts.slice(-2).join('\\')}` : folder;

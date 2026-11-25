@@ -58,6 +58,8 @@ async function main() {
   const settingsOpen = () => page.$('#settings:not([hidden])').then(Boolean);
   const hints = () => page.$$eval('#hints .hint', (els) => els.map((el) => el.textContent).join(' '));
   const focusedRow = () => page.evaluate(() => document.activeElement.innerText.replace(/\n+/g, ' | '));
+  const heading = () => page.textContent('#settings .settings-pane h1');
+  const selectedCategory = () => page.textContent('#settings .settings-category.selected');
   const dialogText = () => page.$eval('.dialog p', (el) => el.textContent).catch(() => null);
   const readSettings = () => JSON.parse(fs.readFileSync(path.join(data, 'settings.json'), 'utf8'));
   const isFullscreen = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFullScreen());
@@ -76,7 +78,8 @@ async function main() {
   assert.ok(await settingsOpen(), 'Open Settings opens it');
   console.log('opened on:', await focusedRow(), '| hints:', await hints());
   assert.ok((await focusedRow()).startsWith('GameCube'), 'focus lands on the GameCube emulator row');
-  assert.strictEqual(await page.textContent('#settings h1'), 'Emulators');
+  assert.strictEqual(await heading(), 'Emulators');
+  assert.strictEqual(await selectedCategory(), 'Library');
   await shot('3-settings-on-gamecube-emulator');
 
   await pick(dolphin);
@@ -93,33 +96,47 @@ async function main() {
 
   await key('Escape');
   assert.ok(await settingsOpen(), 'B in a sub-list does not close Settings');
-  assert.strictEqual(await page.textContent('#settings h1'), 'Settings');
+  assert.strictEqual(await heading(), 'Library');
   assert.ok((await focusedRow()).startsWith('Emulators'), await focusedRow());
   const fits = await page.$eval('#settings .setup-list', (list) => list.scrollHeight <= list.clientHeight);
-  assert.ok(fits, 'the top level fits on one screen: ' + JSON.stringify(await page.$eval('#settings .setup-list', (l) => [l.scrollHeight, l.clientHeight])));
-  await shot('top-level');
+  assert.ok(fits, 'the Library pane fits on one screen');
+  await shot('5-library');
+
+  await key('Escape');
+  assert.ok(await settingsOpen(), 'B in the pane goes back to the categories');
+  assert.strictEqual(await focusedRow(), 'Library');
+  console.log('categories hints:', await hints());
+  await key('ArrowUp');
+  assert.strictEqual(await focusedRow(), 'Library');
+  await key('ArrowRight');
+  assert.ok((await focusedRow()).startsWith('Emulators'), await focusedRow());
 
   await key('ArrowDown');
   await key('Enter');
-  assert.strictEqual(await page.textContent('#settings h1'), 'Games folders');
+  assert.strictEqual(await heading(), 'Games folders');
   assert.ok((await focusedRow()).startsWith('GameCube'));
   console.log('folder row:', await focusedRow(), '| hints:', await hints());
-  await key('Escape');
+  await key('ArrowLeft');
   assert.ok((await focusedRow()).startsWith('Games folders'));
 
   await key('ArrowDown');
   await key('Enter');
-  assert.strictEqual(await page.textContent('#settings h1'), 'Consoles');
+  assert.strictEqual(await heading(), 'Consoles');
   await key('Escape');
   assert.ok((await focusedRow()).startsWith('Consoles'));
-  await key('ArrowDown');
 
-  console.log('re-download hints:', await hints());
-  await key('Enter');
-  assert.ok((await dialogText()).startsWith('Replace all covers?'));
-  await shot('10-redownload-confirm');
-  await key('Escape');
   await key('ArrowDown');
+  assert.ok((await focusedRow()).startsWith('Hidden games | None'), await focusedRow());
+  await key('ArrowDown');
+  assert.ok((await focusedRow()).startsWith('Rescan games'), await focusedRow());
+  await key('Enter');
+  assert.ok((await focusedRow()).endsWith('Done'));
+
+  await key('ArrowLeft');
+  await key('ArrowDown');
+  assert.strictEqual(await focusedRow(), 'Covers');
+  assert.strictEqual(await heading(), 'Covers');
+  await key('Enter');
   console.log('key row:', await focusedRow(), '| hints:', await hints());
   await key('Enter');
   console.log('typing hints:', await hints());
@@ -135,6 +152,18 @@ async function main() {
   console.log('key cleared');
 
   await key('ArrowDown');
+  assert.ok((await focusedRow()).startsWith('Re-download covers'), await focusedRow());
+  console.log('re-download hints:', await hints());
+  await key('Enter');
+  assert.ok((await dialogText()).startsWith('Replace all covers?'));
+  await shot('10-redownload-confirm');
+  await key('Escape');
+  assert.ok((await focusedRow()).startsWith('Re-download covers'), await focusedRow());
+
+  await key('Escape');
+  await key('ArrowDown');
+  assert.strictEqual(await heading(), 'Display');
+  await key('ArrowRight');
   assert.ok((await focusedRow()).startsWith('Start in fullscreen | On'), await focusedRow());
   assert.strictEqual(await isFullscreen(), true);
   await key('Enter');
@@ -144,15 +173,32 @@ async function main() {
   assert.strictEqual(await isFullscreen(), true);
 
   await key('ArrowDown');
+  assert.ok((await focusedRow()).startsWith('Left edge | Slide off'), await focusedRow());
   await key('Enter');
-  assert.ok((await focusedRow()).endsWith('Done'));
+  assert.ok((await focusedRow()).startsWith('Left edge | Peek'), await focusedRow());
+  assert.strictEqual(readSettings().leftEdge, 'peek');
+  await key('Enter');
+  assert.ok((await focusedRow()).startsWith('Left edge | Fade'), await focusedRow());
+  assert.strictEqual(readSettings().leftEdge, 'fade');
+  await key('Enter');
+  assert.ok((await focusedRow()).startsWith('Left edge | Slide off'), await focusedRow());
+  assert.strictEqual(readSettings().leftEdge, 'slide');
+
+  await key('Escape');
   await key('ArrowDown');
+  assert.strictEqual(await heading(), 'System');
   await key('ArrowDown');
+  assert.strictEqual(await focusedRow(), 'System');
+  await key('Enter');
   assert.ok((await focusedRow()).startsWith('Check for updates'), await focusedRow());
-  assert.ok((await page.textContent('#settings')).includes(`Version ${require('../package.json').version}`));
+  assert.ok((await page.innerText('#settings .settings-pane')).includes(`Version\n${require('../package.json').version}`));
+  await key('ArrowUp');
+  assert.ok((await focusedRow()).startsWith('Check for updates'), 'Version is not focusable');
   await key('Enter');
   await sleep(300);
   assert.ok((await focusedRow()).endsWith('Up to date'), await focusedRow());
+  await key('Escape');
+  assert.strictEqual(await focusedRow(), 'System');
 
   fs.rmSync(path.join(games, 'Luigis Mansion (USA).rvz'));
   await key('Escape');

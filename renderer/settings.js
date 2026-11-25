@@ -4,6 +4,13 @@ import { screen } from './transition.js';
 const root = document.getElementById('settings');
 let active = null;
 
+const CATEGORIES = [
+  { id: 'library', name: 'Library' },
+  { id: 'covers', name: 'Covers' },
+  { id: 'display', name: 'Display' },
+  { id: 'system', name: 'System' },
+];
+
 // Registered before the shelf's handler, so the press that closes Settings isn't also taken by the shelf.
 listenForInput((action) => {
   if (!active || active.busy || document.querySelector('.dialog-scrim')) return null;
@@ -15,6 +22,9 @@ export const settingsOpen = () => active !== null;
 export function hideSettings() {
   root.hidden = true;
 }
+
+const EDGES = { slide: 'Slide off', peek: 'Peek', fade: 'Fade' };
+const NEXT_EDGE = { slide: 'peek', peek: 'fade', fade: 'slide' };
 
 export async function openSettings({ focusConsole } = {}) {
   let state = await window.tink.getSettings();
@@ -28,6 +38,10 @@ export async function openSettings({ focusConsole } = {}) {
     let view = 'top';
     let update = '';
     let pendingFocus = null;
+    let category = 0;
+    let column = 'categories';
+    let categoryNodes = [];
+    let pane = null;
 
     async function change(request, { reload = true } = {}) {
       active.busy = true;
@@ -42,7 +56,7 @@ export async function openSettings({ focusConsole } = {}) {
       render();
     }
 
-    const link = (name, label, status) => ({ id: name, label, status, hint: 'Open', activate: () => { view = name; focus = 0; render(); } });
+    const link = (name, label, status) => ({ id: name, label, status, hint: 'Open', activate: () => { view = name; focus = 0; render({ swap: true }); } });
 
     async function checkUpdates() {
       if (update === 'Checking…') return;
@@ -100,64 +114,79 @@ export async function openSettings({ focusConsole } = {}) {
       const emulatorsFound = state.consoles.filter((item) => item.emulator.found).length;
       const foldersSet = state.consoles.filter((item) => item.folder).length;
       const shown = state.consoleList.filter((item) => !item.hidden).length;
-      return [
-        link('emulators', 'Emulators', `${emulatorsFound} of ${state.consoles.length} found`),
-        link('folders', 'Games folders', `${foldersSet} of ${state.consoles.length} set`),
-        link('consoles', 'Consoles', `${shown} of ${state.consoleList.length} shown`),
-        {
-          label: 'Re-download covers',
-          group: true,
-          hint: 'Download',
-          status: done.has('covers') ? 'Done' : '',
-          activate: async () => {
-            // Lets this press finish before the dialog opens, or the dialog would take it as its own.
-            await null;
-            const ok = await showDialog({
-              message: 'Replace all covers?',
-              confirm: 'Replace',
-              cancel: 'Not now',
-              sound: 'list',
-            });
-            if (!ok) return;
-            done.add('covers');
-            await change(window.tink.redownloadCovers().then(() => undefined));
+      const panes = {
+        library: () => [
+          link('emulators', 'Emulators', `${emulatorsFound} of ${state.consoles.length} found`),
+          link('folders', 'Games folders', `${foldersSet} of ${state.consoles.length} set`),
+          link('consoles', 'Consoles', `${shown} of ${state.consoleList.length} shown`),
+          {
+            label: 'Hidden games',
+            group: true,
+            status: state.hiddenGames ? String(state.hiddenGames) : 'None',
+            hint: 'Show all',
+            sound: 'toggle',
+            activate: () => (state.hiddenGames ? change(window.tink.showHiddenGames()) : undefined),
           },
-        },
-        {
-          label: 'SteamGridDB key',
-          key: true,
-          hint: 'Type',
-          second: state.hasKey ? { label: 'Clear', run: () => change(window.tink.setSteamKey(''), { reload: false }) } : null,
-          activate: () => startTyping(),
-        },
-        {
-          label: 'Start in fullscreen',
-          group: true,
-          status: state.fullscreen ? 'On' : 'Off',
-          hint: 'Switch',
-          sound: 'toggle',
-          activate: () => change(window.tink.setFullscreen(!state.fullscreen), { reload: false }),
-        },
-        {
-          label: 'Rescan games',
-          hint: 'Rescan',
-          status: done.has('rescan') ? 'Done' : '',
-          activate: () => {
-            changed = true;
-            done.add('rescan');
-            render();
+          {
+            label: 'Rescan games',
+            hint: 'Rescan',
+            status: done.has('rescan') ? 'Done' : '',
+            activate: () => {
+              changed = true;
+              done.add('rescan');
+              render();
+            },
           },
-        },
-        {
-          label: 'Hidden games',
-          status: state.hiddenGames ? String(state.hiddenGames) : 'None',
-          hint: 'Show all',
-          sound: 'toggle',
-          activate: () => (state.hiddenGames ? change(window.tink.showHiddenGames()) : undefined),
-        },
-        { label: `Version ${state.version}`, plain: true, group: true },
-        { id: 'update', label: 'Check for updates', status: update, hint: 'Check', activate: checkUpdates },
-      ];
+        ],
+        covers: () => [
+          {
+            label: 'SteamGridDB key',
+            key: true,
+            hint: 'Type',
+            second: state.hasKey ? { label: 'Clear', run: () => change(window.tink.setSteamKey(''), { reload: false }) } : null,
+            activate: () => startTyping(),
+          },
+          {
+            label: 'Re-download covers',
+            hint: 'Download',
+            status: done.has('covers') ? 'Done' : '',
+            activate: async () => {
+              // Lets this press finish before the dialog opens, or the dialog would take it as its own.
+              await null;
+              const ok = await showDialog({
+                message: 'Replace all covers?',
+                confirm: 'Replace',
+                cancel: 'Not now',
+                sound: 'list',
+              });
+              if (!ok) return;
+              done.add('covers');
+              await change(window.tink.redownloadCovers().then(() => undefined));
+            },
+          },
+        ],
+        display: () => [
+          {
+            label: 'Start in fullscreen',
+            status: state.fullscreen ? 'On' : 'Off',
+            hint: 'Switch',
+            sound: 'toggle',
+            activate: () => change(window.tink.setFullscreen(!state.fullscreen), { reload: false }),
+          },
+          {
+            label: 'Left edge',
+            status: EDGES[state.leftEdge] || EDGES.slide,
+            hint: 'Switch',
+            sound: 'toggle',
+            activate: () => change(window.tink.setLeftEdge(NEXT_EDGE[state.leftEdge] || 'peek'), { reload: false }),
+          },
+        ],
+        system: () => [
+          { label: 'Version', status: state.version, plain: true },
+          { id: 'update', label: 'Check for updates', status: update, hint: 'Check', activate: checkUpdates },
+        ],
+      };
+      return panes[CATEGORIES[category].id]();
     };
 
     function startTyping() {
@@ -182,7 +211,28 @@ export async function openSettings({ focusConsole } = {}) {
       showSettingsHints();
     }
 
-    function render() {
+    function build() {
+      const categories = element('div', 'settings-categories');
+      categoryNodes = CATEGORIES.map((item, index) => {
+        const node = element('button', 'settings-category', item.name);
+        node.type = 'button';
+        node.append(element('span', 'settings-bar'));
+        node.addEventListener('click', () => {
+          if (typing) return;
+          const swap = index !== category || view !== 'top';
+          category = index;
+          column = 'categories';
+          view = 'top';
+          render({ swap });
+        });
+        return node;
+      });
+      categories.append(element('h1', '', 'Settings'), ...categoryNodes);
+      pane = element('div', 'settings-pane');
+      root.replaceChildren(categories, pane);
+    }
+
+    function render({ swap = false } = {}) {
       rows = buildRows();
       if (pendingFocus) {
         focus = rows.filter((row) => !row.plain).findIndex(pendingFocus);
@@ -193,12 +243,10 @@ export async function openSettings({ focusConsole } = {}) {
       nodes = [];
       const focusable = [];
       for (const row of rows) {
-        if (row.plain) {
-          list.append(element('p', row.group ? 'setup-note group-start' : 'setup-note', row.label));
-          continue;
-        }
-        const node = element(row.key ? 'div' : 'button', row.group ? 'setup-row group-start' : 'setup-row');
-        if (row.key) node.tabIndex = 0;
+        const node = element(row.key || row.plain ? 'div' : 'button', 'setup-row');
+        if (row.group) node.classList.add('group-start');
+        if (row.plain) node.classList.add('plain');
+        else if (row.key) node.tabIndex = 0;
         else node.type = 'button';
         const name = element('span', 'setup-name', row.label);
         if (row.sub) name.append(element('span', 'setup-sub', row.sub));
@@ -220,28 +268,42 @@ export async function openSettings({ focusConsole } = {}) {
         } else if (row.status) {
           node.append(element('span', row.found ? 'setup-status found' : 'setup-status', row.status));
         }
+        list.append(node);
+        if (row.plain) continue;
         node.addEventListener('click', () => {
           focus = focusable.indexOf(row);
+          column = 'pane';
           if (!typing) row.activate();
         });
-        list.append(node);
         nodes.push(node);
         focusable.push(row);
       }
       rows = focusable;
-      const titles = { top: 'Settings', emulators: 'Emulators', folders: 'Games folders', consoles: 'Consoles' };
-      root.replaceChildren(element('h1', '', titles[view]), list);
+      const titles = { emulators: 'Emulators', folders: 'Games folders', consoles: 'Consoles' };
+      const heading = element('h1', '', view === 'top' ? CATEGORIES[category].name : titles[view]);
+      if (swap) {
+        heading.classList.add('settings-swap');
+        list.classList.add('settings-swap');
+      }
+      pane.replaceChildren(heading, list);
+      categoryNodes.forEach((node, index) => node.classList.toggle('selected', index === category));
       focus = Math.max(0, Math.min(focus, nodes.length - 1));
-      focusRow(nodes[focus], false);
+      focusColumn(false);
+    }
+
+    function focusColumn(smooth = true) {
+      if (column === 'categories') focusRow(categoryNodes[category], false);
+      else focusRow(nodes[focus], smooth);
       showSettingsHints();
     }
 
     function showSettingsHints() {
+      if (column === 'categories') return setHints([{ button: 'a', label: 'Open' }, { button: 'b', label: 'Close' }]);
       const row = rows[focus];
       if (typing) return setHints([{ button: 'a', label: 'Save' }, { button: 'b', label: 'Cancel' }]);
       const hints = [{ button: 'a', label: row.hint || 'Start' }];
       if (row.second) hints.push({ button: 'x', label: row.second.label });
-      hints.push({ button: 'b', label: view === 'top' ? 'Close' : 'Back' });
+      hints.push({ button: 'b', label: 'Back' });
       setHints(hints);
     }
 
@@ -267,6 +329,27 @@ export async function openSettings({ focusConsole } = {}) {
           }
           return null;
         }
+        if (column === 'categories') {
+          if (action === 'up' || action === 'down') {
+            const next = Math.max(0, Math.min(CATEGORIES.length - 1, category + (action === 'down' ? 1 : -1)));
+            if (next === category) return null;
+            category = next;
+            focus = 0;
+            render({ swap: true });
+            return 'list';
+          }
+          if (action === 'right' || action === 'a') {
+            column = 'pane';
+            focus = 0;
+            focusColumn(false);
+            return action === 'a' ? 'confirm' : 'list';
+          }
+          if (action === 'b') {
+            close();
+            return 'back';
+          }
+          return null;
+        }
         if (action === 'up' || action === 'down') {
           const before = focus;
           focus = Math.max(0, Math.min(nodes.length - 1, focus + (action === 'down' ? 1 : -1)));
@@ -282,22 +365,26 @@ export async function openSettings({ focusConsole } = {}) {
           rows[focus].second.run();
           return 'toggle';
         }
-        if (action === 'b') {
-          if (view === 'top') close();
-          else {
+        if (action === 'b' || action === 'left') {
+          if (view === 'top') {
+            column = 'categories';
+            focusColumn();
+          } else {
             const id = view;
             view = 'top';
             pendingFocus = (row) => row.id === id;
-            render();
+            render({ swap: true });
           }
-          return 'back';
+          return action === 'b' ? 'back' : 'list';
         }
         return null;
       },
     };
     screen(() => {
       root.hidden = false;
+      build();
       if (focusConsole) {
+        column = 'pane';
         view = 'emulators';
         pendingFocus = (row) => row.console === focusConsole;
       }

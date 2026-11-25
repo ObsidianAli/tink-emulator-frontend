@@ -19,7 +19,7 @@ test('old settings get one profile with nothing hidden, and the rest is kept', (
   assert.strictEqual(settings.profiles.length, 1);
   const [profile] = settings.profiles;
   assert.deepStrictEqual({ ...profile, id: undefined }, {
-    id: undefined, name: 'Player', colour: 'blue', avatar: null, recent: [], favourites: [], hiddenConsoles: [], hiddenGames: [], sort: 'recent',
+    id: undefined, name: 'Player', colour: 'blue', avatar: null, icon: 'star', recent: [], favourites: [], hiddenConsoles: [], hiddenGames: [], sort: 'recent',
   });
   assert.ok(profile.id);
   assert.strictEqual(settings.lastProfile, profile.id);
@@ -137,14 +137,25 @@ test('favourites toggle on and off', () => {
   assert.deepStrictEqual(profile.favourites, []);
 });
 
-test('editing ignores bad names, colours and pictures', () => {
+test('editing ignores bad names, colours, icons and pictures', () => {
   const [profile] = fresh().profiles;
   p.editProfile(profile, { name: '  Sam  ', colour: 'red', avatar: 'sam.png' }, ['sam.png']);
-  assert.deepStrictEqual([profile.name, profile.colour, profile.avatar], ['Sam', 'red', 'sam.png']);
-  p.editProfile(profile, { name: '   ', colour: 'pink', avatar: '../x.png' }, ['sam.png']);
-  assert.deepStrictEqual([profile.name, profile.colour, profile.avatar], ['Sam', 'red', 'sam.png']);
-  p.editProfile(profile, { avatar: null }, []);
-  assert.strictEqual(profile.avatar, null);
+  assert.deepStrictEqual([profile.name, profile.colour, profile.avatar, profile.icon], ['Sam', 'red', 'sam.png', null]);
+  p.editProfile(profile, { name: '   ', colour: 'pink', avatar: '../x.png', icon: 'moon' }, ['sam.png']);
+  assert.deepStrictEqual([profile.name, profile.colour, profile.avatar, profile.icon], ['Sam', 'red', 'sam.png', null]);
+  p.editProfile(profile, { icon: 'star' }, []);
+  assert.deepStrictEqual([profile.avatar, profile.icon], [null, 'star']);
+  p.editProfile(profile, { name: 'A very long nickname' }, []);
+  assert.strictEqual(profile.name, 'A very lon');
+});
+
+test('a profile has a built-in icon or a picture, never neither or both', () => {
+  const settings = { profiles: [{ name: 'Old' }, { name: 'Pic', avatar: 'sam.png', icon: 'star' }, { name: 'Odd', icon: 'moon' }] };
+  p.ensureProfiles(settings);
+  assert.deepStrictEqual(settings.profiles.map((profile) => [profile.icon, profile.avatar]), [
+    ['star', null], [null, 'sam.png'], ['star', null],
+  ]);
+  assert.strictEqual(p.ensureProfiles(settings), false);
 });
 
 test('adding picks a free colour, and the last profile cannot be removed', () => {
@@ -152,6 +163,7 @@ test('adding picks a free colour, and the last profile cannot be removed', () =>
   const added = p.addProfile(settings);
   assert.notStrictEqual(added.colour, settings.profiles[0].colour);
   assert.strictEqual(added.name, 'Player 2');
+  assert.ok(p.ICONS.includes(added.icon));
   settings.lastProfile = added.id;
   assert.strictEqual(p.removeProfile(settings, added.id), true);
   assert.strictEqual(settings.lastProfile, settings.profiles[0].id);

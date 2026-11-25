@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('tink', {
   finishSetup: (covers) => ipcRenderer.invoke('finishSetup', covers),
   getSettings: () => ipcRenderer.invoke('getSettings'),
   setFullscreen: (on) => ipcRenderer.invoke('setFullscreen', on),
+  setLeftEdge: (mode) => ipcRenderer.invoke('setLeftEdge', mode),
   setSteamKey: (key) => ipcRenderer.invoke('setSteamKey', key),
   findAutomatically: (id) => ipcRenderer.invoke('findAutomatically', id),
   redownloadCovers: () => ipcRenderer.invoke('redownloadCovers'),
