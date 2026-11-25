@@ -3,7 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { download, writeAtomic } = require('./covers');
 
-const RELEASES_URL = 'https://api.github.com/repos/ObsidianAli/tink-emulator-frontend/releases?per_page=8';
+const RELEASES_URL = 'https://api.github.com/repos/ObsidianAli/tink-emulator-frontend/releases?per_page=3';
 const STEAM_NEWS = 'https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?count=20&maxlength=0&feeds=steam_community_announcements&appid=';
 const CLAN_IMAGES = 'https://clan.cloudflare.steamstatic.com/images';
 const IMAGE_HOST = /^https:\/\/[a-z0-9.-]+\.(steamstatic\.com|akamaihd\.net)\//i;
