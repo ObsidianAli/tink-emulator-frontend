@@ -169,7 +169,6 @@ function getOwnedGames(steamDir, installedIds = [], { includeUnsure = false, hid
     .sort((a, b) => a.title.localeCompare(b.title, 'en', { numeric: true }));
 }
 
-// The owned, uninstalled games a profile has hidden, for the hidden-games list in Settings.
 function getHiddenOwnedGames(steamDir, installedIds = [], hidden = []) {
   const found = owned(steamDir);
   if (!found) return [];

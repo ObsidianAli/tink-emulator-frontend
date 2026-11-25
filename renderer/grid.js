@@ -1,4 +1,5 @@
 import { element, focusGlow, scrollToNode } from './dom.js';
+import { heartDrawing } from './icons.js';
 
 const SORT_NAMES = { recent: 'Last played', az: 'A–Z', console: 'Console', favourites: 'Favourites' };
 const SORTS = Object.keys(SORT_NAMES);
@@ -30,7 +31,7 @@ function whole(img, aspect) {
 async function fillCover(tile, game) {
   if (!covers.has(game.id)) covers.set(game.id, window.tink.getCover(game.id).catch(() => null));
   const cover = await covers.get(game.id);
-  if (tile.game !== game) return;
+  if (tile.game.id !== game.id) return;
   if (cover && cover.src) {
     const img = new Image();
     img.alt = '';
@@ -48,12 +49,25 @@ async function fillCover(tile, game) {
   tile.firstChild.replaceChildren(plain);
 }
 
+function showHeart(tile, pop) {
+  let heart = tile.querySelector('.heart');
+  if (!heart) {
+    if (!tile.game.fav) return;
+    heart = heartDrawing();
+    tile.append(heart);
+    // Without a first style at zero there is nothing to animate from.
+    if (pop) void getComputedStyle(heart).scale;
+  }
+  heart.classList.toggle('shown', tile.game.fav);
+}
+
 function draw() {
   observer.disconnect();
   tiles = games.map((game) => {
     const tile = element('div', 'tile');
     tile.game = game;
     tile.append(element('div', 'tile-art'), focusGlow());
+    showHeart(tile, false);
     observer.observe(tile);
     return tile;
   });
@@ -81,8 +95,25 @@ function reveal(tile, smooth) {
   scrollToNode(list, tile, smooth, parseFloat(getComputedStyle(list).paddingTop));
 }
 
+const shownIn = (next, sort) => (sort === 'favourites' ? next.filter((game) => game.fav) : next);
+
+function update(next, sort) {
+  const shown = shownIn(next, sort);
+  if (shown.length !== games.length || shown.some((game, i) => game.id !== games[i].id)) return false;
+  games = shown;
+  tiles.forEach((tile, i) => {
+    tile.game = games[i];
+    showHeart(tile, true);
+  });
+  return true;
+}
+
+function setHeartLook(look) {
+  list.dataset.heart = look;
+}
+
 function set(next, sort, id, otherwise = index) {
-  games = sort === 'favourites' ? next.filter((game) => game.fav) : next;
+  games = shownIn(next, sort);
   sortLabel.textContent = SORT_NAMES[sort];
   draw();
   const found = games.findIndex((game) => game.id === id);
@@ -125,6 +156,8 @@ function sleep() {
 
 export const grid = {
   set,
+  update,
+  setHeartLook,
   move,
   jump,
   nextSort,

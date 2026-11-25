@@ -18,8 +18,8 @@ async function main() {
     setupDone: true,
     consoles: { snes: { folder } },
     profiles: [
-      { id: 'p1', name: 'Ali', colour: 'blue', icon: 'planet' },
-      { id: 'p2', name: 'Sam', colour: 'green', icon: 'star' },
+      { id: 'p1', name: 'Ali', colour: 'blue' },
+      { id: 'p2', name: 'Sam', colour: 'green' },
     ],
     lastProfile: 'p1',
   }));
@@ -79,6 +79,44 @@ async function main() {
   assert.strictEqual((await label()).opacity, '0');
   assert.ok(await page.textContent('#title'));
 
+  const pink = async () => {
+    const shot = (await page.screenshot()).toString('base64');
+    return page.evaluate(async (src) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${src}`;
+      await img.decode();
+      const ctx = new OffscreenCanvas(img.width, img.height).getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const { data } = ctx.getImageData(0, 0, img.width, img.height);
+      let count = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (Math.abs(data[i] - 255) < 6 && Math.abs(data[i + 1] - 93) < 6 && Math.abs(data[i + 2] - 143) < 6) count++;
+      }
+      return count;
+    }, shot);
+  };
+  assert.strictEqual(await pink(), 0);
+  await key('l', 800);
+  assert.ok(await pink() > 200, 'a favourite wears a heart on Home');
+  await key('f', 1500);
+  assert.strictEqual(await pink(), 0, 'the heart is not seen from behind');
+  await key('Escape', 1200);
+  await key('l', 800);
+  assert.strictEqual(await pink(), 0, 'unfavouriting takes the heart away');
+  await key('l', 800);
+
+  await key('End');
+  await key('Enter', 800);
+  const tileHearts = () => page.$$eval('#grid-list .heart.shown', (nodes) => nodes.length);
+  assert.strictEqual(await tileHearts(), 1);
+  const tiles = await page.$$('#grid-list .tile');
+  await key('l');
+  assert.notStrictEqual(await tileHearts(), 1);
+  await key('l');
+  assert.strictEqual(await tileHearts(), 1);
+  assert.ok(await tiles[0].evaluate((node) => node.isConnected), 'favouriting keeps the tiles');
+  await key('Escape', 800);
+
   const heading = () => page.textContent('#settings .settings-pane h1').catch(() => null);
   await key(',', 800);
   for (let i = 0; i < 8 && (await heading()) !== 'Display'; i++) await key('ArrowDown');
@@ -88,9 +126,14 @@ async function main() {
   assert.ok((await page.evaluate(() => document.activeElement.innerText)).startsWith('Profiles on Home'));
   await key('Enter');
   assert.strictEqual(read().homeProfiles, false);
+  for (let i = 0; i < 4; i++) await key('ArrowDown');
+  assert.ok((await page.evaluate(() => document.activeElement.innerText)).startsWith('Favourite heart'));
+  await key('ArrowRight');
+  assert.strictEqual(read().heart, 'small');
   await key('Escape');
   await key('Escape', 1200);
   assert.strictEqual(await shown(), false);
+  assert.strictEqual(await page.$eval('#grid-list', (node) => node.dataset.heart), 'small');
   await key('ArrowUp');
   assert.strictEqual(await focused(), null, 'the hidden row cannot be focused');
 

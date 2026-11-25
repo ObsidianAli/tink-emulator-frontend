@@ -1,6 +1,6 @@
 import { element, focusGlow, focusRow, shortPath } from './dom.js';
 import { screen } from './transition.js';
-import { badge, tick } from './badge.js';
+import { badge } from './badge.js';
 import { editProfile, closeProfiles, PROFILES_MAX } from './profiles.js';
 
 const root = document.getElementById('settings');
@@ -11,6 +11,7 @@ const CATEGORIES = [
   { id: 'library', name: 'Library' },
   { id: 'covers', name: 'Covers' },
   { id: 'display', name: 'Display' },
+  { id: 'sounds', name: 'Sounds' },
   { id: 'system', name: 'System' },
 ];
 
@@ -31,6 +32,7 @@ const EDGES = { slide: 'Slide off', peek: 'Peek', fade: 'Fade' };
 const KEYBOARDS = { grid: 'Grid', full: 'Full' };
 const ICON_STYLES = { grey: 'Grey', disc: 'Colour when selected', glyph: 'Coloured icon' };
 const ICON_ROWS = { separate: 'Separate', bar: 'One bar' };
+const HEARTS = { sticker: 'Sticker', small: 'Small' };
 const BACKGROUNDS = { tint: 'Tint', art: 'Art', drift: 'Drift' };
 
 export async function openSettings({ focusConsole } = {}) {
@@ -51,7 +53,6 @@ export async function openSettings({ focusConsole } = {}) {
     let categoryNodes = [];
     let pane = null;
     let user = null;
-    let choice = null;
     let learning = false;
 
     async function change(request, { reload = true, swap = false } = {}) {
@@ -67,24 +68,87 @@ export async function openSettings({ focusConsole } = {}) {
       render({ swap });
     }
 
-    const choose = (id, label, options, current, set) => ({
+    const choose = (id, label, names, key, set) => ({
       id,
       label,
-      status: options[current] || Object.values(options)[0],
-      hint: 'Open',
-      activate: () => {
-        view = 'choice';
-        choice = { id, label, options, current: options[current] ? current : Object.keys(options)[0], set };
-        focus = Object.keys(options).indexOf(choice.current);
-        render({ swap: true });
+      sound: 'toggle',
+      options: Object.entries(names),
+      hint: 'Next',
+      current: () => (names[state[key]] ? state[key] : Object.keys(names)[0]),
+      choose: (value) => {
+        state[key] = value;
+        for (const row of rows) row.paint?.();
+        set(value);
       },
     });
 
-    function pick(value) {
-      const { id, set } = choice;
-      view = 'top';
-      pendingFocus = (row) => row.id === id;
-      return change(set(value), { reload: false, swap: true });
+    const softable = Object.keys(SOUND_CHOICES).filter((name) => SOUND_CHOICES[name].options.some(([id]) => id === 'soft'));
+    const soundOf = (name) => state.sounds[name] || 'now';
+
+    function pickSounds(names, id) {
+      const picked = Object.fromEntries(names.map((name) => [name, id]));
+      state.sounds = { ...state.sounds, ...picked };
+      setSounds(state.sounds);
+      for (const row of rows) row.paint?.();
+      window.tink.setSounds(picked);
+    }
+
+    const soundRow = (label, names, options, sound, group) => ({
+      label,
+      group,
+      sound,
+      options,
+      hint: 'Play',
+      current: () => (names.every((name) => soundOf(name) === soundOf(names[0])) ? soundOf(names[0]) : null),
+      choose: (id) => pickSounds(names, id),
+    });
+
+    function soundRows() {
+      const single = (name, group) => soundRow(SOUND_CHOICES[name].label, [name], SOUND_CHOICES[name].options, name, group);
+      return [
+        ...Object.keys(SOUND_CHOICES).filter((name) => !softable.includes(name)).map((name) => single(name)),
+        soundRow('All others', softable, SOUND_CHOICES.confirm.options, 'confirm', true),
+        ...softable.map((name, index) => single(name, index === 0)),
+      ];
+    }
+
+    function addPills(row, node) {
+      const pills = element('span', 'setup-pills');
+      for (const [id, label] of row.options) {
+        const pill = element('span', 'setup-pill', label);
+        pill.dataset.id = id;
+        pill.addEventListener('click', (event) => {
+          event.stopPropagation();
+          column = 'pane';
+          focus = rows.indexOf(row);
+          focusColumn();
+          row.choose(id);
+          playSound(row.sound);
+        });
+        pills.append(pill);
+      }
+      row.paint = () => {
+        const current = row.current();
+        for (const pill of pills.children) pill.classList.toggle('on', pill.dataset.id === current);
+      };
+      row.paint();
+      node.append(pills);
+    }
+
+    function stepOption(row, action) {
+      const at = row.options.findIndex(([id]) => id === row.current());
+      const next = at + (action === 'right' ? 1 : -1);
+      if (next < 0 || next >= row.options.length) return null;
+      row.choose(row.options[next][0]);
+      return row.sound;
+    }
+
+    function pressOption(row) {
+      if (row.hint === 'Next') {
+        const at = row.options.findIndex(([id]) => id === row.current());
+        row.choose(row.options[(at + 1) % row.options.length][0]);
+      }
+      return row.sound;
     }
 
     const link = (name, label, status) => ({ id: name, label, status, hint: 'Open', activate: () => { view = name; focus = 0; render({ swap: true }); } });
@@ -180,15 +244,6 @@ export async function openSettings({ focusConsole } = {}) {
           hint: 'Pick',
           second: item.folder ? { label: 'Skip', run: () => change(window.tink.clearFolder(item.id)) } : null,
           activate: () => change(window.tink.pickFolder(item.id)),
-        }));
-      }
-      if (view === 'choice') {
-        return Object.entries(choice.options).map(([value, label]) => ({
-          id: value,
-          label,
-          tick: value === choice.current,
-          hint: 'Choose',
-          activate: () => pick(value),
         }));
       }
       if (view === 'hidden') {
@@ -296,9 +351,9 @@ export async function openSettings({ focusConsole } = {}) {
             sound: 'toggle',
             activate: () => change(window.tink.setFullscreen(!state.fullscreen), { reload: false }),
           },
-          choose('edge', 'Left edge', EDGES, state.leftEdge, (value) => window.tink.setLeftEdge(value)),
-          choose('highlight', 'Highlight', HIGHLIGHTS, state.focusStyle, (value) => window.tink.setFocusStyle(value)),
-          choose('keyboard', 'Keyboard', KEYBOARDS, state.keyboard, (value) => window.tink.setKeyboard(value)),
+          choose('edge', 'Left edge', EDGES, 'leftEdge', (value) => window.tink.setLeftEdge(value)),
+          choose('highlight', 'Highlight', HIGHLIGHTS, 'focusStyle', (value) => window.tink.setFocusStyle(value)),
+          choose('keyboard', 'Keyboard', KEYBOARDS, 'keyboard', (value) => window.tink.setKeyboard(value)),
           {
             label: 'Profiles on Home',
             status: state.homeProfiles ? 'On' : 'Off',
@@ -306,10 +361,12 @@ export async function openSettings({ focusConsole } = {}) {
             sound: 'toggle',
             activate: () => change(window.tink.setHomeProfiles(!state.homeProfiles), { reload: false }),
           },
-          choose('icons', 'Icons', ICON_STYLES, state.iconStyle, (value) => window.tink.setIconStyle(value)),
-          choose('iconRow', 'Icon row', ICON_ROWS, state.iconRow, (value) => window.tink.setIconRow(value)),
-          choose('background', 'Background', BACKGROUNDS, state.background, (value) => window.tink.setBackground(value)),
+          choose('icons', 'Icons', ICON_STYLES, 'iconStyle', (value) => window.tink.setIconStyle(value)),
+          choose('iconRow', 'Icon row', ICON_ROWS, 'iconRow', (value) => window.tink.setIconRow(value)),
+          choose('background', 'Background', BACKGROUNDS, 'background', (value) => window.tink.setBackground(value)),
+          choose('heart', 'Favourite heart', HEARTS, 'heart', (value) => window.tink.setHeart(value)),
         ],
+        sounds: soundRows,
         system: () => [
           { label: 'Version', status: state.version, plain: true },
           { id: 'update', label: 'Check for updates', status: update, hint: 'Check', activate: checkUpdates },
@@ -394,7 +451,6 @@ export async function openSettings({ focusConsole } = {}) {
         if (row.badge) name.prepend(badge(row.badge, { className: 'small' }));
         node.append(name);
         if (row.side) node.append(badge(row.side, { className: 'small' }));
-        if (row.tick) node.append(tick());
         if (row.key) {
           const input = element('input', 'settings-key');
           input.type = 'password';
@@ -409,6 +465,8 @@ export async function openSettings({ focusConsole } = {}) {
             if (typing && !active.busy) saveKey(input);
           });
           node.append(input);
+        } else if (row.options) {
+          addPills(row, node);
         } else if (row.status) {
           node.append(element('span', row.found ? 'setup-status found' : 'setup-status', row.status));
         }
@@ -418,13 +476,15 @@ export async function openSettings({ focusConsole } = {}) {
         node.addEventListener('click', () => {
           focus = focusable.indexOf(row);
           column = 'pane';
-          if (!typing) row.activate();
+          if (typing) return;
+          if (row.options) focusColumn();
+          else row.activate();
         });
         nodes.push(node);
         focusable.push(row);
       }
       rows = focusable;
-      const titles = { emulators: 'Emulators', folders: 'Games folders', consoles: 'Consoles', hidden: 'Hidden games', choice: choice && choice.label };
+      const titles = { emulators: 'Emulators', folders: 'Games folders', consoles: 'Consoles', hidden: 'Hidden games' };
       const heading = element('h1', '', view === 'top' ? CATEGORIES[category].name : view === 'user' ? userProfile().name : titles[view]);
       if (swap) {
         heading.classList.add('settings-swap');
@@ -502,7 +562,9 @@ export async function openSettings({ focusConsole } = {}) {
           showSettingsHints();
           return focus !== before ? 'list' : null;
         }
+        if (rows[focus].options && (action === 'left' || action === 'right')) return stepOption(rows[focus], action);
         if (action === 'a') {
+          if (rows[focus].options) return pressOption(rows[focus]);
           rows[focus].activate();
           return rows[focus].sound || 'confirm';
         }
@@ -515,7 +577,7 @@ export async function openSettings({ focusConsole } = {}) {
             column = 'categories';
             focusColumn();
           } else {
-            const id = view === 'user' ? user : view === 'choice' ? choice.id : view;
+            const id = view === 'user' ? user : view;
             view = 'top';
             pendingFocus = (row) => row.id === id;
             render({ swap: true });

@@ -1,11 +1,10 @@
 import { element, focusGlow } from './dom.js';
 import { screen as changeScreen } from './transition.js';
-import { badge, tick, ICONS } from './badge.js';
+import { badge, tick } from './badge.js';
 import { createKeyboard } from './keyboard.js';
 
 const root = document.getElementById('profiles');
 const COLOURS = ['blue', 'green', 'orange', 'red', 'purple', 'teal'];
-const BUILT_IN = Object.keys(ICONS);
 const NAME_MAX = 10;
 const TITLES = { icon: 'Choose an icon', colour: 'Choose a background', name: 'Nickname' };
 export const PROFILES_MAX = 8;
@@ -27,6 +26,10 @@ export function closeProfiles() {
 function reveal(node, smooth = true) {
   node.focus({ preventScroll: true });
   const row = node.parentElement;
+  if (row.classList.contains('profile-grid')) {
+    node.scrollIntoView({ block: 'nearest', behavior: smooth ? 'smooth' : 'instant' });
+    return;
+  }
   row.scrollTo({ left: node.offsetLeft + node.offsetWidth / 2 - row.clientWidth / 2, behavior: smooth ? 'smooth' : 'instant' });
 }
 
@@ -36,25 +39,26 @@ function clickable(controller, nodes, pick) {
   }));
 }
 
-export async function editProfile({ id = null, steps = ['icon', 'colour', 'name'], hide = () => {} } = {}) {
+export async function editProfile({ id = null, steps: wanted = ['icon', 'colour', 'name'], hide = () => {} } = {}) {
   const [data, settings, avatars] = await Promise.all([
     window.tink.getProfiles(),
     window.tink.getSettings(),
-    steps.includes('icon') ? window.tink.getAvatars() : [],
+    wanted.includes('icon') ? window.tink.getAvatars() : [],
   ]);
+  const steps = avatars.length ? wanted : wanted.filter((s) => s !== 'icon');
   const design = settings.keyboard === 'full' ? 'full' : 'grid';
   const profile = data.profiles.find((p) => p.id === id);
   const taken = data.profiles.map((p) => p.colour);
   const draft = profile
-    ? { name: profile.name, colour: profile.colour, icon: profile.icon, avatar: profile.avatar, file: null }
+    ? { name: profile.name, colour: profile.colour, avatar: profile.avatar, file: null }
     : {
       name: '',
       colour: COLOURS.find((c) => !taken.includes(c)) || COLOURS[data.profiles.length % COLOURS.length],
-      icon: BUILT_IN[0],
       avatar: null,
       file: null,
     };
-  const tiles = [...BUILT_IN.map((icon) => ({ icon })), ...avatars.map((a) => ({ avatar: a.src, file: a.file }))];
+  const placeholder = profile ? profile.name : `Player ${data.profiles.length + 1}`;
+  const tiles = [{ avatar: null, file: null }, ...avatars.map((a) => ({ avatar: a.src, file: a.file }))];
 
   return new Promise((resolve) => {
     const previous = active;
@@ -70,21 +74,20 @@ export async function editProfile({ id = null, steps = ['icon', 'colour', 'name'
     const dots = element('span', 'profile-dots');
     const header = element('div', 'profile-header');
     header.append(title, dots);
-    const preview = badge(draft, { className: 'profile-preview' });
+    const preview = badge({ ...draft, name: draft.name || placeholder }, { className: 'profile-preview' });
     const body = element('div', 'profile-step');
     const layout = element('div', `profile-steps profile-steps-${design}`);
     layout.append(header, preview, body);
 
     const flow = () => steps.filter((s) => s !== 'colour' || !draft.avatar);
-    const tileLook = (tile) => ({ ...draft, icon: tile.icon || null, avatar: tile.avatar || null });
-    const iconIndex = () => (draft.avatar
-      ? BUILT_IN.length + Math.max(0, avatars.findIndex((a) => a.src === draft.avatar))
-      : Math.max(0, BUILT_IN.indexOf(draft.icon)));
+    const named = (look) => ({ ...look, name: draft.name || placeholder });
+    const tileLook = (tile) => named({ ...draft, avatar: tile.avatar });
+    const iconIndex = () => (draft.avatar ? 1 + Math.max(0, avatars.findIndex((a) => a.src === draft.avatar)) : 0);
     const colourIndex = () => Math.max(0, COLOURS.indexOf(draft.colour));
     const chosen = (index) => (step === 'icon' ? index === iconIndex() : index === colourIndex());
 
     function paint(look) {
-      const next = badge(look);
+      const next = badge(named(look));
       preview.style.background = next.style.background;
       preview.replaceChildren(...next.childNodes);
       document.body.style.setProperty('--profile-tint', look.avatar ? 'var(--bg)' : `var(--profile-${look.colour})`);
@@ -110,7 +113,7 @@ export async function editProfile({ id = null, steps = ['icon', 'colour', 'name'
       nodes.forEach((node, index) => {
         if (chosen(index)) node.append(tick());
       });
-      const row = element('div', 'profile-options');
+      const row = element('div', step === 'icon' ? 'profile-options profile-grid' : 'profile-options');
       row.setAttribute('role', 'list');
       row.append(...nodes);
       body.replaceChildren(row);
@@ -125,7 +128,11 @@ export async function editProfile({ id = null, steps = ['icon', 'colour', 'name'
         design,
         text: draft.name,
         max: NAME_MAX,
-        placeholder: profile ? profile.name : `Player ${data.profiles.length + 1}`,
+        placeholder,
+        onChange: (value) => {
+          draft.name = value.trim();
+          paint(draft);
+        },
         onDone: () => {
           draft.name = keyboard.value().trim();
           next();
@@ -141,6 +148,7 @@ export async function editProfile({ id = null, steps = ['icon', 'colour', 'name'
 
     function render(swap) {
       title.textContent = TITLES[step];
+      layout.classList.toggle('profile-steps-icon', step === 'icon');
       const list = flow();
       dots.replaceChildren(...list.map((s) => element('i', s === step ? 'on' : '')));
       dots.hidden = list.length < 2;
@@ -177,7 +185,8 @@ export async function editProfile({ id = null, steps = ['icon', 'colour', 'name'
 
     async function save() {
       controller.busy = true;
-      const edit = { name: draft.name, colour: draft.colour, icon: draft.icon, avatar: draft.file };
+      const edit = { name: draft.name, colour: draft.colour };
+      if (steps.includes('icon')) edit.avatar = draft.file;
       let saved = id;
       if (!saved) saved = await window.tink.addProfile();
       if (saved) await window.tink.saveProfile({ id: saved, ...edit });
@@ -201,10 +210,26 @@ export async function editProfile({ id = null, steps = ['icon', 'colour', 'name'
       }
     }
 
-    function move(action) {
+    function columns() {
+      return nodes.filter((node) => node.offsetTop === nodes[0].offsetTop).length;
+    }
+
+    function target(action) {
+      if (action === 'first') return 0;
+      if (action === 'last') return nodes.length - 1;
       const delta = { left: -1, right: 1 }[action];
-      const index = focus + (delta || 0);
-      if (!delta || index < 0 || index >= nodes.length) return null;
+      if (delta) return focus + delta;
+      if (step !== 'icon' || (action !== 'up' && action !== 'down')) return -1;
+      const cols = columns();
+      if (action === 'up') return focus - cols;
+      const below = focus + cols;
+      if (below < nodes.length) return below;
+      return Math.floor(focus / cols) < Math.floor((nodes.length - 1) / cols) ? nodes.length - 1 : -1;
+    }
+
+    function move(action) {
+      const index = target(action);
+      if (index < 0 || index >= nodes.length || index === focus) return null;
       focus = index;
       reveal(nodes[focus]);
       return 'move';
@@ -228,7 +253,7 @@ export async function editProfile({ id = null, steps = ['icon', 'colour', 'name'
     const handlers = {
       icon: (action) => choose(action, () => {
         const tile = tiles[focus];
-        Object.assign(draft, { icon: tile.icon || null, avatar: tile.avatar || null, file: tile.file || null });
+        Object.assign(draft, { avatar: tile.avatar, file: tile.file });
       }, () => tileLook(tiles[focus])),
       colour: (action) => choose(action, () => {
         draft.colour = COLOURS[focus];

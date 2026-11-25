@@ -20,6 +20,7 @@ async function launch(root, userData) {
     APPDATA: empty,
   };
   const app = await electron.launch({ args: [path.join(__dirname, '..'), `--user-data-dir=${userData}`], env });
+  await app.evaluate(() => { process.mainModule.require('./src/steam').findSteamDir = async () => null; });
   const page = await app.firstWindow();
   page.errors = [];
   page.on('pageerror', (error) => page.errors.push(error.message));

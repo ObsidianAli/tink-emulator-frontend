@@ -6,18 +6,30 @@ const time = document.createElement('span');
 time.className = 'clock-time';
 
 const wifi = document.createElementNS(SVG, 'svg');
-wifi.setAttribute('viewBox', '0 2 24 24');
+wifi.setAttribute('viewBox', '0 0 24 24');
 wifi.setAttribute('aria-hidden', 'true');
 wifi.id = 'wifi';
-for (const [tag, attributes] of [
-  ['path', { d: 'M3 9a13 13 0 0 1 18 0M6 12.5a8.5 8.5 0 0 1 12 0M9 16a4 4 0 0 1 6 0' }],
-  ['circle', { cx: 12, cy: 19, r: 1, fill: 'currentColor' }],
-  ['path', { class: 'wifi-off', d: 'M4 4l16 16' }],
-]) {
-  const shape = document.createElementNS(SVG, tag);
-  for (const [name, value] of Object.entries(attributes)) shape.setAttribute(name, value);
-  wifi.append(shape);
+
+function shape(tag, attributes, parent = wifi) {
+  const node = document.createElementNS(SVG, tag);
+  for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
+  parent.append(node);
+  return node;
 }
+
+const arc = (r) => {
+  const d = +(r * Math.SQRT1_2).toFixed(3);
+  return `M${+(12 - d).toFixed(3)} ${+(19 - d).toFixed(3)}a${r} ${r} 0 0 1 ${+(2 * d).toFixed(3)} 0`;
+};
+const SLASH = 'M3.5 3.5L20.5 20.5';
+
+const cut = shape('mask', { id: 'wifi-cut', maskUnits: 'userSpaceOnUse', x: 0, y: 0, width: 24, height: 24 });
+shape('rect', { width: 24, height: 24, fill: 'white', stroke: 'none' }, cut);
+shape('path', { d: SLASH, stroke: 'black', 'stroke-width': 5.4 }, cut);
+const signal = shape('g', { class: 'wifi-signal' });
+for (const r of [5, 9.3, 13.6]) shape('path', { d: arc(r) }, signal);
+shape('circle', { class: 'wifi-dot', cx: 12, cy: 18.5, r: 1.9 }, signal);
+shape('path', { class: 'wifi-off', d: SLASH });
 clock.append(time, wifi);
 
 function connection() {

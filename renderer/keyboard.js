@@ -31,7 +31,7 @@ function fullKeys() {
   return keys;
 }
 
-export function createKeyboard({ design, text = '', max, placeholder, onDone, onBack }) {
+export function createKeyboard({ design, text = '', max, placeholder, onDone, onBack, onChange }) {
   const full = design === 'full';
   const keys = full ? fullKeys() : gridKeys();
   const doneIndex = keys.findIndex((key) => key.id === (full ? 'ok' : 'done'));
@@ -73,6 +73,7 @@ export function createKeyboard({ design, text = '', max, placeholder, onDone, on
   function update() {
     nameText.textContent = value || placeholder;
     nameText.classList.toggle('placeholder', value === '');
+    if (onChange) onChange(value);
     keys.forEach((key, i) => {
       const node = nodes[i];
       const label = key.label || (upper() ? key.id.toUpperCase() : key.id);

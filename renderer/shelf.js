@@ -29,6 +29,7 @@ const SHARP_MAX = 2048;
 // A slow Cover load can't keep the screen black for longer than this.
 const READY_MAX_MS = 500;
 const COMPILE_MAX_MS = 1000;
+const HEART_OVERSHOOT = 1.7;
 const BREATH_FRAME_MS = 1000 / 30;
 
 function token(name) {
@@ -69,6 +70,25 @@ function focusTheme() {
     poolSpread: pixels('--focus-pool-spread'),
     poolStrength: parseFloat(token('--focus-pool-strength')) || 0,
   };
+}
+
+function heartTheme() {
+  const number = (name) => parseFloat(token(name)) || 0;
+  return {
+    fill: colour('--heart').slice(0, 3),
+    edge: colour('--heart-edge').slice(0, 3),
+    shadow: colour('--heart-shadow'),
+    edgeWidth: number('--heart-edge-width'),
+    tilt: THREE.MathUtils.degToRad(number('--heart-tilt')),
+    sticker: { size: number('--heart-sticker-size'), inset: number('--heart-sticker-inset') },
+    small: { size: number('--heart-small-size'), inset: number('--heart-small-inset') },
+  };
+}
+
+function heartEase(t, growing) {
+  if (!growing) return t * t;
+  const back = t - 1;
+  return 1 + (HEART_OVERSHOOT + 1) * back ** 3 + HEART_OVERSHOOT * back ** 2;
 }
 
 function studioLight(renderer) {
@@ -116,7 +136,7 @@ function createShelf(canvas, { onTint, button, title }) {
   key.position.set(-2, 3, 6);
   scene.add(key);
 
-  const colours = { shell: token('--surface'), blank: token('--surface-raised'), disc: token('--muted') };
+  const colours = { shell: token('--surface'), blank: token('--surface-raised'), disc: token('--muted'), heart: heartTheme() };
   const row = new THREE.Group();
   scene.add(row);
 
@@ -125,6 +145,7 @@ function createShelf(canvas, { onTint, button, title }) {
   let ringShown = true;
   let textures = createTextures(renderer.capabilities.getMaxAnisotropy());
   const tau = durationMs('--duration-case') / 4.6;
+  const heartMs = durationMs('--duration-ui');
   const discTau = durationMs('--duration-case-slow') / 4.6;
 
   let games = [];
@@ -134,6 +155,8 @@ function createShelf(canvas, { onTint, button, title }) {
   const pools = new Map();
   const motion = { focus: 0 };
   const poseOf = new Map();
+  const hearts = new Map();
+  let heartLook = 'sticker';
   const restPose = () => ({ flip: 0, lid: 0, disc: 0, spin: 0 });
   const detailed = new Set();
   let sharpIndex = -1;
@@ -162,10 +185,12 @@ function createShelf(canvas, { onTint, button, title }) {
     const item = live.get(index);
     live.delete(index);
     poseOf.delete(index);
+    hearts.delete(index);
     clearDetails(index, item);
     ring.detach(item);
     if (sharpIndex === index) sharpIndex = -1;
     item.setPose(restPose());
+    item.setHeart(heartLook, 0);
     item.setCover(null);
     item.setSpine(null);
     row.remove(item.group);
@@ -247,6 +272,7 @@ function createShelf(canvas, { onTint, button, title }) {
       live.set(index, item);
       poseOf.set(index, restPose());
       row.add(item.group);
+      setHeart(index, item, games[index].fav ? 1 : 0);
       showCover(index, item);
     }
   }
@@ -266,6 +292,38 @@ function createShelf(canvas, { onTint, button, title }) {
     leftEdge = mode === 'peek' || mode === 'fade' ? mode : 'slide';
     requestRender();
   }
+  function setHeart(index, item, scale) {
+    hearts.set(index, { scale, from: scale, to: scale, at: 1 });
+    item.setHeart(heartLook, scale);
+  }
+
+  function stepHeart(index, item, dt) {
+    const heart = hearts.get(index);
+    if (heart.at >= 1) return false;
+    heart.at = Math.min(1, heart.at + dt / heartMs);
+    heart.scale = heart.from + (heart.to - heart.from) * heartEase(heart.at, heart.to > heart.from);
+    item.setHeart(heartLook, heart.scale);
+    return true;
+  }
+
+  function setHeartLook(look) {
+    heartLook = look === 'small' ? 'small' : 'sticker';
+    for (const [index, item] of live) item.setHeart(heartLook, hearts.get(index).scale);
+    requestRender();
+  }
+
+  function update(list) {
+    games = list;
+    for (const [index, item] of live) {
+      const heart = hearts.get(index);
+      const to = games[index].fav ? 1 : 0;
+      if (heart.to === to) continue;
+      if (onScreen()) hearts.set(index, { scale: heart.scale, from: heart.scale, to, at: 0 });
+      else setHeart(index, item, to);
+    }
+    requestRender();
+  }
+
   function setFocusStyle(name) {
     ring.setStyle(name);
     requestRender();
@@ -393,6 +451,7 @@ function createShelf(canvas, { onTint, button, title }) {
     for (const [index, item] of live) {
       const isSelected = index === selected;
       place(item, index - motion.focus);
+      if (stepHeart(index, item, dt)) moving = true;
       const pose = poseOf.get(index);
       stepPose(pose, isSelected ? currentPose() : REST, ease, easeSlow);
       if (pose.disc > 0 && item.disc) {
@@ -608,7 +667,7 @@ function createShelf(canvas, { onTint, button, title }) {
   screens.observe(canvas.parentElement, { attributes: true, attributeFilter: ['class'] });
   for (const section of canvas.parentElement.querySelectorAll(':scope > section')) screens.observe(section, { attributes: true, attributeFilter: ['hidden'] });
 
-  return { show, whenSettled, showRing, setLeftEdge, setFocusStyle, ready, forgetCovers, art, sleep, wake, select, flip, open, back, caseState, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
+  return { show, update, whenSettled, showRing, setLeftEdge, setHeartLook, setFocusStyle, ready, forgetCovers, art, sleep, wake, select, flip, open, back, caseState, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
 }
 
 export { createShelf };
