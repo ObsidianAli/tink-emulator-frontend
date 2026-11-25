@@ -18,10 +18,6 @@ const SPARE = 2;
 const LEFT_CLEAR = 0.7;
 const SETTLED = 0.0005;
 const TITLE_NEAR = 0.05;
-const NEXT_STEP = 0.9;
-const DISC_SEATED = 0.03;
-const DISC_SPIN = (Math.PI * 2) / 16000;
-const REST = { flip: 0, lid: 0 };
 const LAYOUT = SHAPES.dvd;
 const shapeOf = (game) => shapeFor(game.console);
 const SHARP_STEP = 64;
@@ -136,7 +132,7 @@ function createShelf(canvas, { onTint, button, title }) {
   key.position.set(-2, 3, 6);
   scene.add(key);
 
-  const colours = { shell: token('--surface'), blank: token('--surface-raised'), disc: token('--muted'), heart: heartTheme() };
+  const colours = { shell: token('--surface'), blank: token('--surface-raised'), heart: heartTheme() };
   const row = new THREE.Group();
   scene.add(row);
 
@@ -146,19 +142,14 @@ function createShelf(canvas, { onTint, button, title }) {
   let textures = createTextures(renderer.capabilities.getMaxAnisotropy());
   const tau = durationMs('--duration-case') / 4.6;
   const heartMs = durationMs('--duration-ui');
-  const discTau = durationMs('--duration-case-slow') / 4.6;
 
   let games = [];
   let selected = 0;
-  let poses = [];
   const live = new Map();
   const pools = new Map();
   const motion = { focus: 0 };
-  const poseOf = new Map();
   const hearts = new Map();
   let heartLook = 'sticker';
-  const restPose = () => ({ flip: 0, lid: 0, disc: 0, spin: 0 });
-  const detailed = new Set();
   let sharpIndex = -1;
 
   const halfTan = () => Math.tan(THREE.MathUtils.degToRad(FOV / 2));
@@ -184,12 +175,9 @@ function createShelf(canvas, { onTint, button, title }) {
   function releaseCase(index) {
     const item = live.get(index);
     live.delete(index);
-    poseOf.delete(index);
     hearts.delete(index);
-    clearDetails(index, item);
     ring.detach(item);
     if (sharpIndex === index) sharpIndex = -1;
-    item.setPose(restPose());
     item.setHeart(heartLook, 0);
     item.setCover(null);
     item.setSpine(null);
@@ -203,8 +191,9 @@ function createShelf(canvas, { onTint, button, title }) {
     return textures.get(games[index], coverAspect(shape), spineAspect(shape), inUse);
   }
 
-  function inUseDetails() {
-    return new Set([...detailed, selected].filter((i) => games[i]).map((i) => games[i].id));
+  function sharpCover() {
+    const game = games[selected];
+    return textures.getSharp(game, coverAspect(shapeOf(game)), sharpHeight(), new Set([game.id]));
   }
 
   function sharpen() {
@@ -219,30 +208,11 @@ function createShelf(canvas, { onTint, button, title }) {
     const item = live.get(index);
     sharpIndex = item ? index : -1;
     if (!item) return;
-    textures.getSharp(games[index], coverAspect(shapeOf(games[index])), sharpHeight(), inUseDetails()).then((made) => {
+    sharpCover().then((made) => {
       if (!made || live.get(index) !== item || sharpIndex !== index) return;
       item.setCover(made.texture);
       requestRender();
     });
-  }
-
-  function showDetails() {
-    const index = selected;
-    const item = live.get(index);
-    if (!item || detailed.has(index)) return;
-    detailed.add(index);
-    textures.getDetails(games[index], coverAspect(shapeOf(games[index])), sharpHeight(), games[index].consoleName, inUseDetails()).then((made) => {
-      if (live.get(index) !== item || !detailed.has(index) || !made) return;
-      item.setBack(made.back);
-      item.setLabel(made.label);
-      requestRender();
-    });
-  }
-
-  function clearDetails(index, item) {
-    if (!detailed.delete(index)) return;
-    item.setBack(null);
-    item.setLabel(null);
   }
 
   function showCover(index, item) {
@@ -270,7 +240,6 @@ function createShelf(canvas, { onTint, button, title }) {
       if (live.has(index)) continue;
       const item = takeCase(shapeOf(games[index]));
       live.set(index, item);
-      poseOf.set(index, restPose());
       row.add(item.group);
       setHeart(index, item, games[index].fav ? 1 : 0);
       showCover(index, item);
@@ -422,46 +391,15 @@ function createShelf(canvas, { onTint, button, title }) {
     camera.lookAt(0, LAYOUT.height * AIM, BACK);
   }
 
-  const currentPose = () => poses[poses.length - 1] || REST;
-
-  function stepPose(pose, target, ease, easeSlow) {
-    const flipTarget = target.flip && pose.lid > 0 ? pose.flip : target.flip;
-    pose.flip = ease(pose.flip, flipTarget);
-    const facingFront = pose.flip < 1 - NEXT_STEP;
-    const lidTarget = target.lid ? (facingFront ? 1 : pose.lid) : pose.disc > DISC_SEATED ? pose.lid : 0;
-    pose.lid = ease(pose.lid, lidTarget);
-    pose.disc = easeSlow(pose.disc, target.lid && pose.lid > NEXT_STEP ? 1 : 0);
-  }
-
   function step(dt) {
-    let moving = false;
-    const easer = (t) => {
-      const k = 1 - Math.exp(-dt / t);
-      return (value, target) => {
-        const next = value + (target - value) * k;
-        if (Math.abs(target - next) < SETTLED) return target;
-        moving = true;
-        return next;
-      };
-    };
-    const ease = easer(tau);
-    const easeSlow = easer(discTau);
-    motion.focus = ease(motion.focus, selected);
-    let spinning = false;
+    const next = motion.focus + (selected - motion.focus) * (1 - Math.exp(-dt / tau));
+    let moving = Math.abs(selected - next) >= SETTLED;
+    motion.focus = moving ? next : selected;
     for (const [index, item] of live) {
-      const isSelected = index === selected;
       place(item, index - motion.focus);
       if (stepHeart(index, item, dt)) moving = true;
-      const pose = poseOf.get(index);
-      stepPose(pose, isSelected ? currentPose() : REST, ease, easeSlow);
-      if (pose.disc > 0 && item.disc) {
-        pose.spin = (pose.spin + dt * DISC_SPIN) % (Math.PI * 2);
-        spinning = true;
-      }
-      item.setPose(pose);
-      if (!isSelected && !pose.flip && !pose.lid && !pose.disc) clearDetails(index, item);
     }
-    return { moving, spinning };
+    return moving;
   }
 
   let frameRequested = false;
@@ -476,14 +414,14 @@ function createShelf(canvas, { onTint, button, title }) {
   function frame(now) {
     frameRequested = false;
     const dt = lastTime === null ? 16 : Math.min(now - lastTime, 50);
-    const { moving, spinning } = step(dt);
+    const moving = step(dt);
     aimCamera();
     layoutRow();
     const buttonAt = placeButton();
     const item = live.get(selected);
     if (item && selected < games.length) ring.attach(item);
     else ring.clear();
-    const showing = ring.update(now, ringShown && caseState() === 'front');
+    const showing = ring.update(now, ringShown);
     renderer.render(scene, camera);
     placeTitle(buttonAt);
     if (onRest && Math.abs(motion.focus - selected) < TITLE_NEAR) {
@@ -491,12 +429,12 @@ function createShelf(canvas, { onTint, button, title }) {
       onRest = null;
       done();
     }
-    if (moving || spinning) settled = false;
+    if (moving) settled = false;
     else if (!settled) {
       settled = true;
       updateWindow();
     }
-    if (moving || spinning) {
+    if (moving) {
       lastTime = now;
       nextFrame();
     } else if (showing && onScreen()) {
@@ -539,7 +477,6 @@ function createShelf(canvas, { onTint, button, title }) {
     for (const i of [...live.keys()]) releaseCase(i);
     games = list;
     button.hidden = !games.length;
-    poses = [];
     selected = Math.max(0, Math.min(index, games.length));
     motion.focus = selected;
     resize();
@@ -554,7 +491,6 @@ function createShelf(canvas, { onTint, button, title }) {
     const next = Math.max(0, Math.min(index, games.length));
     if (next === selected) return false;
     selected = next;
-    poses = [];
     if (asleep) return true;
     updateWindow();
     const item = live.get(selected);
@@ -570,8 +506,7 @@ function createShelf(canvas, { onTint, button, title }) {
 
   function ready() {
     const waits = [...live.keys()].map(coverOf);
-    const game = games[selected];
-    if (live.has(selected)) waits.push(textures.getSharp(game, coverAspect(shapeOf(game)), sharpHeight(), inUseDetails()));
+    if (live.has(selected)) waits.push(sharpCover());
     const capped = (promise, ms) => Promise.race([promise, new Promise((resolve) => setTimeout(resolve, ms))]);
     // A fresh WebGL context after sleep has to compile every shader again, which stalls the first frame if left to draw time.
     return capped(Promise.all(waits), READY_MAX_MS).then(() => capped(renderer.compileAsync(scene, camera), COMPILE_MAX_MS));
@@ -620,42 +555,6 @@ function createShelf(canvas, { onTint, button, title }) {
     show(games, selected);
   }
 
-  function changePose(change) {
-    if (selected >= games.length) return false;
-    change();
-    showDetails();
-    requestRender();
-    return true;
-  }
-
-  function flip() {
-    const pose = currentPose();
-    if (pose.lid) return false;
-    if (pose.flip) return back();
-    return changePose(() => poses.push({ flip: 1, lid: 0 }));
-  }
-
-  function open() {
-    const pose = currentPose();
-    if (pose.lid) return false;
-    return changePose(() => {
-      if (pose.flip) poses.push({ flip: 0, lid: 0 });
-      poses.push({ flip: 0, lid: 1 });
-    });
-  }
-
-  function back() {
-    if (!poses.length) return false;
-    poses.pop();
-    requestRender();
-    return true;
-  }
-
-  function caseState() {
-    const pose = currentPose();
-    return pose.lid ? 'open' : pose.flip ? 'back' : 'front';
-  }
-
   function showRing(shown) {
     ringShown = shown;
     requestRender();
@@ -667,7 +566,7 @@ function createShelf(canvas, { onTint, button, title }) {
   screens.observe(canvas.parentElement, { attributes: true, attributeFilter: ['class'] });
   for (const section of canvas.parentElement.querySelectorAll(':scope > section')) screens.observe(section, { attributes: true, attributeFilter: ['hidden'] });
 
-  return { show, update, whenSettled, showRing, setLeftEdge, setHeartLook, setFocusStyle, ready, forgetCovers, art, sleep, wake, select, flip, open, back, caseState, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
+  return { show, update, whenSettled, showRing, setLeftEdge, setHeartLook, setFocusStyle, ready, forgetCovers, art, sleep, wake, select, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
 }
 
 export { createShelf };

@@ -7,12 +7,6 @@ const SPINE_WIDTH = 48;
 const SPINE_DIM = 0.55;
 const CROP_LIMIT = 0.25;
 const TINT_SAMPLES = 16;
-const KEEP_DETAILS = 4;
-const BACK_BLUR = 0.04;
-const BACK_MARGIN = 0.08;
-const BACK_DIM = 0.6;
-const HOLE = 0.07;
-const HUB = 0.17;
 
 const tokens = new Map();
 
@@ -37,7 +31,8 @@ async function loadImage(src) {
 
 function drawImage(img, aspect, height) {
   const canvas = canvasFor(aspect, Math.min(height, Math.max(TEXTURE_HEIGHT, img.naturalHeight)));
-  const ctx = canvas.getContext('2d');
+  // Copying a GPU canvas into an sRGB texture stalls the screen for 15 ms or more, so this one stays on the CPU.
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const crop = Math.abs(img.naturalWidth / img.naturalHeight / aspect - 1) <= CROP_LIMIT;
   const fit = crop ? Math.max : Math.min;
   const scale = fit(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight);
@@ -140,65 +135,6 @@ function fontFor(size, weight) {
   return `${token(weight)} ${Math.round(size)}px Inter`;
 }
 
-async function drawBack(cover, title, consoleName) {
-  const canvas = document.createElement('canvas');
-  canvas.width = cover.width;
-  canvas.height = cover.height;
-  const { width, height } = canvas;
-  const ctx = canvas.getContext('2d');
-  const blur = width * BACK_BLUR;
-  ctx.filter = `blur(${blur}px)`;
-  // Drawn past the edges so the blur doesn't fade them.
-  ctx.drawImage(cover, -blur * 2, -blur * 2, width + blur * 4, height + blur * 4);
-  ctx.filter = 'none';
-  ctx.globalAlpha = BACK_DIM;
-  ctx.fillStyle = token('--scrim');
-  ctx.fillRect(0, 0, width, height);
-  ctx.globalAlpha = 1;
-
-  const titleSize = width / 10;
-  const smallSize = titleSize * (parseFloat(token('--text-body')) / parseFloat(token('--text-title')));
-  const titleFont = fontFor(titleSize, '--weight-bold');
-  const smallFont = fontFor(smallSize, '--weight-regular');
-  await Promise.all([document.fonts.load(titleFont), document.fonts.load(smallFont)]);
-  const margin = width * BACK_MARGIN;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.font = titleFont;
-  ctx.fillStyle = token('--text');
-  const lineHeight = titleSize * parseFloat(token('--line-height'));
-  wrap(ctx, title, width - margin * 2).forEach((line, i) => ctx.fillText(line, margin, margin + i * lineHeight));
-  ctx.font = smallFont;
-  ctx.fillStyle = token('--muted');
-  ctx.textBaseline = 'bottom';
-  ctx.fillText(consoleName, margin, height - margin);
-  return canvas;
-}
-
-function drawLabel(cover) {
-  const canvas = document.createElement('canvas');
-  const size = Math.max(cover.width, cover.height);
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  const r = size / 2;
-  const circle = (radius) => {
-    ctx.beginPath();
-    ctx.arc(r, r, radius, 0, Math.PI * 2);
-  };
-  circle(r);
-  ctx.clip();
-  const scale = Math.max(size / cover.width, size / cover.height);
-  ctx.drawImage(cover, (size - cover.width * scale) / 2, (size - cover.height * scale) / 2, cover.width * scale, cover.height * scale);
-  circle(r * HUB);
-  ctx.fillStyle = token('--muted');
-  ctx.fill();
-  circle(r * HOLE);
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.fill();
-  return canvas;
-}
-
 async function coverCanvas(game, aspect, height) {
   const cover = await window.tink.getCover(game.id);
   try {
@@ -258,12 +194,6 @@ function createTextures(maxAnisotropy) {
     return { texture, textures: [texture] };
   });
 
-  const details = createCache(KEEP_DETAILS, async (game, cover, consoleName) => {
-    const back = makeTexture(await drawBack(cover, game.title, consoleName), anisotropy);
-    const label = makeTexture(drawLabel(cover), anisotropy);
-    return { back, label, textures: [back, label] };
-  });
-
   function get(game, aspect, spineAspect, inUse) {
     return covers(game.id, inUse, game, aspect, spineAspect);
   }
@@ -272,19 +202,12 @@ function createTextures(maxAnisotropy) {
     return sharp(game.id, inUse, game, aspect, height);
   }
 
-  async function getDetails(game, aspect, height, consoleName, inUse) {
-    const made = await getSharp(game, aspect, height, inUse);
-    if (!made) return null;
-    return details(game.id, inUse, game, made.texture.image, consoleName);
-  }
-
   function forget() {
     covers.clear();
     sharp.clear();
-    details.clear();
   }
 
-  return { get, getSharp, getDetails, forget };
+  return { get, getSharp, forget };
 }
 
 export { createTextures };

@@ -98,9 +98,6 @@ async function main() {
   assert.strictEqual(await pink(), 0);
   await key('l', 800);
   assert.ok(await pink() > 200, 'a favourite wears a heart on Home');
-  await key('f', 1500);
-  assert.strictEqual(await pink(), 0, 'the heart is not seen from behind');
-  await key('Escape', 1200);
   await key('l', 800);
   assert.strictEqual(await pink(), 0, 'unfavouriting takes the heart away');
   await key('l', 800);
