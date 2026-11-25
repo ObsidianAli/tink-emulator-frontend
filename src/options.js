@@ -4,8 +4,18 @@ const { isFile } = require('./detect');
 
 const wantsFullscreen = (settings) => settings.fullscreen !== false;
 
+const showsHomeProfiles = (settings) => settings.homeProfiles !== false;
+
 const LEFT_EDGES = ['slide', 'peek', 'fade'];
 const leftEdge = (settings) => (LEFT_EDGES.includes(settings.leftEdge) ? settings.leftEdge : 'slide');
+const FOCUS_STYLES = ['rim', 'snake', 'under'];
+const focusStyle = (settings) => (FOCUS_STYLES.includes(settings.focusStyle) ? settings.focusStyle : 'rim');
+
+const BACKGROUNDS = ['tint', 'art', 'drift'];
+const background = (settings) => (BACKGROUNDS.includes(settings.background) ? settings.background : 'tint');
+
+const KEYBOARDS = ['grid', 'full'];
+const keyboard = (settings) => (KEYBOARDS.includes(settings.keyboard) ? settings.keyboard : 'grid');
 
 const steamKey = (settings) => (typeof settings.steamGridDbKey === 'string' ? settings.steamGridDbKey.trim() : '');
 
@@ -32,6 +42,10 @@ function buildSettings(settings, detected, version) {
     version,
     fullscreen: wantsFullscreen(settings),
     leftEdge: leftEdge(settings),
+    focusStyle: focusStyle(settings),
+    background: background(settings),
+    keyboard: keyboard(settings),
+    homeProfiles: showsHomeProfiles(settings),
     covers: settings.covers === true,
     hasKey: steamKey(settings) !== '',
     consoles,
@@ -51,8 +65,24 @@ function setFullscreen(settings, on) {
   settings.fullscreen = on === true;
 }
 
+function setHomeProfiles(settings, on) {
+  settings.homeProfiles = on === true;
+}
+
 function setLeftEdge(settings, mode) {
   if (LEFT_EDGES.includes(mode)) settings.leftEdge = mode;
+}
+
+function setFocusStyle(settings, mode) {
+  if (FOCUS_STYLES.includes(mode)) settings.focusStyle = mode;
+}
+
+function setBackground(settings, mode) {
+  if (BACKGROUNDS.includes(mode)) settings.background = mode;
+}
+
+function setKeyboard(settings, mode) {
+  if (KEYBOARDS.includes(mode)) settings.keyboard = mode;
 }
 
 function setSteamKey(settings, key) {
@@ -61,4 +91,4 @@ function setSteamKey(settings, key) {
   else delete settings.steamGridDbKey;
 }
 
-module.exports = { buildSettings, clearEmulator, setFullscreen, setLeftEdge, setSteamKey, wantsFullscreen, steamKey };
+module.exports = { buildSettings, clearEmulator, setFullscreen, setLeftEdge, setFocusStyle, setBackground, setKeyboard, setHomeProfiles, setSteamKey, wantsFullscreen, steamKey };

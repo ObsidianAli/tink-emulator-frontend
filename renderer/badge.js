@@ -18,11 +18,13 @@ export const ICONS = {
   ],
 };
 
-function glyph(name) {
+const TICK = [['path', { d: 'M17 33l10 10 20-22' }]];
+
+function glyph(shapes) {
   const svg = document.createElementNS(SVG, 'svg');
   svg.setAttribute('viewBox', '0 0 64 64');
   svg.setAttribute('aria-hidden', 'true');
-  for (const [tag, attributes] of ICONS[name] || ICONS.controller) {
+  for (const [tag, attributes] of shapes) {
     const shape = document.createElementNS(SVG, tag);
     for (const [key, value] of Object.entries(attributes)) shape.setAttribute(key, value);
     svg.append(shape);
@@ -39,7 +41,13 @@ export function badge(profile, { className = '', neutral = false } = {}) {
     image.alt = '';
     node.append(image);
   } else {
-    node.append(glyph(profile.icon));
+    node.append(glyph(ICONS[profile.icon] || ICONS.controller));
   }
+  return node;
+}
+
+export function tick() {
+  const node = element('span', 'tick');
+  node.append(glyph(TICK));
   return node;
 }

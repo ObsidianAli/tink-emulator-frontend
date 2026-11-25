@@ -17,6 +17,7 @@ const SIDE_DIM = 0.35;
 const SPARE = 2;
 const LEFT_CLEAR = 0.7;
 const SETTLED = 0.0005;
+const TITLE_NEAR = 0.05;
 const NEXT_STEP = 0.9;
 const DISC_SEATED = 0.03;
 const DISC_SPIN = (Math.PI * 2) / 16000;
@@ -61,6 +62,13 @@ function focusTheme() {
     low: parseFloat(token('--focus-breath-low')) || 1,
     period: durationMs('--focus-period'),
     fade: durationMs('--focus-fade'),
+    arc: parseFloat(token('--focus-arc')) || 0.25,
+    lap: durationMs('--focus-lap'),
+    halo: parseFloat(token('--focus-rim-halo')) || 0,
+    rimPower: parseFloat(token('--focus-rim-power')) || 1,
+    rimStrength: parseFloat(token('--focus-rim-strength')) || 0,
+    poolSpread: pixels('--focus-pool-spread'),
+    poolStrength: parseFloat(token('--focus-pool-strength')) || 0,
   };
 }
 
@@ -157,6 +165,7 @@ function createShelf(canvas, { onTint, button, title }) {
     poseOf.delete(index);
     clearDetails(index, item);
     ring.detach(item.group);
+    ring.light(item, 0);
     if (sharpIndex === index) sharpIndex = -1;
     item.setPose(restPose());
     item.setCover(null);
@@ -219,7 +228,7 @@ function createShelf(canvas, { onTint, button, title }) {
       item.setCover(made.texture);
       item.setSpine(made.spine);
       if (index === selected) {
-        onTint(made.tint);
+        onTint(made.tint, made.art);
         sharpen();
       }
       requestRender();
@@ -251,6 +260,7 @@ function createShelf(canvas, { onTint, button, title }) {
     item.group.position.set(slotX(offset) - clear, 0, PULL + near * (BACK - PULL));
     item.group.rotation.y = (1 - near) * SELECTED_TURN - side * near * SIDE_TURN;
     item.setDim(near * SIDE_DIM, near);
+    ring.light(item, 1 - near);
     item.setFade(offset < 0 && leftEdge === 'fade' ? Math.max(0, 1 + offset) : 1);
   }
 
@@ -259,7 +269,14 @@ function createShelf(canvas, { onTint, button, title }) {
     leftEdge = mode === 'peek' || mode === 'fade' ? mode : 'slide';
     requestRender();
   }
-  window.tink.getSettings().then((state) => setLeftEdge(state.leftEdge));
+  function setFocusStyle(name) {
+    ring.setStyle(name);
+    requestRender();
+  }
+  window.tink.getSettings().then((state) => {
+    setLeftEdge(state.leftEdge);
+    setFocusStyle(state.focusStyle);
+  });
 
   function slotX(offset) {
     const near = Math.min(1, Math.abs(offset));
@@ -397,6 +414,7 @@ function createShelf(canvas, { onTint, button, title }) {
   let lastTime = null;
   let breathTimer = 0;
   let settled = false;
+  let onRest = null;
   let buttonHalf = 0;
 
   function frame(now) {
@@ -412,6 +430,11 @@ function createShelf(canvas, { onTint, button, title }) {
     const { fading, showing } = ring.update(now, dt, ringShown && caseState() === 'front');
     renderer.render(scene, camera);
     placeTitle(buttonAt);
+    if (onRest && Math.abs(motion.focus - selected) < TITLE_NEAR) {
+      const done = onRest;
+      onRest = null;
+      done();
+    }
     if (moving || spinning) settled = false;
     else if (!settled) {
       settled = true;
@@ -437,6 +460,11 @@ function createShelf(canvas, { onTint, button, title }) {
   }
 
   const requestRender = nextFrame;
+
+  function whenSettled(callback) {
+    onRest = callback;
+    nextFrame();
+  }
 
   function resize() {
     const { clientWidth, clientHeight } = canvas;
@@ -476,7 +504,7 @@ function createShelf(canvas, { onTint, button, title }) {
     const item = live.get(selected);
     if (item) {
       coverOf(selected).then((made) => {
-        if (made && live.get(selected) === item) onTint(made.tint);
+        if (made && live.get(selected) === item) onTint(made.tint, made.art);
       });
     }
     sharpen();
@@ -500,7 +528,7 @@ function createShelf(canvas, { onTint, button, title }) {
       textures.get(game, coverAspect(shape), spineAspect(shape), inUse),
       textures.getSharp(game, coverAspect(shape), height, inUse),
     ]);
-    if (cover) onTint(cover.tint);
+    if (cover) onTint(cover.tint, cover.art);
     return sharp && { image: sharp.texture.image, aspect: coverAspect(shape) };
   }
 
@@ -583,7 +611,7 @@ function createShelf(canvas, { onTint, button, title }) {
   screens.observe(canvas.parentElement, { attributes: true, attributeFilter: ['class'] });
   for (const section of canvas.parentElement.querySelectorAll(':scope > section')) screens.observe(section, { attributes: true, attributeFilter: ['hidden'] });
 
-  return { show, showRing, setLeftEdge, ready, forgetCovers, art, sleep, wake, select, flip, open, back, caseState, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
+  return { show, whenSettled, showRing, setLeftEdge, setFocusStyle, ready, forgetCovers, art, sleep, wake, select, flip, open, back, caseState, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
 }
 
 export { createShelf };

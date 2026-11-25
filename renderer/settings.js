@@ -1,10 +1,13 @@
 import { element, focusRow, shortPath } from './dom.js';
 import { screen } from './transition.js';
+import { badge } from './badge.js';
+import { editProfile, closeProfiles, PROFILES_MAX } from './profiles.js';
 
 const root = document.getElementById('settings');
 let active = null;
 
 const CATEGORIES = [
+  { id: 'users', name: 'Users' },
   { id: 'library', name: 'Library' },
   { id: 'covers', name: 'Covers' },
   { id: 'display', name: 'Display' },
@@ -23,11 +26,17 @@ export function hideSettings() {
   root.hidden = true;
 }
 
+const HIGHLIGHTS = { rim: 'Rim', snake: 'Snake', under: 'Under' };
+const NEXT_HIGHLIGHT = { rim: 'snake', snake: 'under', under: 'rim' };
 const EDGES = { slide: 'Slide off', peek: 'Peek', fade: 'Fade' };
+const KEYBOARDS = { grid: 'Grid', full: 'Full' };
 const NEXT_EDGE = { slide: 'peek', peek: 'fade', fade: 'slide' };
+const BACKGROUNDS = { tint: 'Tint', art: 'Art', drift: 'Drift' };
+const NEXT_BACKGROUND = { tint: 'art', art: 'drift', drift: 'tint' };
 
 export async function openSettings({ focusConsole } = {}) {
   let state = await window.tink.getSettings();
+  let users = await window.tink.getProfiles();
   return new Promise((resolve) => {
     let changed = false;
     let focus = 0;
@@ -42,6 +51,7 @@ export async function openSettings({ focusConsole } = {}) {
     let column = 'categories';
     let categoryNodes = [];
     let pane = null;
+    let user = null;
 
     async function change(request, { reload = true } = {}) {
       active.busy = true;
@@ -77,7 +87,49 @@ export async function openSettings({ focusConsole } = {}) {
       if (ok) await window.tink.applyUpdate();
     }
 
+    async function runSteps(options, rowId) {
+      active.busy = true;
+      const id = await editProfile({ ...options, hide: () => { root.hidden = true; } });
+      users = await window.tink.getProfiles();
+      await screen(() => {
+        closeProfiles();
+        root.hidden = false;
+        pendingFocus = (row) => row.id === (rowId || id || 'add');
+        render();
+      });
+      active.busy = false;
+    }
+
+    async function removeUser(profile) {
+      // Lets this press finish before the dialog opens, or the dialog would take it as its own.
+      await null;
+      if (!await showDialog({ message: `Remove ${profile.name}?`, confirm: 'Remove', cancel: 'Not now', sound: 'list' })) return;
+      if (profile.id === users.last) changed = true;
+      active.busy = true;
+      try {
+        await window.tink.removeProfile(profile.id);
+        users = await window.tink.getProfiles();
+      } finally {
+        active.busy = false;
+      }
+      view = 'top';
+      user = null;
+      focus = 0;
+      render({ swap: true });
+    }
+
+    const userProfile = () => users.profiles.find((p) => p.id === user);
+
     const buildRows = () => {
+      if (view === 'user') {
+        const profile = userProfile();
+        const userRows = [
+          { id: 'name', label: 'Nickname', status: profile.name, hint: 'Change', activate: () => runSteps({ id: user, steps: ['name'] }, 'name') },
+          { id: 'icon', label: 'Icon', side: profile, hint: 'Change', activate: () => runSteps({ id: user, steps: ['icon', 'colour'] }, 'icon') },
+        ];
+        if (users.profiles.length > 1) userRows.push({ label: 'Remove', group: true, hint: 'Remove', activate: () => removeUser(profile) });
+        return userRows;
+      }
       if (view === 'emulators') {
         return state.consoles.map((item) => {
           const emulator = item.emulator;
@@ -115,6 +167,23 @@ export async function openSettings({ focusConsole } = {}) {
       const foldersSet = state.consoles.filter((item) => item.folder).length;
       const shown = state.consoleList.filter((item) => !item.hidden).length;
       const panes = {
+        users: () => {
+          const list = users.profiles.map((profile) => ({
+            id: profile.id,
+            label: profile.name,
+            badge: profile,
+            status: profile.id === users.last ? 'Current' : '',
+            hint: 'Open',
+            activate: () => {
+              user = profile.id;
+              view = 'user';
+              focus = 0;
+              render({ swap: true });
+            },
+          }));
+          if (users.profiles.length < PROFILES_MAX) list.push({ id: 'add', label: 'Add user', group: true, hint: 'Add', activate: () => runSteps({}) });
+          return list;
+        },
         library: () => [
           link('emulators', 'Emulators', `${emulatorsFound} of ${state.consoles.length} found`),
           link('folders', 'Games folders', `${foldersSet} of ${state.consoles.length} set`),
@@ -179,6 +248,34 @@ export async function openSettings({ focusConsole } = {}) {
             hint: 'Switch',
             sound: 'toggle',
             activate: () => change(window.tink.setLeftEdge(NEXT_EDGE[state.leftEdge] || 'peek'), { reload: false }),
+          },
+          {
+            label: 'Highlight',
+            status: HIGHLIGHTS[state.focusStyle] || HIGHLIGHTS.rim,
+            hint: 'Switch',
+            sound: 'toggle',
+            activate: () => change(window.tink.setFocusStyle(NEXT_HIGHLIGHT[state.focusStyle] || 'snake'), { reload: false }),
+          },
+          {
+            label: 'Keyboard',
+            status: KEYBOARDS[state.keyboard] || KEYBOARDS.grid,
+            hint: 'Switch',
+            sound: 'toggle',
+            activate: () => change(window.tink.setKeyboard(state.keyboard === 'full' ? 'grid' : 'full'), { reload: false }),
+          },
+          {
+            label: 'Profiles on Home',
+            status: state.homeProfiles ? 'On' : 'Off',
+            hint: 'Switch',
+            sound: 'toggle',
+            activate: () => change(window.tink.setHomeProfiles(!state.homeProfiles), { reload: false }),
+          },
+          {
+            label: 'Background',
+            status: BACKGROUNDS[state.background] || BACKGROUNDS.tint,
+            hint: 'Switch',
+            sound: 'toggle',
+            activate: () => change(window.tink.setBackground(NEXT_BACKGROUND[state.background] || 'art'), { reload: false }),
           },
         ],
         system: () => [
@@ -250,7 +347,9 @@ export async function openSettings({ focusConsole } = {}) {
         else node.type = 'button';
         const name = element('span', 'setup-name', row.label);
         if (row.sub) name.append(element('span', 'setup-sub', row.sub));
+        if (row.badge) name.prepend(badge(row.badge, { className: 'small' }));
         node.append(name);
+        if (row.side) node.append(badge(row.side, { className: 'small' }));
         if (row.key) {
           const input = element('input', 'settings-key');
           input.type = 'password';
@@ -280,7 +379,7 @@ export async function openSettings({ focusConsole } = {}) {
       }
       rows = focusable;
       const titles = { emulators: 'Emulators', folders: 'Games folders', consoles: 'Consoles' };
-      const heading = element('h1', '', view === 'top' ? CATEGORIES[category].name : titles[view]);
+      const heading = element('h1', '', view === 'top' ? CATEGORIES[category].name : view === 'user' ? userProfile().name : titles[view]);
       if (swap) {
         heading.classList.add('settings-swap');
         list.classList.add('settings-swap');
@@ -370,7 +469,7 @@ export async function openSettings({ focusConsole } = {}) {
             column = 'categories';
             focusColumn();
           } else {
-            const id = view;
+            const id = view === 'user' ? user : view;
             view = 'top';
             pendingFocus = (row) => row.id === id;
             render({ swap: true });
@@ -384,6 +483,7 @@ export async function openSettings({ focusConsole } = {}) {
       root.hidden = false;
       build();
       if (focusConsole) {
+        category = CATEGORIES.findIndex((item) => item.id === 'library');
         column = 'pane';
         view = 'emulators';
         pendingFocus = (row) => row.console === focusConsole;

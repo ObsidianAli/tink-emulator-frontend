@@ -43,6 +43,12 @@
   initial-value: 0px;
 }
 
+@property --focus-pool-spread {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
 @property --focus-glow-size {
   syntax: '<length>';
   inherits: true;
@@ -56,6 +62,7 @@
   --line: rgba(255, 255, 255, 0.08);
   --text: #f3f4f6;
   --muted: #9aa0aa;
+  --dim: #5d636e;
   --accent: #4da3ff;
   --on-light: #0f1115;
   --scrim: rgba(8, 9, 12, 0.5);
@@ -63,6 +70,38 @@
   --black: #000;
   --tint-strength: 28%;
   --tint-reach: 80%;
+
+  --art-width: 160;
+  --art-height: 90;
+  --art-overscan: 1.4;
+  --art-focus: 0.4;
+  --art-blur: 8px;
+  --art-saturate: 1;
+  --art-zoom: 1.05;
+  --art-opacity: 0.32;
+  --art-opacity-behind: 0.15;
+  --art-shade: linear-gradient(to bottom, rgba(15, 17, 21, 0.3), rgba(15, 17, 21, 0) 35%, rgba(15, 17, 21, 0.75));
+
+  --drift-neutral: #3b4b6e;
+  --drift-lightness: 0.5;
+  --drift-chroma: 0.12;
+  --drift-hue-shift: 60;
+  --drift-mix: 55%;
+  --drift-size: 80vmax;
+  --drift-falloff: 70%;
+  --drift-opacity: 0.6;
+  --drift-opacity-behind: 0.35;
+  --drift-period-a: 47s;
+  --drift-period-b: 61s;
+  --drift-period-c: 73s;
+  --drift-ease: ease-in-out;
+  --drift-a-from: -32vmax -28vmax;
+  --drift-a-to: -20vmax -20vmax;
+  --drift-b-from: 45vw -20vmax;
+  --drift-b-to: 35vw -8vmax;
+  --drift-c-from: -10vmax 25vh;
+  --drift-c-to: 5vmax 18vh;
+  --drift-vignette: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.5));
 
   --profile-blue: #2f6fd6;
   --profile-green: #2f9e5b;
@@ -77,6 +116,7 @@
   --text-small: 16px;
   --line-height: 1.3;
   --weight-regular: 400;
+  --weight-medium: 500;
   --weight-bold: 600;
 
   --space: 8px;
@@ -105,20 +145,39 @@
   --focus-period: 2400ms;
   --focus-fade: 140ms;
   --focus-ease: ease-in-out;
+  --focus-arc: 0.3;
+  --focus-lap: 4000ms;
+  --focus-rim-power: 1.6;
+  --focus-rim-strength: 1.6;
+  --focus-rim-halo: 0.5;
+  --focus-pool-spread: 80px;
+  --focus-pool-strength: 0.8;
 
   --home-margin: calc(var(--space) * 12);
   --title-home-size: var(--text-body);
   --title-home-colour: #b9c6f0;
   --title-home-gap: calc(var(--space) * 1.5);
   --title-home-width: calc(var(--space) * 70);
-  --clock-size: 22px;
+  --home-top: var(--space-4);
+  --home-badge-size: calc(var(--space) * 4);
+  --home-badge-gap: var(--space-2);
+  --clock-size: 20px;
   --clock-colour: var(--text);
+  --clock-period-size: 14px;
+  --clock-period-colour: var(--muted);
+  --clock-period-gap: calc(var(--space) / 2);
+  --clock-gap: calc(var(--space) * 1.5);
+  --clock-icon-size: calc(var(--space) * 3);
+  --clock-icon-stroke: 2.2;
+  --clock-offline-opacity: 0.45;
   --settings-side-width: calc(var(--space) * 40);
   --settings-row-padding: var(--space-2) var(--space-3);
 
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --duration-fast: 150ms;
   --duration-ui: 250ms;
+  --duration-title-out: 100ms;
+  --duration-title-in: 100ms;
   --duration-case: 500ms;
   --duration-case-slow: 600ms;
   --duration-to-black: 120ms;
@@ -135,13 +194,36 @@
   --hints-height: calc(var(--space) * 10);
   --button-min-width: calc(var(--space) * 20);
   --avatar-size: calc(var(--space) * 16);
-  --profile-tile-size: calc(var(--space) * 18);
-  --profile-large-size: calc(var(--space) * 36);
-  --profile-swatch-size: calc(var(--space) * 13);
-  --profile-side-width: calc(var(--space) * 60);
-  --profile-field-width: calc(var(--space) * 70);
-  --profile-icon-columns: 6;
-  --profile-swatch-columns: 3;
+  --profile-header-top: calc(var(--space) * 5.5);
+  --profile-header-gap: calc(var(--space) * 1.75);
+  --profile-dot-size: var(--space);
+  --profile-preview-size: calc(var(--space) * 25);
+  --profile-preview-top: calc(var(--space) * 6.5);
+  --profile-preview-size-full: calc(var(--space) * 14);
+  --profile-preview-top-full: var(--space-3);
+  --profile-option-size: calc(var(--space) * 12);
+  --profile-tick-size: calc(var(--space) * 3.5);
+  --profile-tick-inset: calc(var(--space) / -4);
+  --profile-tick-glyph: 80%;
+  --profile-tick-stroke: 8;
+  --profile-small-size: calc(var(--space) * 6);
+  --profile-side-size: calc(var(--text-body) * var(--line-height));
+  --shadow-preview: 0 20px 50px rgba(0, 0, 0, 0.45);
+  --keyboard-name-size: 44px;
+  --keyboard-name-width: calc(var(--space) * 52);
+  --keyboard-name-height: calc(var(--space) * 7);
+  --keyboard-underline: 2px;
+  --keyboard-caret-width: 3px;
+  --keyboard-caret-height: 44px;
+  --keyboard-caret-period: 1000ms;
+  --keyboard-key-size: 28px;
+  --keyboard-key-word-size: var(--text-body);
+  --keyboard-grid-columns: 9;
+  --keyboard-grid-width: calc(var(--space) * 8);
+  --keyboard-grid-height: calc(var(--space) * 5.75);
+  --keyboard-grid-gap: calc(var(--space) / 4) var(--space-2);
+  --keyboard-full-height: calc(var(--space) * 5.5);
+  --keyboard-full-gap: var(--space);
   --icon-glyph: 62%;
   --icon-stroke: 5;
   --menu-width: calc(var(--space) * 28);

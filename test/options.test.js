@@ -22,6 +22,15 @@ test('fullscreen is on unless it was turned off', () => {
   assert.strictEqual(options.wantsFullscreen(settings), true);
 });
 
+test('profiles on Home are on unless turned off', () => {
+  const settings = { consoles: {} };
+  assert.strictEqual(options.buildSettings(settings, {}, '1').homeProfiles, true);
+  options.setHomeProfiles(settings, false);
+  assert.strictEqual(options.buildSettings(settings, {}, '1').homeProfiles, false);
+  options.setHomeProfiles(settings, true);
+  assert.strictEqual(options.buildSettings(settings, {}, '1').homeProfiles, true);
+});
+
 test('left edge defaults to slide and ignores unknown values', () => {
   const settings = { consoles: {} };
   assert.strictEqual(options.buildSettings(settings, {}, '1').leftEdge, 'slide');
@@ -29,6 +38,24 @@ test('left edge defaults to slide and ignores unknown values', () => {
   assert.strictEqual(options.buildSettings(settings, {}, '1').leftEdge, 'fade');
   options.setLeftEdge(settings, 'nonsense');
   assert.strictEqual(options.buildSettings(settings, {}, '1').leftEdge, 'fade');
+});
+
+test('background defaults to tint and ignores unknown values', () => {
+  const settings = { consoles: {} };
+  assert.strictEqual(options.buildSettings(settings, {}, '1').background, 'tint');
+  options.setBackground(settings, 'drift');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').background, 'drift');
+  options.setBackground(settings, 'video');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').background, 'drift');
+});
+
+test('highlight defaults to rim and ignores unknown values', () => {
+  const settings = { consoles: {} };
+  assert.strictEqual(options.buildSettings(settings, {}, '1').focusStyle, 'rim');
+  options.setFocusStyle(settings, 'under');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').focusStyle, 'under');
+  options.setFocusStyle(settings, 'full');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').focusStyle, 'under');
 });
 
 test('turning fullscreen off drops each emulator fullscreen flag', () => {
@@ -76,4 +103,13 @@ test('the SteamGridDB key is trimmed, stored, cleared, and never sent to the scr
   options.setSteamKey(settings, '   ');
   assert.strictEqual(options.steamKey(settings), '');
   assert.strictEqual(options.buildSettings(settings, {}, '1').hasKey, false);
+});
+
+test('keyboard defaults to grid and ignores unknown values', () => {
+  const settings = { consoles: {} };
+  assert.strictEqual(options.buildSettings(settings, {}, '1').keyboard, 'grid');
+  options.setKeyboard(settings, 'full');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').keyboard, 'full');
+  options.setKeyboard(settings, 'nonsense');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').keyboard, 'full');
 });

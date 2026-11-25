@@ -16,9 +16,120 @@ body {
   transition: --tint var(--duration-case) var(--ease-out);
 }
 
+body.profile-tint {
+  --tint: var(--profile-tint) !important;
+}
+
 /* Otherwise the old profile's tint would ease into the new one under the black. */
 body:has(#blackout.black) {
   transition: none;
+}
+
+#backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+body:not([data-background=art]) .backdrop-art,
+body:not([data-background=drift]) .backdrop-blob,
+body:not([data-background=art]) .backdrop-shade,
+body:not([data-background=drift]) .backdrop-vignette,
+body.resting #backdrop {
+  display: none;
+}
+
+.backdrop-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  scale: var(--art-zoom);
+  opacity: 0;
+  transition: opacity var(--duration-case) step-end;
+}
+
+.backdrop-art.shown {
+  z-index: 1;
+  opacity: var(--art-opacity);
+  transition: opacity var(--duration-case) var(--ease-out);
+}
+
+.backdrop-art.gone {
+  transition: opacity var(--duration-case) var(--ease-out);
+}
+
+.backdrop-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--art-shade);
+}
+
+.backdrop-blob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--drift-size);
+  height: var(--drift-size);
+  margin: calc(var(--drift-size) / -2);
+  border-radius: 50%;
+  opacity: var(--drift-opacity);
+  animation: var(--drift-period-a) var(--drift-ease) infinite alternate drift-a;
+  transition: opacity var(--duration-screen-in) var(--ease-screen);
+  will-change: translate;
+}
+
+.backdrop-blob-a {
+  background: radial-gradient(closest-side, oklch(from color-mix(in oklab, var(--tint) var(--drift-mix), var(--drift-neutral)) var(--drift-lightness) max(c, var(--drift-chroma)) h), transparent var(--drift-falloff));
+}
+
+.backdrop-blob-b {
+  background: radial-gradient(closest-side, oklch(from color-mix(in oklab, var(--tint) var(--drift-mix), var(--drift-neutral)) var(--drift-lightness) max(c, var(--drift-chroma)) calc(h + var(--drift-hue-shift))), transparent var(--drift-falloff));
+  animation-name: drift-b;
+  animation-duration: var(--drift-period-b);
+}
+
+.backdrop-blob-c {
+  background: radial-gradient(closest-side, var(--drift-neutral), transparent var(--drift-falloff));
+  animation-name: drift-c;
+  animation-duration: var(--drift-period-c);
+}
+
+.backdrop-vignette {
+  position: absolute;
+  inset: 0;
+  background: var(--drift-vignette);
+}
+
+@keyframes drift-a {
+  from { translate: var(--drift-a-from); }
+  to { translate: var(--drift-a-to); }
+}
+
+@keyframes drift-b {
+  from { translate: var(--drift-b-from); }
+  to { translate: var(--drift-b-to); }
+}
+
+@keyframes drift-c {
+  from { translate: var(--drift-c-from); }
+  to { translate: var(--drift-c-to); }
+}
+
+body:is(.window-hidden, :has(#blackout.black)) .backdrop-blob {
+  animation-play-state: paused;
+}
+
+body:has(main > :is(#settings, #profiles, #info, #grid):not([hidden])) .backdrop-art.shown {
+  opacity: var(--art-opacity-behind);
+}
+
+body:has(main > :is(#settings, #profiles, #info, #grid):not([hidden])) .backdrop-blob {
+  opacity: var(--drift-opacity-behind);
 }
 
 #blackout {
@@ -59,7 +170,7 @@ main.screen-hold * {
 }
 
 /* The screens draw no background of their own, so the app background shows through and what is under them is hidden instead. */
-main:has(> :is(#settings, #profiles, #info):not([hidden])) > :is(#shelf, #title, #clock, #tray, #all-games, #message, #notice) {
+main:has(> :is(#settings, #profiles, #info):not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, #tray, #all-games, #message, #notice) {
   visibility: hidden;
 }
 
@@ -87,22 +198,108 @@ main:has(> #loading:not([hidden])) > :not(#loading) {
   text-overflow: ellipsis;
   white-space: nowrap;
   translate: -50% calc(-100% - var(--title-home-gap));
-  transition: opacity var(--duration-fast) var(--ease-out);
+  transition: opacity var(--duration-title-in) var(--ease-out);
 }
 
-main.tray-focused #title {
+#title.away,
+main.tray-focused #title,
+main.top-focused #title {
   opacity: 0;
+  transition-duration: var(--duration-title-out);
 }
 
 #clock {
   position: absolute;
-  top: var(--space-4);
+  top: var(--home-top);
   right: var(--home-margin);
+  display: flex;
+  align-items: center;
+  gap: var(--clock-gap);
+  height: var(--home-badge-size);
   margin: 0;
   color: var(--clock-colour);
   font-size: var(--clock-size);
   font-weight: var(--weight-regular);
   font-variant-numeric: tabular-nums;
+}
+
+#clock .clock-period {
+  margin-inline-start: var(--clock-period-gap);
+  color: var(--clock-period-colour);
+  font-size: var(--clock-period-size);
+}
+
+#wifi {
+  width: var(--clock-icon-size);
+  height: var(--clock-icon-size);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--clock-icon-stroke);
+  stroke-linecap: round;
+}
+
+#wifi .wifi-off {
+  display: none;
+}
+
+#wifi.offline {
+  opacity: var(--clock-offline-opacity);
+}
+
+#wifi.offline .wifi-off {
+  display: inline;
+}
+
+#home-profiles {
+  position: absolute;
+  top: var(--home-top);
+  left: var(--home-margin);
+  display: flex;
+  gap: var(--home-badge-gap);
+}
+
+#home-profiles[hidden] {
+  display: none;
+}
+
+.home-badge {
+  position: relative;
+  box-sizing: border-box;
+  width: var(--home-badge-size);
+  height: var(--home-badge-size);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-round);
+  background: none;
+  color: var(--text);
+  outline: none;
+}
+
+.home-badge .badge {
+  width: 100%;
+  height: 100%;
+  font-size: var(--text-small);
+}
+
+.home-badge .badge svg {
+  width: 60%;
+  height: 60%;
+}
+
+#home-label {
+  position: absolute;
+  top: calc(100% + var(--tray-label-gap));
+  color: var(--tray-label-colour);
+  font-size: var(--tray-label-size);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  translate: -50% 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+main.top-focused #home-label {
+  opacity: 1;
 }
 
 #grid-title {
@@ -244,8 +441,8 @@ main.tray-focused #tray-label {
 }
 
 .tray-icon:focus .focus-glow,
-.icon-tile:focus .focus-glow,
-.swatch:focus .focus-glow,
+.home-badge:focus .focus-glow,
+.profile-option:focus .focus-glow,
 #all-games.selected .focus-glow {
   opacity: 1;
   animation: focus-breath calc(var(--focus-period) / 2) var(--focus-ease) infinite alternate;
@@ -286,6 +483,7 @@ main.tray-focused #tray-label {
 main.grid-open #shelf,
 main.grid-open #title,
 main.grid-open #clock,
+main.grid-open #home-profiles,
 main.grid-open #tray,
 main.grid-open #all-games {
   visibility: hidden;
@@ -531,8 +729,7 @@ main.grid-open #all-games {
 
 #setup h1,
 #settings h1,
-#panel h1,
-#profiles h1 {
+#panel h1 {
   margin: 0;
   font-size: var(--text-title);
   font-weight: var(--weight-bold);
@@ -653,6 +850,147 @@ main.grid-open #all-games {
 
 #profiles {
   z-index: var(--layer-dialog);
+  gap: 0;
+  padding-top: 0;
+  padding-bottom: var(--hints-height);
+}
+
+.profile-steps {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+}
+
+.profile-header {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--profile-header-gap);
+  margin-top: var(--profile-header-top);
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+}
+
+.profile-dots {
+  display: flex;
+  gap: var(--space);
+}
+
+.profile-dots[hidden] {
+  visibility: hidden;
+}
+
+.profile-dots i {
+  width: var(--profile-dot-size);
+  height: var(--profile-dot-size);
+  border-radius: var(--radius-round);
+  background: var(--dim);
+}
+
+.profile-dots i.on {
+  background: var(--text);
+}
+
+.badge.profile-preview {
+  width: var(--profile-preview-size);
+  height: var(--profile-preview-size);
+  margin-top: var(--profile-preview-top);
+  box-shadow: var(--shadow-preview);
+}
+
+.profile-steps-full .badge.profile-preview {
+  width: var(--profile-preview-size-full);
+  height: var(--profile-preview-size-full);
+  margin-top: var(--profile-preview-top-full);
+}
+
+.profile-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: stretch;
+  min-height: 0;
+  margin-top: var(--space-2);
+}
+
+.profile-options {
+  position: relative;
+  display: flex;
+  gap: var(--space-3);
+  box-sizing: border-box;
+  max-width: 100%;
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.profile-option {
+  position: relative;
+  flex: none;
+  width: var(--profile-option-size);
+  height: var(--profile-option-size);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-round);
+  background: none;
+  outline: none;
+  transition: scale var(--duration-fast) var(--ease-out);
+}
+
+.profile-option:focus {
+  scale: var(--tile-zoom);
+}
+
+.profile-option .badge {
+  width: 100%;
+  height: 100%;
+}
+
+.tick {
+  position: absolute;
+  right: var(--profile-tick-inset);
+  bottom: var(--profile-tick-inset);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--profile-tick-size);
+  height: var(--profile-tick-size);
+  border-radius: var(--radius-round);
+  background: var(--text);
+  color: var(--on-light);
+}
+
+.tick svg {
+  width: var(--profile-tick-glyph);
+  height: var(--profile-tick-glyph);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--profile-tick-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.badge.small {
+  width: var(--profile-small-size);
+  height: var(--profile-small-size);
+}
+
+.setup-row > .badge.small {
+  width: var(--profile-side-size);
+  height: var(--profile-side-size);
+}
+
+.setup-name:has(> .badge) {
+  align-items: center;
+}
+
+.keyboard-full {
+  align-self: stretch;
 }
 
 .profile-row {
@@ -700,11 +1038,6 @@ main.grid-open #all-games {
   transition: outline-color var(--duration-fast) var(--ease-out), background-color var(--duration-ui) var(--ease-out);
 }
 
-.badge.large {
-  width: var(--profile-large-size);
-  height: var(--profile-large-size);
-}
-
 .badge svg {
   width: var(--icon-glyph);
   height: var(--icon-glyph);
@@ -732,89 +1065,103 @@ main.grid-open #all-games {
   animation: focus-breath calc(var(--focus-period) / 2) var(--focus-ease) infinite alternate;
 }
 
-.profile-icons {
-  margin: 0 calc(-1 * var(--space-3));
-  padding: var(--space-3);
+.profile-name {
+  box-sizing: border-box;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--keyboard-name-width);
+  height: var(--keyboard-name-height);
+  border-bottom: var(--keyboard-underline) solid var(--line);
+  font-size: var(--keyboard-name-size);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
 }
 
-.icon-grid {
-  display: grid;
-  grid-template-columns: repeat(var(--profile-icon-columns), var(--profile-tile-size));
-  justify-content: space-between;
-  row-gap: var(--space-4);
+.profile-name-text.placeholder {
+  color: var(--muted);
+  font-weight: var(--weight-regular);
 }
 
-.icon-tile,
-.swatch {
-  position: relative;
-  width: var(--profile-tile-size);
-  height: var(--profile-tile-size);
+.profile-caret {
+  flex: none;
+  width: var(--keyboard-caret-width);
+  height: var(--keyboard-caret-height);
+  margin-left: var(--keyboard-caret-width);
+  background: var(--accent);
+  animation: profile-caret var(--keyboard-caret-period) steps(2, start) infinite;
+}
+
+@keyframes profile-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.keyboard .key {
   padding: 0;
   border: 0;
-  border-radius: var(--radius-round);
-  background: none;
-  outline: none;
-  transition: scale var(--duration-fast) var(--ease-out);
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--keyboard-key-size);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
-.icon-tile:focus,
-.swatch:focus {
-  scale: var(--tile-zoom);
+.keyboard .key-word {
+  font-size: var(--keyboard-key-word-size);
 }
 
-.icon-tile .badge {
-  width: 100%;
-  height: 100%;
-}
-
-.swatch {
-  width: var(--profile-swatch-size);
-  height: var(--profile-swatch-size);
-}
-
-.swatches {
-  display: grid;
-  grid-template-columns: repeat(var(--profile-swatch-columns), var(--profile-swatch-size));
-  gap: var(--space-3);
-}
-
-.profile-split {
-  display: grid;
-  flex: 1;
-  grid-template-columns: var(--profile-side-width) minmax(0, 1fr);
-  align-content: start;
-  align-items: center;
-  row-gap: var(--space-3);
-  min-height: 0;
-  padding-top: var(--space-6);
-}
-
-.profile-side {
-  display: flex;
-  justify-content: center;
-}
-
-.profile-nickname {
-  grid-column: 1;
-  margin: 0;
-  overflow: hidden;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--text-title);
+.keyboard .key.focused {
+  background: var(--text);
+  color: var(--on-light);
   font-weight: var(--weight-bold);
 }
 
-.profile-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+.keyboard-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--keyboard-grid-columns), var(--keyboard-grid-width));
+  gap: var(--keyboard-grid-gap);
 }
 
-.profile-count {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--text-small);
+.keyboard-grid .key {
+  height: var(--keyboard-grid-height);
+  border-radius: var(--radius-round);
+  background: transparent;
+}
+
+.keyboard-full {
+  display: flex;
+  flex-direction: column;
+  gap: var(--keyboard-full-gap);
+}
+
+.keyboard-row {
+  display: flex;
+  gap: var(--keyboard-full-gap);
+}
+
+.keyboard-full .key {
+  flex-basis: 0;
+  min-width: 0;
+  height: var(--keyboard-full-height);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.keyboard-full .key.on {
+  color: var(--accent);
+}
+
+.keyboard-full .key.key-ok {
+  background: var(--accent);
+  color: var(--on-light);
+}
+
+.keyboard-full .key.focused {
+  background: var(--text);
+  color: var(--on-light);
 }
 
 #settings .settings-key {
@@ -897,19 +1244,16 @@ main.grid-open #all-games {
   outline: var(--focus-ring);
 }
 
-#settings .setup-row,
-#profiles .setup-row {
+#settings .setup-row {
   padding: var(--settings-row-padding);
   background: transparent;
 }
 
-#settings .setup-row:focus,
-#profiles .setup-row:focus {
+#settings .setup-row:focus {
   background: var(--text);
 }
 
-#settings .setup-row.group-start,
-#profiles .setup-row.group-start {
+#settings .setup-row.group-start {
   margin-top: var(--space-4);
 }
 
@@ -921,16 +1265,6 @@ main.grid-open #all-games {
   from {
     opacity: 0;
   }
-}
-
-.profile-name {
-  width: var(--profile-field-width);
-  max-width: 100%;
-  padding: var(--space-2) var(--space-3);
-  border: 0;
-  border-radius: var(--radius-large);
-  background: var(--text);
-  color: var(--on-light);
 }
 
 #case-menu {
