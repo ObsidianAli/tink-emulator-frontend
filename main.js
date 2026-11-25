@@ -14,8 +14,14 @@ const { createLog } = require('./src/log');
 const { playGame, closeEmulator } = require('./src/launcher');
 const { startSession } = require('./src/session');
 const win32 = require('./src/win32');
-const { watchCombo, loadPadReader } = require('./src/pad');
+const { watchCombo, watchPress, learnButton, openButtons, loadPadReader } = require('./src/pad');
+const { captureWindow, shotName, safeName } = require('./src/capture');
+const { createAlbum } = require('./src/album');
 const { createCovers } = require('./src/covers');
+const owned = require('./src/owned');
+const installs = require('./src/install');
+const pcgames = require('./src/pcgames');
+const pcadded = require('./src/pcadded');
 const { createGameInfo } = require('./src/gameinfo');
 const { createNews } = require('./src/news');
 const { powerAction } = require('./src/power');
@@ -113,7 +119,7 @@ async function getLibrary() {
     fileName: game.appId,
     key: `steam:${game.appId}`,
   }));
-  const games = [...getEmulatedGames(settings), ...steamGames];
+  const games = [...getEmulatedGames(settings), ...steamGames, ...pcadded.getAddedGames(settings)];
   gamesById = new Map(games.map((game) => [game.id, game]));
   allConsoles = groupConsoles(games);
   return currentLibrary();
@@ -132,7 +138,98 @@ function currentLibrary() {
   };
 }
 
-const lookup = (id) => gamesById.get(id);
+const ownedById = new Map();
+const lookup = (id) => gamesById.get(id) || ownedById.get(id);
+
+// Games the account owns but hasn't installed; they get covers through the same lookup as library games.
+async function getOwnedGames() {
+  const steamDir = await steam.findSteamDir();
+  const installed = steamDir ? steam.getSteamGames(steamDir).map((game) => game.appId) : [];
+  const list = owned.getOwnedGames(steamDir, installed).map((game) => ({
+    ...game,
+    id: `own:${game.appId}`,
+    console: 'steam',
+    consoleName: STEAM.name,
+    fileName: game.appId,
+  }));
+  ownedById.clear();
+  for (const game of list) ownedById.set(game.id, game);
+  return list.map(({ id, appId, title }) => ({ id, appId, title }));
+}
+
+async function installGame(appId) {
+  const id = String(appId);
+  if (!ownedById.has(`own:${id}`)) await getOwnedGames();
+  if (!ownedById.has(`own:${id}`)) return false;
+  const started = await installs.install(id, (url) => shell.openExternal(url));
+  if (started) bringBackWhenSteamTakesIt(id);
+  return started;
+}
+
+const STEAM_ANSWER_MS = 3 * 60 * 1000;
+const STEAM_ANSWER_CHECK_MS = 1000;
+
+// Steam comes to the front for the install. Once it has written a manifest it needs nothing more from the user;
+// until then it may be asking which drive to use, so Tink stays out of the way.
+async function bringBackWhenSteamTakesIt(appId) {
+  const steamDir = await steam.findSteamDir();
+  const until = Date.now() + STEAM_ANSWER_MS;
+  while (Date.now() < until) {
+    await sleep(STEAM_ANSWER_CHECK_MS);
+    if (installs.progress(appId, steamDir).state !== 'none') {
+      if (win && !win.isDestroyed() && !playing) await showTink();
+      return;
+    }
+  }
+}
+
+async function getFileIcon(exe) {
+  if (typeof exe !== 'string' || exe.length > 1000 || exe.includes('\0') || !path.isAbsolute(exe) || !/\.exe$/i.test(exe)) return null;
+  try {
+    const image = await app.getFileIcon(exe, { size: 'large' });
+    return image.isEmpty() ? null : image.toDataURL();
+  } catch {
+    return null;
+  }
+}
+
+async function getInstallProgress(appId) {
+  const id = String(appId);
+  if (!installs.isAppId(id)) return { state: 'none', percent: 0 };
+  return installs.progress(id, await steam.findSteamDir());
+}
+
+function emulatorExes() {
+  const current = loadSettings(settingsFile());
+  const chosen = [...Object.values(current.emulators || {}), ...Object.values(current.consoles || {}).map((entry) => entry && entry.exe)];
+  return [...Object.values(detect()), ...chosen].filter((exe) => typeof exe === 'string');
+}
+
+async function findPcGames() {
+  const have = new Set(pcadded.getAddedGames(loadSettings(settingsFile())).map((game) => game.path.toLowerCase()));
+  const found = await pcgames.findPcGames({
+    readShortcut: (file) => shell.readShortcutLink(file),
+    exclude: { exes: emulatorExes() },
+  });
+  return found.filter((game) => !have.has(game.exe.toLowerCase()));
+}
+
+function changePcGames(change) {
+  const current = loadSettings(settingsFile());
+  const result = change(current);
+  saveSettings(settingsFile(), current);
+  settings = current;
+  const games = [...gamesById.values()].filter((game) => game.console !== 'pc').concat(pcadded.getAddedGames(current));
+  gamesById = new Map(games.map((game) => [game.id, game]));
+  allConsoles = groupConsoles(games);
+  return result;
+}
+
+function addPcGame(entry) {
+  if (!entry || typeof entry !== 'object') return { error: "That isn't a program." };
+  const { exe, title } = entry;
+  return changePcGames((current) => pcadded.addPcGame(current, { exe, title }));
+}
 
 const AVATAR_TYPES = /\.(png|jpe?g)$/i;
 const AVATAR_MAX = 60;
@@ -265,6 +362,77 @@ function watchQuit(close) {
   });
 }
 
+const capturesDir = () => path.join(app.getPath('videos'), 'Captures');
+const shotsDir = () => path.join(capturesDir(), 'Tink');
+
+let albumStore = null;
+function album() {
+  albumStore ||= createAlbum({
+    capturesDir: capturesDir(),
+    tinkDir: shotsDir(),
+    findSteamDir: steam.findSteamDir,
+    steamTitle: (appId) => lookup(`steam:${appId}`)?.title,
+    fileTitle: (name) => [...gamesById.values()].find((game) => safeName(game.title) === name)?.title ?? name,
+    nativeImage,
+    trash: (file) => shell.trashItem(file),
+  });
+  return albumStore;
+}
+
+let shooting = false;
+async function takeShot(game) {
+  const native = win32.native();
+  if (shooting || !native || !session || session.state() !== 'playing') return;
+  const front = native.foreground();
+  if (front === ownHandle()) return;
+  // Some games start through a launcher Tink can't follow, so the window in front stands in for them.
+  const hwnd = session.window() ?? front;
+  if (!hwnd) return;
+  shooting = true;
+  try {
+    const file = path.join(shotsDir(), shotName(game.title, new Date()));
+    const saved = await captureWindow(hwnd, file, { onFail: (reason) => log(`Could not take a screenshot: ${reason}`) });
+    if (saved && !win.isDestroyed()) win.webContents.send('shot');
+  } finally {
+    shooting = false;
+  }
+}
+
+function watchShots(game) {
+  const button = options.screenshotButton(loadSettings(settingsFile()));
+  const buttons = button && openButtons({ xinput: getPadReader() });
+  if (!buttons) return () => {};
+  const stop = watchPress(() => takeShot(game), {
+    read: () => buttons.pressed().has(button.id),
+    onFail: (error) => log("Reading the pad failed, so the screenshot button won't work this time", error),
+  });
+  return () => {
+    stop();
+    buttons.close();
+  };
+}
+
+let learning = null;
+async function learnScreenshotButton() {
+  if (learning) learning.cancel();
+  const buttons = openButtons({ xinput: getPadReader() });
+  if (!buttons) return null;
+  const mine = learnButton({ buttons });
+  learning = mine;
+  try {
+    const id = await mine.done;
+    return id ? changeSettings((current) => options.setScreenshotButton(current, id)).screenshotButton : null;
+  } finally {
+    buttons.close();
+    if (learning === mine) learning = null;
+  }
+}
+
+function clearScreenshotButton() {
+  if (learning) learning.cancel();
+  return changeSettings((current) => options.setScreenshotButton(current, null)).screenshotButton;
+}
+
 function platform() {
   const native = win32.native();
   return {
@@ -280,6 +448,7 @@ async function play(game, target, close) {
   const native = win32.native();
   if (native) native.allowAnyForeground();
   const stopQuit = watchQuit(close);
+  const stopShots = watchShots(game);
   let memoryTimer = null;
   let awakeTimer = null;
   playing = { game, close };
@@ -298,6 +467,7 @@ async function play(game, target, close) {
     },
     async restore(outcome) {
       stopQuit();
+      stopShots();
       clearTimeout(memoryTimer);
       clearTimeout(awakeTimer);
       await showTink();
@@ -321,6 +491,57 @@ function focusGame() {
   if (!session || !session.focus()) return false;
   sendGame('sleep');
   return true;
+}
+
+async function startPc(game) {
+  const { child, exited } = playGame({ exe: game.path, args: [] });
+  try {
+    await new Promise((resolve, reject) => {
+      child.once('spawn', resolve);
+      child.once('error', reject);
+    });
+  } catch {
+    // A program that asks for administrator rights can't be spawned directly, so Windows starts it instead.
+    const problem = await shell.openPath(game.path);
+    if (problem) throw new Error(problem);
+    return { child: { pid: 0, exitCode: 0, signalCode: null }, exited: Promise.resolve() };
+  }
+  exited.catch(() => {});
+  return { child, exited };
+}
+
+async function launchPc(game) {
+  if (!fs.existsSync(game.path)) return { error: "This game can't be found.", fix: 'rescan' };
+  sendGame('loading', { id: game.id, title: game.title });
+  let outcome;
+  try {
+    const { child, exited } = await startPc(game);
+    const match = pcadded.pcMatcher(game, child.pid);
+    const target = {
+      kind: 'pc',
+      child,
+      exited,
+      installDir: game.installDir,
+      match,
+      realExe: () => game.realExe,
+      onExe: (exe) => {
+        const current = loadSettings(settingsFile());
+        if (!pcadded.rememberRealExe(current, game.id, exe)) return;
+        saveSettings(settingsFile(), current);
+        game.realExe = path.resolve(exe);
+      },
+    };
+    outcome = await play(game, target, () => steam.closeSteamGame(match).catch((error) => log('Could not close the game', error)));
+  } catch (error) {
+    sendGame('failed');
+    outcome = { status: 'failed', error };
+  }
+  if (outcome.status === 'failed') {
+    log(`Could not start ${game.title}`, outcome.error);
+    return { error: "This game couldn't be started." };
+  }
+  if (outcome.status === 'ended') changeActive((profile) => profiles.recordPlay(profile, game.key));
+  return {};
 }
 
 async function launchSteam(game) {
@@ -438,6 +659,8 @@ const setLeftEdge = (mode) => changeSettings((current) => options.setLeftEdge(cu
 const setFocusStyle = (mode) => changeSettings((current) => options.setFocusStyle(current, mode));
 const setBackground = (mode) => changeSettings((current) => options.setBackground(current, mode));
 const setKeyboard = (mode) => changeSettings((current) => options.setKeyboard(current, mode));
+const setIconStyle = (mode) => changeSettings((current) => options.setIconStyle(current, mode));
+const setIconRow = (mode) => changeSettings((current) => options.setIconRow(current, mode));
 const setHomeProfiles = (on) => changeSettings((current) => options.setHomeProfiles(current, on));
 const setSteamKey = (key) => changeSettings((current) => options.setSteamKey(current, key));
 const findAutomatically = (id) => changeSettings((current) => options.clearEmulator(current, id));
@@ -488,6 +711,7 @@ async function launch(id) {
     }
     return {};
   }
+  if (game.console === 'pc') return launchPc(game);
   return launchEmulated(game);
 }
 
@@ -567,6 +791,8 @@ app.whenReady().then(async () => {
   handle('setFocusStyle', (mode) => setFocusStyle(String(mode)));
   handle('setBackground', (mode) => setBackground(String(mode)));
   handle('setKeyboard', (mode) => setKeyboard(String(mode)));
+  handle('setIconStyle', (mode) => setIconStyle(String(mode)));
+  handle('setIconRow', (mode) => setIconRow(String(mode)));
   handle('setHomeProfiles', (on) => setHomeProfiles(on === true));
   handle('setSteamKey', (key) => setSteamKey(key));
   handle('findAutomatically', (id) => findAutomatically(String(id)));
@@ -605,11 +831,25 @@ app.whenReady().then(async () => {
   handle('getNewsImage', (id) => (typeof id === 'string' && id.length < 64 ? news().getNewsImage(id) : null));
   handle('markNewsSeen', () => news().markSeen());
   handle('launch', (id) => launch(String(id)));
+  handle('getOwnedGames', getOwnedGames);
+  handle('installGame', (appId) => installGame(appId));
+  handle('getInstallProgress', (appId) => getInstallProgress(appId));
+  handle('findPcGames', findPcGames);
+  handle('getFileIcon', (exe) => getFileIcon(exe));
+  handle('listFolder', (dir) => pcgames.listFolder(typeof dir === 'string' ? dir : ''));
+  handle('addPcGame', (entry) => addPcGame(entry));
+  handle('removePcGame', (id) => changePcGames((current) => pcadded.removePcGame(current, String(id))));
   handle('cancelLaunch', cancelLaunch);
   handle('focusGame', focusGame);
   handle('handoffReady', () => {
     if (session) session.ready();
   });
+  handle('getAlbum', () => album().list());
+  handle('getThumb', (id) => album().getThumb(String(id)));
+  handle('getShot', (id) => album().getShot(String(id)));
+  handle('deleteShot', (id) => album().remove(String(id)));
+  handle('learnScreenshotButton', learnScreenshotButton);
+  handle('clearScreenshotButton', clearScreenshotButton);
   handle('power', (action) => (action === 'close' ? app.quit() : app.isPackaged && powerAction(String(action))));
   ipcMain.handle('logError', (_event, text) => log('Screen error', String(text).slice(0, 2000)));
   createWindow();

@@ -8,6 +8,10 @@ const DEFAULT_STEAM_DIR = 'C:\\Program Files (x86)\\Steam';
 const SKIPPED_APP_IDS = new Set(['228980', '250820', '1070560', '1391110', '1628350', '1493710']);
 const SKIPPED_NAMES = /^(Steamworks Common Redistributables|Proton (\d|Experimental|Hotfix)|Steam Linux Runtime)/i;
 
+function isSkippedApp(appId, name) {
+  return SKIPPED_APP_IDS.has(String(appId)) || SKIPPED_NAMES.test(name || '');
+}
+
 function parseVdf(text) {
   const tokens = text.match(/"(?:[^"\\]|\\.)*"|[{}]/g) || [];
   let pos = 0;
@@ -76,7 +80,7 @@ function getSteamGames(steamDir) {
       const state = manifest && manifest.AppState;
       if (!state || !state.appid || !state.name) continue;
       if (!isFullyInstalled(state)) continue;
-      if (SKIPPED_APP_IDS.has(state.appid) || SKIPPED_NAMES.test(state.name)) continue;
+      if (isSkippedApp(state.appid, state.name)) continue;
       const installDir = state.installdir ? path.join(folder, 'steamapps', 'common', state.installdir) : null;
       games.set(state.appid, { appId: state.appid, title: state.name, art: artUrls(state.appid), installDir });
     }
@@ -169,8 +173,9 @@ function nativeAlive() {
   return native ? native.isAlive : null;
 }
 
-async function closeSteamGame(installDir, { waitMs = CLOSE_WAIT_MS, list = listProcesses, kill = taskkill, alive = nativeAlive(), wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
-  const asked = gameProcesses(await list(), installDir);
+async function closeSteamGame(target, { waitMs = CLOSE_WAIT_MS, list = listProcesses, kill = taskkill, alive = nativeAlive(), wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  const pick = typeof target === 'function' ? target : (rows) => gameProcesses(rows, target);
+  const asked = pick(await list());
   await Promise.all(asked.map((pid) => kill(['/PID', String(pid)])));
   if (asked.length === 0) return;
   let left;
@@ -182,9 +187,9 @@ async function closeSteamGame(installDir, { waitMs = CLOSE_WAIT_MS, list = listP
     left = asked.filter(alive);
   } else {
     await wait(waitMs);
-    left = gameProcesses(await list(), installDir).filter((pid) => asked.includes(pid));
+    left = pick(await list()).filter((pid) => asked.includes(pid));
   }
   await Promise.all(left.map((pid) => kill(['/PID', String(pid), '/T', '/F'])));
 }
 
-module.exports = { parseVdf, getSteamGames, artUrls, findSteamDir, getRunningAppId, isSteamRunning, gameProcesses, listProcesses, closeSteamGame };
+module.exports = { parseVdf, readVdfFile, libraryFolders, isSkippedApp, getSteamGames, artUrls, findSteamDir, getRunningAppId, isSteamRunning, gameProcesses, listProcesses, closeSteamGame };

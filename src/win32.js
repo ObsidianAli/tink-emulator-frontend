@@ -185,6 +185,7 @@ function bind() {
     listProcesses,
     topWindows,
     bringToFront,
+    foreground: u.foreground,
     allowAnyForeground: () => u.allowForeground(ASFW_ANY),
     runningAppId,
     isAlive,

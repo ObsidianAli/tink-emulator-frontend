@@ -113,3 +113,14 @@ test('keyboard defaults to grid and ignores unknown values', () => {
   options.setKeyboard(settings, 'nonsense');
   assert.strictEqual(options.buildSettings(settings, {}, '1').keyboard, 'full');
 });
+
+test('icon style and row have defaults and ignore unknown values', () => {
+  const settings = { consoles: {} };
+  const read = () => options.buildSettings(settings, {}, '1');
+  assert.deepStrictEqual([read().iconStyle, read().iconRow], ['disc', 'separate']);
+  options.setIconStyle(settings, 'glyph');
+  options.setIconRow(settings, 'bar');
+  options.setIconStyle(settings, 'rainbow');
+  options.setIconRow(settings, 'circle');
+  assert.deepStrictEqual([read().iconStyle, read().iconRow], ['glyph', 'bar']);
+});

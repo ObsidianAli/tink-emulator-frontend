@@ -29,11 +29,21 @@ const SOUNDS = {
   error: [[0, 392, 0.11, 0.5, 'sine'], [0.1, 311, 0.14, 0.5, 'sine']],
   profiles: [[0, 659, 0.09, 0.5, 'sine'], [0.08, 988, 0.16, 0.5, 'sine']],
   news: [[0, 1500, 0.07, 0.5, 'noise'], [0.05, 2300, 0.09, 0.6, 'noise'], [0.12, 3000, 0.06, 0.35, 'noise'], [0.19, 880, 0.07, 0.35, 'triangle'], [0.26, 1109, 0.13, 0.35, 'triangle']],
+  album: [[0, 2800, 0.022, 0.95, 'noise'], [0, 220, 0.04, 0.35, 'triangle', 170], [0.085, 1900, 0.035, 0.8, 'noise'], [0.1, 1319, 0.16, 0.22, 'sine']],
   controllers: [...wood(0, 784), ...wood(0.08, 1047)],
   settings: [...[0, 0.055, 0.1, 0.14].flatMap((start) => [[start, 2400, 0.018, 0.9, 'noise'], [start, 3300, 0.02, 0.02, 'sine']]), [0.18, 150, 0.09, 0.6, 'sine', 110]],
   power: [...bell(0, 784, 0.25, 0.4), ...bell(0.1, 659, 0.25, 0.4), ...bell(0.2, 523, 0.5, 0.45)],
+  store: [[0, 1480, 0.13, 0.35, 'sine', 740], [0.13, 196, 0.1, 0.7, 'sine', 140], [0.13, 900, 0.03, 0.25, 'noise'], [0.21, 1047, 0.14, 0.32, 'sine']],
   launch: [[0, 523, 0.1, 0.5, 'sine'], [0.08, 659, 0.1, 0.5, 'sine'], [0.16, 784, 0.1, 0.5, 'sine'], [0.24, 1047, 0.2, 0.5, 'sine']],
+  camera: [
+    [0, 3000, 0.03, 0.9, 'noise'],
+    [0, 1800, 0.02, 0.12, 'triangle', 900],
+    [0.09, 2000, 0.05, 0.8, 'noise'],
+    [0.09, 900, 0.05, 0.16, 'triangle', 420],
+    [0.15, 1568, 0.16, 0.22, 'sine'],
+  ],
 };
+const CAMERA_MS = 600;
 const FOLLOWED_BY = { open: ['discOut', 0.26] };
 
 const lastPlayed = new Map();
@@ -92,8 +102,8 @@ function playNotes(notes, at) {
   }
 }
 
-function playSound(name) {
-  if (!SOUNDS[name] || document.visibilityState !== 'visible') return;
+function playSound(name, { hidden = false } = {}) {
+  if (!SOUNDS[name] || (!hidden && document.visibilityState !== 'visible')) return;
   const now = performance.now();
   if (!soundDue(name, now, lastPlayed)) return;
   lastPlayed.set(name, now);
@@ -111,4 +121,17 @@ function suspendSound() {
   if (audio && audio.state === 'running') audio.suspend().catch(() => {});
 }
 
+let cameraTimer = null;
+function playCamera() {
+  const resting = cameraTimer || !audio || audio.state !== 'running';
+  clearTimeout(cameraTimer);
+  playSound('camera', { hidden: true });
+  if (!resting) return;
+  cameraTimer = setTimeout(() => {
+    cameraTimer = null;
+    suspendSound();
+  }, CAMERA_MS);
+}
+
+if (typeof window !== 'undefined') window.tink?.onShot?.(playCamera);
 if (typeof module !== 'undefined') module.exports = { soundDue };

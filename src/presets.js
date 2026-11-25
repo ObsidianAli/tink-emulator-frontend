@@ -40,12 +40,13 @@ const CONSOLES = {
 };
 
 const STEAM = { name: 'Steam', colour: '#3b4654' };
+const PC = { name: 'PC', colour: '#45524a' };
 
 // Own keys only, so ids from the screen like "__proto__" never match.
 const isConsole = (id) => Object.hasOwn(CONSOLES, id);
 const isEmulator = (id) => Object.hasOwn(EMULATORS, id);
 
-const coverColour = (consoleId) => (isConsole(consoleId) ? CONSOLES[consoleId].colour : STEAM.colour);
+const coverColour = (consoleId) => (isConsole(consoleId) ? CONSOLES[consoleId].colour : consoleId === 'pc' ? PC.colour : STEAM.colour);
 
 function launchSpec(consoleId, exe, gamePath, fullscreen = true) {
   const preset = CONSOLES[consoleId];
@@ -53,4 +54,4 @@ function launchSpec(consoleId, exe, gamePath, fullscreen = true) {
   return { exe, args };
 }
 
-module.exports = { EMULATORS, CONSOLES, STEAM, isConsole, isEmulator, coverColour, launchSpec };
+module.exports = { EMULATORS, CONSOLES, STEAM, PC, isConsole, isEmulator, coverColour, launchSpec };

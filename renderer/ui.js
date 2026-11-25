@@ -2,7 +2,9 @@ import { createShelf } from './shelf.js';
 import { grid } from './grid.js';
 import { runSetup } from './setup.js';
 import { openSettings, hideSettings, settingsOpen } from './settings.js';
+import { openStore, hideStore } from './store.js';
 import { openCaseMenu, openMenu, caseMenuOpen } from './casemenu.js';
+import { openAlbum, hideAlbum } from './album.js';
 import { openNews, hideNews, checkNews, newsTrayIcon } from './news.js';
 import { openInfo, infoOpen } from './info.js';
 import { chooseProfile, closeProfiles } from './profiles.js';
@@ -11,6 +13,7 @@ import { focusGlow } from './dom.js';
 import { transition, screen, changingScreen, fadeToBlack } from './transition.js';
 import { openPanel, updatePanel, panelOpen } from './panel.js';
 import { showLoading, hideLoading, loadingOpen } from './loading.js';
+import { trayDrawing } from './icons.js';
 import './clock.js';
 import { setBackground, setArt, rest } from './backdrop.js';
 
@@ -100,10 +103,12 @@ function showHints() {
 
 const trayIcons = [
   { name: 'Profiles', sound: 'profiles', draw: (profile) => badge(profile), activate: () => switchProfile() },
+  { name: 'Store', sound: 'store', draw: () => trayDrawing('store'), activate: () => goToStore() },
+  { name: 'Album', sound: 'album', draw: () => trayDrawing('album'), activate: () => goToAlbum() },
   { name: 'News', sound: 'news', draw: () => newsTrayIcon(), activate: () => goToNews() },
-  { name: 'Controllers', sound: 'controllers', draw: () => controller(), activate: () => showControllers() },
-  { name: 'Settings', sound: 'settings', draw: () => gear(), activate: () => goToSettings() },
-  { name: 'Power', sound: 'power', draw: () => power(), activate: () => showPower() },
+  { name: 'Controllers', sound: 'controllers', draw: () => trayDrawing('controllers'), activate: () => showControllers() },
+  { name: 'Settings', sound: 'settings', draw: () => trayDrawing('settings'), activate: () => goToSettings() },
+  { name: 'Power', sound: 'power', draw: () => trayDrawing('power'), activate: () => showPower() },
 ];
 let trayFocus = -1;
 let topFocus = -1;
@@ -122,23 +127,6 @@ function icon(...shapes) {
   }
   return svg;
 }
-
-const controller = () => icon(
-  ['path', { d: 'M6.5 5h11a4.5 4.5 0 0 1 4.4 3.7l.9 6.3a3.2 3.2 0 0 1-5.6 2.6L15.4 15.5H8.6l-1.8 2.1a3.2 3.2 0 0 1-5.6-2.6l.9-6.3A4.5 4.5 0 0 1 6.5 5z' }],
-  ['path', { d: 'M7.5 8.5v4M5.5 10.5h4' }],
-  ['circle', { cx: 15.5, cy: 9.5, r: 1.1, fill: 'currentColor', stroke: 'none' }],
-  ['circle', { cx: 17.5, cy: 11.8, r: 1.1, fill: 'currentColor', stroke: 'none' }],
-);
-
-const gear = () => icon(
-  ['circle', { cx: 12, cy: 12, r: 3 }],
-  ['path', { d: 'M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z' }],
-);
-
-const power = () => icon(
-  ['path', { d: 'M12 3v8' }],
-  ['path', { d: 'M6.3 6.8a8 8 0 1 0 11.4 0' }],
-);
 
 const blocks = () => icon(
   ['rect', { x: 3, y: 3, width: 8, height: 8, rx: 2.4 }],
@@ -279,6 +267,8 @@ async function renderTray() {
   const profile = profiles.find((p) => p.id === last) || profiles[0];
   currentProfile = profile;
   renderTop(profiles, profile, shown.homeProfiles !== false);
+  tray.dataset.icons = shown.iconStyle;
+  tray.dataset.row = shown.iconRow;
   tray.replaceChildren(...trayIcons.map((icon) => {
     const node = document.createElement('button');
     node.className = 'tray-icon';
@@ -353,10 +343,11 @@ async function openGameMenu() {
   if (inMenu || changing || launching || !game) return;
   inMenu = true;
   try {
-    const choice = await openCaseMenu({ fav: game.fav });
+    const choice = await openCaseMenu({ fav: game.fav, removable: game.console === 'pc' });
     if (choice === 'fav') await changeGame(window.tink.toggleFavourite);
     else if (choice === 'hide') await changeGame(window.tink.hideGame);
     else if (choice === 'info') await openInfo(game);
+    else if (choice === 'remove') await changeGame(window.tink.removePcGame);
   } finally {
     inMenu = false;
     showHints();
@@ -455,6 +446,22 @@ async function explain({ error, fix, console }) {
   }
 }
 
+async function goToAlbum() {
+  if (inSettings) return;
+  inSettings = true;
+  try {
+    await openAlbum();
+    await screen(async () => {
+      hideAlbum();
+      await renderTray().catch(report);
+      showTitle();
+      showHints();
+    });
+  } finally {
+    inSettings = false;
+  }
+}
+
 async function goToNews() {
   if (inSettings) return;
   inSettings = true;
@@ -496,6 +503,30 @@ async function goToSettings(focusConsole) {
     inSettings = false;
   }
 }
+
+async function goToStore() {
+  if (inSettings) return;
+  inSettings = true;
+  try {
+    const changed = await openStore();
+    await screen(async () => {
+      hideStore();
+      if (changed) {
+        await loadLibrary();
+      } else {
+        await renderTray().catch(report);
+        showTitle();
+        showHints();
+      }
+    });
+  } finally {
+    inSettings = false;
+  }
+}
+
+window.addEventListener('store-installed', () => {
+  if (!launching && !inSettings) loadLibrary().catch(report);
+});
 
 listenForInput((action) => {
   const dialog = dialogTakesInput(action);

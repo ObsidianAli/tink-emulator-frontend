@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('tink', {
   setFocusStyle: (mode) => ipcRenderer.invoke('setFocusStyle', mode),
   setBackground: (mode) => ipcRenderer.invoke('setBackground', mode),
   setKeyboard: (mode) => ipcRenderer.invoke('setKeyboard', mode),
+  setIconStyle: (mode) => ipcRenderer.invoke('setIconStyle', mode),
+  setIconRow: (mode) => ipcRenderer.invoke('setIconRow', mode),
   setHomeProfiles: (on) => ipcRenderer.invoke('setHomeProfiles', on),
   setSteamKey: (key) => ipcRenderer.invoke('setSteamKey', key),
   findAutomatically: (id) => ipcRenderer.invoke('findAutomatically', id),
@@ -42,6 +44,14 @@ contextBridge.exposeInMainWorld('tink', {
   getNotice: () => ipcRenderer.invoke('getNotice'),
   power: (action) => ipcRenderer.invoke('power', action),
   launch: (id) => ipcRenderer.invoke('launch', id),
+  getOwnedGames: () => ipcRenderer.invoke('getOwnedGames'),
+  installGame: (appId) => ipcRenderer.invoke('installGame', appId),
+  getInstallProgress: (appId) => ipcRenderer.invoke('getInstallProgress', appId),
+  findPcGames: () => ipcRenderer.invoke('findPcGames'),
+  getFileIcon: (exe) => ipcRenderer.invoke('getFileIcon', exe),
+  listFolder: (dir) => ipcRenderer.invoke('listFolder', dir),
+  addPcGame: (entry) => ipcRenderer.invoke('addPcGame', entry),
+  removePcGame: (id) => ipcRenderer.invoke('removePcGame', id),
   onGame: (callback) => {
     const listener = (_event, state, info) => callback(state, info);
     ipcRenderer.on('game', listener);
@@ -50,5 +60,16 @@ contextBridge.exposeInMainWorld('tink', {
   handoffReady: () => ipcRenderer.invoke('handoffReady'),
   cancelLaunch: () => ipcRenderer.invoke('cancelLaunch'),
   focusGame: () => ipcRenderer.invoke('focusGame'),
+  getAlbum: () => ipcRenderer.invoke('getAlbum'),
+  getThumb: (id) => ipcRenderer.invoke('getThumb', id),
+  getShot: (id) => ipcRenderer.invoke('getShot', id),
+  deleteShot: (id) => ipcRenderer.invoke('deleteShot', id),
+  learnScreenshotButton: () => ipcRenderer.invoke('learnScreenshotButton'),
+  clearScreenshotButton: () => ipcRenderer.invoke('clearScreenshotButton'),
+  onShot: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('shot', listener);
+    return () => ipcRenderer.removeListener('shot', listener);
+  },
   releaseCaches: () => webFrame.clearCache(),
 });
