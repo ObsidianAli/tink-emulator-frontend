@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeImage, powerMonitor } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const steam = require('./src/steam');
@@ -26,6 +26,7 @@ const MEMORY_LOG_DELAY_MS = 1500;
 const AWAKE_CHECK_MS = 1000;
 const REFOCUS_CHECK_MS = 100;
 const UPDATE_CHECK_DELAY_MS = 10 * 1000;
+const RESUME_CHECK_DELAY_MS = 15 * 1000;
 
 const FINISHING = process.argv.includes(FINISH_FLAG) && /\.new$/i.test(path.dirname(process.execPath));
 // The portable exe unpacks to a temp folder, so "beside Tink" means beside the exe the user started.
@@ -520,7 +521,9 @@ app.whenReady().then(async () => {
   } else if (updater) {
     updater.removeOld();
     notice = updater.takeNotice();
-    setTimeout(() => updater.checkInBackground(), UPDATE_CHECK_DELAY_MS).unref();
+    const checkIn = (ms) => setTimeout(() => updater.checkInBackground(), ms).unref();
+    checkIn(UPDATE_CHECK_DELAY_MS);
+    powerMonitor.on('resume', () => checkIn(RESUME_CHECK_DELAY_MS));
   }
   handle('getUpdate', () => (updater ? updater.pendingVersion() : null));
   handle('checkForUpdates', async () => {

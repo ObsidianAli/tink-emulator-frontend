@@ -681,7 +681,7 @@ async function showNotice() {
   setTimeout(() => { notice.hidden = true; }, NOTICE_MS);
 }
 
-const UPDATE_POLL_MS = 15 * 1000;
+const UPDATE_POLL_MS = 3 * 1000;
 
 function offerUpdate() {
   const timer = setInterval(async () => {
