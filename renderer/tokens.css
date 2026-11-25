@@ -134,6 +134,7 @@
   --focus-width: calc(var(--space) / 2);
   --focus-offset: calc(var(--space) / 2);
   --focus-ring: var(--focus-width) solid var(--accent);
+  --label-colour: var(--accent);
 
   --focus-from: #5b8def;
   --focus-to: #c9b9f6;
@@ -155,7 +156,6 @@
 
   --home-margin: calc(var(--space) * 12);
   --title-home-size: var(--text-body);
-  --title-home-colour: #b9c6f0;
   --title-home-gap: calc(var(--space) * 1.5);
   --title-home-width: calc(var(--space) * 70);
   --home-top: var(--space-4);
@@ -234,12 +234,11 @@
   --tray-bottom: var(--space-8);
   --tray-label-gap: var(--space-2);
   --tray-label-size: var(--text-body);
-  --tray-label-colour: var(--accent);
   --press-duration: 260ms;
   --press-scale: 0.9;
   --press-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --press-hop: calc(var(--space) * -0.875);
-  --press-hop-duration: 380ms;
+  --press-zoom: 1.15;
+  --press-zoom-duration: 380ms;
   --press-wiggle-duration: 360ms;
   --press-wiggle-angle: 12deg;
   --press-turn: 90deg;

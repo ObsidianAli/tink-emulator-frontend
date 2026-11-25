@@ -124,11 +124,11 @@ body:is(.window-hidden, :has(#blackout.black)) .backdrop-blob {
   animation-play-state: paused;
 }
 
-body:has(main > :is(#settings, #profiles, #info, #grid):not([hidden])) .backdrop-art.shown {
+body:has(main > :is(#settings, #profiles, #info, #grid, #panel):not([hidden])) .backdrop-art.shown {
   opacity: var(--art-opacity-behind);
 }
 
-body:has(main > :is(#settings, #profiles, #info, #grid):not([hidden])) .backdrop-blob {
+body:has(main > :is(#settings, #profiles, #info, #grid, #panel):not([hidden])) .backdrop-blob {
   opacity: var(--drift-opacity-behind);
 }
 
@@ -170,7 +170,7 @@ main.screen-hold * {
 }
 
 /* The screens draw no background of their own, so the app background shows through and what is under them is hidden instead. */
-main:has(> :is(#settings, #profiles, #info):not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, #tray, #all-games, #message, #notice) {
+main:has(> :is(#settings, #profiles, #info, #panel):not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, #tray, #all-games, #message, #notice) {
   visibility: hidden;
 }
 
@@ -192,7 +192,7 @@ main:has(> #loading:not([hidden])) > :not(#loading) {
   max-width: var(--title-home-width);
   margin: 0;
   overflow: hidden;
-  color: var(--title-home-colour);
+  color: var(--label-colour);
   font-size: var(--title-home-size);
   font-weight: var(--weight-regular);
   text-overflow: ellipsis;
@@ -289,7 +289,7 @@ main.top-focused #title {
 #home-label {
   position: absolute;
   top: calc(100% + var(--tray-label-gap));
-  color: var(--tray-label-colour);
+  color: var(--label-colour);
   font-size: var(--tray-label-size);
   white-space: nowrap;
   opacity: 0;
@@ -329,7 +329,7 @@ main.top-focused #home-label {
 #tray-label {
   position: absolute;
   top: calc(100% + var(--tray-label-gap));
-  color: var(--tray-label-colour);
+  color: var(--label-colour);
   font-size: var(--tray-label-size);
   white-space: nowrap;
   opacity: 0;
@@ -346,8 +346,8 @@ main.tray-focused #tray-label {
   animation: tray-press var(--press-duration) var(--press-ease);
 }
 
-.tray-icon.pressed[data-icon='Profiles'] .badge {
-  animation: tray-hop var(--press-hop-duration) var(--press-ease);
+.tray-icon.pressed[data-icon='Profiles'] .badge > :is(svg, img) {
+  animation: tray-zoom var(--press-zoom-duration) var(--press-ease);
 }
 
 .tray-icon.pressed[data-icon='Controllers'] svg {
@@ -368,9 +368,9 @@ main.tray-focused #tray-label {
   }
 }
 
-@keyframes tray-hop {
+@keyframes tray-zoom {
   40% {
-    transform: translateY(var(--press-hop));
+    transform: scale(var(--press-zoom));
   }
 }
 
@@ -440,9 +440,8 @@ main.tray-focused #tray-label {
   mask-composite: exclude;
 }
 
-.tray-icon:focus .focus-glow,
-.home-badge:focus .focus-glow,
-.profile-option:focus .focus-glow,
+:is(.tray-icon, .home-badge, .profile-option, .profile, .setup-row, .setup-next, .settings-category, .dialog button):focus .focus-glow,
+.setup-row:focus-within .focus-glow,
 #all-games.selected .focus-glow {
   opacity: 1;
   animation: focus-breath calc(var(--focus-period) / 2) var(--focus-ease) infinite alternate;
@@ -678,6 +677,7 @@ main.grid-open #all-games {
 }
 
 .dialog button {
+  position: relative;
   min-width: var(--button-min-width);
   padding: var(--space-2) var(--space-3);
   border: 0;
@@ -685,15 +685,12 @@ main.grid-open #all-games {
   background: var(--surface);
   color: var(--text);
   font: inherit;
-  outline: var(--focus-width) solid transparent;
-  outline-offset: var(--focus-offset);
-  transition: background-color var(--duration-fast) var(--ease-out), outline-color var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out);
 }
 
 .dialog button:focus {
   background: var(--text);
   color: var(--on-light);
-  outline: var(--focus-ring);
 }
 
 #setup,
@@ -709,8 +706,7 @@ main.grid-open #all-games {
   padding: var(--space-6) var(--space-8) calc(var(--space-3) + var(--hints-height));
 }
 
-#setup,
-#panel {
+#setup {
   background: var(--bg);
 }
 
@@ -719,12 +715,6 @@ main.grid-open #all-games {
 #panel[hidden],
 #profiles[hidden] {
   display: none;
-}
-
-#panel {
-  gap: var(--space);
-  padding-top: var(--space-2);
-  padding-bottom: var(--hints-height);
 }
 
 #setup h1,
@@ -745,6 +735,7 @@ main.grid-open #all-games {
 
 .setup-row,
 .setup-next {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -758,9 +749,7 @@ main.grid-open #all-games {
   color: var(--text);
   font: inherit;
   text-align: left;
-  outline: var(--focus-width) solid transparent;
-  outline-offset: var(--focus-offset);
-  transition: background-color var(--duration-fast) var(--ease-out), outline-color var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out);
 }
 
 .setup-row + .setup-row {
@@ -771,7 +760,6 @@ main.grid-open #all-games {
 .setup-next:focus {
   background: var(--text);
   color: var(--on-light);
-  outline: var(--focus-ring);
 }
 
 .setup-next {
@@ -834,8 +822,8 @@ main.grid-open #all-games {
 }
 
 .settings-key:focus {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-offset);
+  outline: none;
+  border-color: var(--text);
 }
 
 .setup-row.group-start {
@@ -985,6 +973,17 @@ main.grid-open #all-games {
   height: var(--profile-side-size);
 }
 
+.setup-row > .tick {
+  position: static;
+  width: var(--profile-side-size);
+  height: var(--profile-side-size);
+}
+
+.setup-row:focus > .tick {
+  background: var(--on-light);
+  color: var(--text);
+}
+
 .setup-name:has(> .badge) {
   align-items: center;
 }
@@ -1058,11 +1057,6 @@ main.grid-open #all-games {
   position: relative;
   display: flex;
   border-radius: var(--radius-round);
-}
-
-.profile:focus .focus-glow {
-  opacity: 1;
-  animation: focus-breath calc(var(--focus-period) / 2) var(--focus-ease) infinite alternate;
 }
 
 .profile-name {
@@ -1208,9 +1202,7 @@ main.grid-open #all-games {
   color: var(--muted);
   font: inherit;
   text-align: left;
-  outline: var(--focus-width) solid transparent;
-  outline-offset: var(--focus-offset);
-  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), outline-color var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
 .settings-category + .settings-category {
@@ -1222,26 +1214,9 @@ main.grid-open #all-games {
   color: var(--text);
 }
 
-.settings-bar {
-  position: absolute;
-  top: var(--space-2);
-  bottom: var(--space-2);
-  left: 0;
-  width: var(--focus-width);
-  border-radius: var(--radius-round);
-  background: var(--accent);
-  opacity: 0;
-  transition: opacity var(--duration-fast) var(--ease-out);
-}
-
-.settings-category.selected .settings-bar {
-  opacity: 1;
-}
-
 .settings-category:focus {
   background: var(--text);
   color: var(--on-light);
-  outline: var(--focus-ring);
 }
 
 #settings .setup-row {

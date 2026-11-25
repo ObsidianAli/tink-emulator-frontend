@@ -28,6 +28,7 @@ async function main() {
     args: [path.join(__dirname, '..'), `--user-data-dir=${path.join(root, 'user')}`],
     env: { ...process.env, TINK_DATA_DIR: data, PORTABLE_EXECUTABLE_DIR: path.join(root, 'tink') },
   });
+  await app.evaluate(() => { process.mainModule.require('./src/steam').findSteamDir = async () => null; });
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -51,6 +52,11 @@ async function main() {
   await key('ArrowUp');
   assert.strictEqual(await focused(), 'Ali');
   assert.deepStrictEqual(await label(), { text: 'Ali', opacity: '1' });
+  assert.strictEqual(
+    await page.evaluate(() => getComputedStyle(document.getElementById('title')).color === getComputedStyle(document.getElementById('home-label')).color),
+    true,
+    'the game title and the icon labels share one colour',
+  );
   await key('ArrowLeft');
   assert.strictEqual(await focused(), 'Ali');
   await key('ArrowRight');

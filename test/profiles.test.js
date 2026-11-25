@@ -130,6 +130,18 @@ test('the settings view lists consoles with whether this profile hides them', ()
   ]);
 });
 
+test('one hidden game can come back, and the settings view lists the hidden ones', () => {
+  const profile = fresh().profiles[0];
+  p.hideGame(profile, 'gamecube:Beta');
+  p.hideGame(profile, 'snes:Gamma');
+  const view = p.settingsView(profile, consoles);
+  assert.strictEqual(view.hiddenGames, 2);
+  assert.deepStrictEqual(view.hiddenList.map((g) => [g.key, g.title, g.consoleName]), [['gamecube:Beta', 'Beta', 'GameCube'], ['snes:Gamma', 'Gamma', 'SNES']]);
+  p.showGame(profile, 'gamecube:Beta');
+  assert.deepStrictEqual(profile.hiddenGames, ['snes:Gamma']);
+  assert.ok(titles(p.visibleGames(consoles, profile)).includes('Beta'));
+});
+
 test('favourites toggle on and off', () => {
   const [profile] = fresh().profiles;
   assert.strictEqual(p.toggleFavourite(profile, 'a'), true);

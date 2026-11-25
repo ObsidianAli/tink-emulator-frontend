@@ -595,6 +595,7 @@ app.whenReady().then(async () => {
     changeActive((profile) => { if (profiles.SORTS.includes(sort)) profile.sort = sort; });
     return currentLibrary();
   });
+  handle('showGame', (key) => { changeActive((profile) => profiles.showGame(profile, String(key))); return getSettings(); });
   handle('showHiddenGames', () => { changeActive(profiles.showAllGames); return getSettings(); });
   handle('getLibrary', getLibrary);
   handle('refreshLibrary', currentLibrary);

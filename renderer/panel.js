@@ -1,11 +1,12 @@
-import { element, focusRow } from './dom.js';
+import { element, focusGlow, focusRow } from './dom.js';
+import { screen } from './transition.js';
 
 const root = document.getElementById('panel');
 let active = null;
 
 // Registered before the shelf's handler, so the press that closes the panel isn't also taken by the shelf.
 listenForInput((action) => {
-  if (!active || document.querySelector('.dialog-scrim')) return null;
+  if (!active || active.busy || document.querySelector('.dialog-scrim')) return null;
   return active.handle(action);
 });
 
@@ -25,7 +26,7 @@ export function openPanel({ title, rows, empty = '' }) {
       for (const row of current) {
         const node = element('button', 'setup-row');
         node.type = 'button';
-        node.append(element('span', 'setup-name', row.label));
+        node.append(element('span', 'setup-name', row.label), focusGlow());
         if (row.run) node.addEventListener('click', () => row.run());
         list.append(node);
         nodes.push(node);
@@ -39,14 +40,15 @@ export function openPanel({ title, rows, empty = '' }) {
       setHints(hints);
     }
 
-    function close() {
-      root.hidden = true;
-      // Still counts as open until every handler has seen this press.
-      setTimeout(() => { active = null; }, 0);
+    async function close() {
+      active.busy = true;
+      await screen(() => { root.hidden = true; });
+      active = null;
       resolve();
     }
 
     active = {
+      busy: true,
       handle(action) {
         if (action === 'up' || action === 'down') {
           const before = focus;
@@ -72,8 +74,11 @@ export function openPanel({ title, rows, empty = '' }) {
         render();
       },
     };
-    root.hidden = false;
-    render();
+    screen(() => {
+      root.hidden = false;
+      render();
+      active.busy = false;
+    });
   });
 }
 
