@@ -17,6 +17,7 @@ const win32 = require('./src/win32');
 const { watchCombo, loadPadReader } = require('./src/pad');
 const { createCovers } = require('./src/covers');
 const { createGameInfo } = require('./src/gameinfo');
+const { createNews } = require('./src/news');
 const { powerAction } = require('./src/power');
 const { createUpdater, FINISH_FLAG } = require('./src/update');
 
@@ -197,6 +198,17 @@ async function getGameInfo(id) {
   if (!game) return null;
   const details = game.console === 'steam' ? await createGameInfo({ dir: path.join(DATA_DIR, 'info') }).get(game.appId) : null;
   return { consoleName: game.consoleName, overview: details ? details.overview : '', screenshots: details ? details.screenshots : [] };
+}
+
+let newsService = null;
+function news() {
+  if (!newsService) {
+    newsService = createNews({
+      dir: path.join(DATA_DIR, 'news'),
+      getGames: () => [...gamesById.values()].filter((game) => game.console === 'steam'),
+    });
+  }
+  return newsService;
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -588,6 +600,9 @@ app.whenReady().then(async () => {
   handle('refreshLibrary', currentLibrary);
   handle('getCover', (id) => getCover(String(id)));
   handle('getGameInfo', (id) => getGameInfo(String(id)));
+  handle('getNews', async (cachedOnly) => ({ items: await news().getNews({ cachedOnly: cachedOnly === true }), unread: await news().hasUnread() }));
+  handle('getNewsImage', (id) => (typeof id === 'string' && id.length < 64 ? news().getNewsImage(id) : null));
+  handle('markNewsSeen', () => news().markSeen());
   handle('launch', (id) => launch(String(id)));
   handle('cancelLaunch', cancelLaunch);
   handle('focusGame', focusGame);
