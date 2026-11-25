@@ -4,7 +4,9 @@ import { runSetup } from './setup.js';
 import { openSettings, hideSettings, settingsOpen } from './settings.js';
 import { openCaseMenu, openMenu, caseMenuOpen } from './casemenu.js';
 import { openInfo, infoOpen } from './info.js';
-import { chooseProfile, closeProfiles, badge } from './profiles.js';
+import { chooseProfile, closeProfiles } from './profiles.js';
+import { badge } from './badge.js';
+import { focusGlow } from './dom.js';
 import { transition, screen, changingScreen, fadeToBlack } from './transition.js';
 import { openPanel, updatePanel, panelOpen } from './panel.js';
 import { showLoading, hideLoading, loadingOpen } from './loading.js';
@@ -15,6 +17,8 @@ const allGamesButton = document.getElementById('all-games');
 const title = document.getElementById('title');
 const message = document.getElementById('message');
 const tray = document.getElementById('tray');
+const trayLabel = document.createElement('span');
+trayLabel.id = 'tray-label';
 
 let row = [];
 let games = [];
@@ -67,10 +71,10 @@ function showHints() {
 }
 
 const trayIcons = [
-  { name: 'Profile', draw: (profile) => badge(profile), activate: () => switchProfile() },
-  { name: 'Controllers', draw: () => controller(), activate: () => showControllers() },
-  { name: 'Settings', draw: () => gear(), activate: () => goToSettings() },
-  { name: 'Power', draw: () => power(), activate: () => showPower() },
+  { name: 'Profiles', sound: 'profiles', draw: (profile) => badge(profile), activate: () => switchProfile() },
+  { name: 'Controllers', sound: 'controllers', draw: () => controller(), activate: () => showControllers() },
+  { name: 'Settings', sound: 'settings', draw: () => gear(), activate: () => goToSettings() },
+  { name: 'Power', sound: 'power', draw: () => power(), activate: () => showPower() },
 ];
 let trayFocus = -1;
 
@@ -110,13 +114,6 @@ const blocks = () => icon(
   ['rect', { x: 3, y: 13, width: 8, height: 8, rx: 2.4 }],
   ['rect', { x: 13, y: 13, width: 8, height: 8, rx: 2.4 }],
 );
-
-function focusGlow() {
-  const glow = document.createElement('span');
-  glow.className = 'focus-glow';
-  glow.append(document.createElement('span'));
-  return glow;
-}
 
 allGamesButton.append(blocks(), focusGlow());
 
@@ -190,20 +187,34 @@ async function renderTray() {
     const node = document.createElement('button');
     node.className = 'tray-icon';
     node.setAttribute('aria-label', icon.name);
+    node.dataset.icon = icon.name;
     node.append(icon.draw(profile), focusGlow());
     node.addEventListener('click', () => {
       if (!ready || inMenu || inPicker || inPanel || inSettings || launching || settingsOpen() || document.querySelector('.dialog-scrim')) return;
       trayFocus = trayIcons.indexOf(icon);
       showTitle();
-      icon.activate();
+      playSound(pressTray(icon));
     });
     return node;
-  }));
+  }), trayLabel);
   focusTray();
 }
 
+function pressTray(icon) {
+  const node = tray.children[trayIcons.indexOf(icon)];
+  node.classList.remove('pressed');
+  void node.offsetWidth;
+  node.classList.add('pressed');
+  icon.activate();
+  return icon.sound;
+}
+
 function focusTray() {
-  if (trayFocus >= 0 && tray.children[trayFocus]) tray.children[trayFocus].focus({ preventScroll: true });
+  const node = tray.children[trayFocus];
+  if (trayFocus < 0 || !node || node === trayLabel) return;
+  node.focus({ preventScroll: true });
+  trayLabel.textContent = trayIcons[trayFocus].name;
+  trayLabel.style.left = `${node.offsetLeft + node.offsetWidth / 2}px`;
 }
 
 function leaveTray() {
@@ -350,6 +361,7 @@ async function goToSettings(focusConsole) {
   inSettings = true;
   try {
     const changed = await openSettings({ focusConsole });
+    shelf.setLeftEdge((await window.tink.getSettings()).leftEdge);
     await screen(async () => {
       hideSettings();
       if (changed) {
@@ -400,8 +412,7 @@ listenForInput((action) => {
       return 'move';
     }
     if (action === 'a') {
-      trayIcons[trayFocus].activate();
-      return 'confirm';
+      return pressTray(trayIcons[trayFocus]);
     }
     return null;
   }

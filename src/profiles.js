@@ -1,8 +1,10 @@
 const crypto = require('node:crypto');
 
 const COLOURS = ['blue', 'green', 'orange', 'red', 'purple', 'teal'];
+const ICONS = ['controller', 'planet', 'star'];
+const DEFAULT_ICON = 'star';
 const RECENT_MAX = 200;
-const NAME_MAX = 16;
+const NAME_MAX = 10;
 const PROFILES_MAX = 8;
 const SORTS = ['recent', 'az', 'console', 'favourites'];
 const ROW_MAX = 12;
@@ -11,11 +13,13 @@ const cleanName = (name) => (typeof name === 'string' ? name.trim().slice(0, NAM
 const strings = (list) => (Array.isArray(list) ? list.filter((item) => typeof item === 'string') : []);
 
 function normalise(profile) {
+  const avatar = typeof profile.avatar === 'string' && profile.avatar ? profile.avatar : null;
   return {
     id: typeof profile.id === 'string' && profile.id ? profile.id : crypto.randomBytes(4).toString('hex'),
     name: cleanName(profile.name) || 'Player',
     colour: COLOURS.includes(profile.colour) ? profile.colour : COLOURS[0],
-    avatar: typeof profile.avatar === 'string' && profile.avatar ? profile.avatar : null,
+    avatar,
+    icon: avatar ? null : ICONS.includes(profile.icon) ? profile.icon : DEFAULT_ICON,
     recent: strings(profile.recent).slice(0, RECENT_MAX),
     favourites: strings(profile.favourites),
     hiddenConsoles: strings(profile.hiddenConsoles),
@@ -38,16 +42,17 @@ function addProfile(settings) {
   if (settings.profiles.length >= PROFILES_MAX) return null;
   const taken = settings.profiles.map((p) => p.colour);
   const colour = COLOURS.find((c) => !taken.includes(c)) || COLOURS[settings.profiles.length % COLOURS.length];
-  const profile = normalise({ name: `Player ${settings.profiles.length + 1}`, colour });
+  const icon = ICONS[settings.profiles.length % ICONS.length];
+  const profile = normalise({ name: `Player ${settings.profiles.length + 1}`, colour, icon });
   settings.profiles.push(profile);
   return profile;
 }
 
-function editProfile(profile, { name, colour, avatar }, avatars = []) {
+function editProfile(profile, { name, colour, avatar, icon }, avatars = []) {
   if (cleanName(name)) profile.name = cleanName(name);
   if (COLOURS.includes(colour)) profile.colour = colour;
-  if (avatar === null) profile.avatar = null;
-  else if (avatars.includes(avatar)) profile.avatar = avatar;
+  if (ICONS.includes(icon)) Object.assign(profile, { icon, avatar: null });
+  else if (avatars.includes(avatar)) Object.assign(profile, { icon: null, avatar });
 }
 
 function removeProfile(settings, id) {
@@ -115,6 +120,6 @@ function settingsView(profile, consoles) {
 }
 
 module.exports = {
-  COLOURS, RECENT_MAX, PROFILES_MAX, SORTS, ROW_MAX, ensureProfiles, activeProfile, addProfile, editProfile, removeProfile, recordPlay, toggleFavourite,
+  COLOURS, ICONS, DEFAULT_ICON, RECENT_MAX, PROFILES_MAX, SORTS, ROW_MAX, ensureProfiles, activeProfile, addProfile, editProfile, removeProfile, recordPlay, toggleFavourite,
   hideGame, showAllGames, toggleConsole, visibleGames, sortGames, homeRow, sortByHistory, settingsView,
 };

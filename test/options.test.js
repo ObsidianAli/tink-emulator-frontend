@@ -22,6 +22,15 @@ test('fullscreen is on unless it was turned off', () => {
   assert.strictEqual(options.wantsFullscreen(settings), true);
 });
 
+test('left edge defaults to slide and ignores unknown values', () => {
+  const settings = { consoles: {} };
+  assert.strictEqual(options.buildSettings(settings, {}, '1').leftEdge, 'slide');
+  options.setLeftEdge(settings, 'fade');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').leftEdge, 'fade');
+  options.setLeftEdge(settings, 'nonsense');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').leftEdge, 'fade');
+});
+
 test('turning fullscreen off drops each emulator fullscreen flag', () => {
   const rom = 'game.iso';
   assert.deepStrictEqual(launchSpec('wiiu', 'Cemu.exe', rom, false).args, ['-g', rom]);

@@ -54,18 +54,28 @@ async function main() {
   assert.strictEqual(await hints(), 0, 'the shelf has no hints');
   assert.deepStrictEqual(
     await page.$$eval('.tray-icon', (nodes) => nodes.map((n) => n.getAttribute('aria-label'))),
-    ['Profile', 'Controllers', 'Settings', 'Power'],
+    ['Profiles', 'Controllers', 'Settings', 'Power'],
   );
   const title = await page.textContent('#title');
   await shot('1-shelf');
 
   assert.strictEqual(await focusedIcon(), null);
   await key('ArrowDown');
-  assert.strictEqual(await focusedIcon(), 'Profile');
+  assert.strictEqual(await focusedIcon(), 'Profiles');
   assert.strictEqual(await page.$eval('#title', (el) => getComputedStyle(el).opacity), '0', 'the game title hides while the icons have focus');
+  const label = await page.evaluate(() => {
+    const text = document.getElementById('tray-label');
+    const box = text.getBoundingClientRect();
+    const icon = document.activeElement.getBoundingClientRect();
+    return { text: text.textContent, opacity: getComputedStyle(text).opacity, below: box.top >= icon.bottom, centred: Math.abs(box.left + box.width / 2 - (icon.left + icon.width / 2)) < 2, bottom: box.bottom, height: innerHeight };
+  });
+  assert.strictEqual(label.text, 'Profiles');
+  assert.strictEqual(label.opacity, '1');
+  assert.ok(label.below && label.centred, 'the name sits under the selected icon');
+  assert.ok(label.bottom <= label.height, 'and stays on screen');
   await shot('2-profile-focused');
   await key('ArrowLeft');
-  assert.strictEqual(await focusedIcon(), 'Profile', 'the row stops at its first icon');
+  assert.strictEqual(await focusedIcon(), 'Profiles', 'the row stops at its first icon');
   await key('ArrowRight');
   assert.strictEqual(await focusedIcon(), 'Controllers');
   await key('ArrowUp');
@@ -78,7 +88,7 @@ async function main() {
   assert.ok(await visible('#profiles'), 'the picker opens');
   await key('Escape');
   assert.ok(!(await visible('#profiles')));
-  assert.strictEqual(await focusedIcon(), 'Profile');
+  assert.strictEqual(await focusedIcon(), 'Profiles');
 
   await key('ArrowRight');
   await key('Enter');

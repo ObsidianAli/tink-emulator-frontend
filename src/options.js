@@ -4,6 +4,9 @@ const { isFile } = require('./detect');
 
 const wantsFullscreen = (settings) => settings.fullscreen !== false;
 
+const LEFT_EDGES = ['slide', 'peek', 'fade'];
+const leftEdge = (settings) => (LEFT_EDGES.includes(settings.leftEdge) ? settings.leftEdge : 'slide');
+
 const steamKey = (settings) => (typeof settings.steamGridDbKey === 'string' ? settings.steamGridDbKey.trim() : '');
 
 function buildSettings(settings, detected, version) {
@@ -28,6 +31,7 @@ function buildSettings(settings, detected, version) {
   return {
     version,
     fullscreen: wantsFullscreen(settings),
+    leftEdge: leftEdge(settings),
     covers: settings.covers === true,
     hasKey: steamKey(settings) !== '',
     consoles,
@@ -47,10 +51,14 @@ function setFullscreen(settings, on) {
   settings.fullscreen = on === true;
 }
 
+function setLeftEdge(settings, mode) {
+  if (LEFT_EDGES.includes(mode)) settings.leftEdge = mode;
+}
+
 function setSteamKey(settings, key) {
   const clean = typeof key === 'string' ? key.trim().slice(0, 200) : '';
   if (clean) settings.steamGridDbKey = clean;
   else delete settings.steamGridDbKey;
 }
 
-module.exports = { buildSettings, clearEmulator, setFullscreen, setSteamKey, wantsFullscreen, steamKey };
+module.exports = { buildSettings, clearEmulator, setFullscreen, setLeftEdge, setSteamKey, wantsFullscreen, steamKey };

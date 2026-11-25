@@ -149,6 +149,10 @@ function createCase(shape, colours) {
   const body = new THREE.Group();
   group.add(body);
 
+  let mats = materials;
+  let fade = 1;
+  const has = { cover: false, spine: false, back: false, label: false };
+
   const shadow = new THREE.Mesh(geometries.shadow, materials.shadow);
   shadow.position.y = SURFACE_GAP;
   shadow.renderOrder = -1;
@@ -205,16 +209,56 @@ function createCase(shape, colours) {
     mesh.material = texture ? material : fallback;
   }
 
-  const setCover = (texture) => show(front, coverMaterial, texture, materials.blank);
-  const setSpine = (texture) => show(spine, spineMaterial, texture, materials.shell);
-  const setBack = (texture) => show(back, backMaterial, texture, materials.shell);
+  const setCover = (texture) => { has.cover = Boolean(texture); show(front, coverMaterial, texture, mats.blank); };
+  const setSpine = (texture) => { has.spine = Boolean(texture); show(spine, spineMaterial, texture, mats.shell); };
+  const setBack = (texture) => { has.back = Boolean(texture); show(back, backMaterial, texture, mats.shell); };
+
+  function useMaterials(next) {
+    mats = next;
+    shadow.material = mats.shadow;
+    tray.material = mats.shell;
+    lid.material = mats.shell;
+    show(front, coverMaterial, has.cover ? coverMaterial.map : null, mats.blank);
+    show(spine, spineMaterial, has.spine ? spineMaterial.map : null, mats.shell);
+    show(back, backMaterial, has.back ? backMaterial.map : null, mats.shell);
+    if (discMesh) {
+      const face = has.label ? labelMaterial : mats.disc;
+      discMesh.material = [mats.disc, face, face];
+    }
+  }
+
+  function setFade(alpha) {
+    if (alpha === fade) return;
+    fade = alpha;
+    if (alpha >= 1 && mats !== materials) {
+      const own = mats;
+      useMaterials(materials);
+      for (const material of Object.values(own)) material.dispose();
+    } else if (alpha < 1 && mats === materials) {
+      const own = {};
+      for (const [name, material] of Object.entries(materials)) {
+        own[name] = material.clone();
+        own[name].transparent = true;
+      }
+      useMaterials(own);
+    }
+    const fading = alpha < 1;
+    const owned = [coverMaterial, spineMaterial, backMaterial, labelMaterial];
+    for (const material of fading ? [...owned, ...Object.values(mats)] : owned) {
+      if (material.transparent !== fading) material.needsUpdate = true;
+      material.transparent = fading;
+      material.opacity = alpha;
+    }
+    group.visible = alpha > 0;
+  }
 
   function setLabel(texture) {
     if (!discMesh) return;
     labelMaterial.map = texture;
     labelMaterial.needsUpdate = true;
-    const face = texture ? labelMaterial : materials.disc;
-    discMesh.material = [materials.disc, face, face];
+    has.label = Boolean(texture);
+    const face = texture ? labelMaterial : mats.disc;
+    discMesh.material = [mats.disc, face, face];
   }
 
   function setDim(amount, near = 1) {
@@ -238,9 +282,10 @@ function createCase(shape, colours) {
 
   function dispose() {
     for (const material of [coverMaterial, spineMaterial, backMaterial, labelMaterial]) material.dispose();
+    if (mats !== materials) for (const material of Object.values(mats)) material.dispose();
   }
 
-  return { group, shape, disc: discMesh, setCover, setSpine, setBack, setLabel, setDim, setPose, dispose };
+  return { group, shape, disc: discMesh, setCover, setSpine, setBack, setLabel, setDim, setFade, setPose, dispose };
 }
 
 function disposeShared() {

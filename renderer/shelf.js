@@ -15,8 +15,7 @@ const NEAR = 1.02;
 const STEP = 0.26;
 const SIDE_DIM = 0.35;
 const SPARE = 2;
-// The cursor walks this many slots in from the left before the row starts scrolling under it.
-const HOLD = 2;
+const LEFT_CLEAR = 0.7;
 const SETTLED = 0.0005;
 const NEXT_STEP = 0.9;
 const DISC_SEATED = 0.03;
@@ -230,8 +229,8 @@ function createShelf(canvas, { onTint, button, title }) {
   function updateWindow() {
     const width = canvas.clientWidth || 1;
     const centre = Math.round(motion.focus);
-    const from = Math.max(0, Math.min(selected, centre) - visibleCount(anchorAt(HOLD) / width));
-    const to = Math.min(games.length - 1, Math.max(selected, centre) + visibleCount(1 - anchorAt(0) / width));
+    const from = Math.max(0, Math.min(selected, centre) - visibleCount(rowStart / width));
+    const to = Math.min(games.length - 1, Math.max(selected, centre) + visibleCount(1 - rowStart / width));
     for (const index of [...live.keys()]) {
       if (index < from || index > to) releaseCase(index);
     }
@@ -248,10 +247,19 @@ function createShelf(canvas, { onTint, button, title }) {
   function place(item, offset) {
     const near = Math.min(1, Math.abs(offset));
     const side = Math.sign(offset);
-    item.group.position.set(slotX(offset), 0, PULL + near * (BACK - PULL));
+    const clear = offset < 0 && leftEdge === 'slide' ? near * LEFT_CLEAR * LAYOUT.width : 0;
+    item.group.position.set(slotX(offset) - clear, 0, PULL + near * (BACK - PULL));
     item.group.rotation.y = (1 - near) * SELECTED_TURN - side * near * SIDE_TURN;
     item.setDim(near * SIDE_DIM, near);
+    item.setFade(offset < 0 && leftEdge === 'fade' ? Math.max(0, 1 + offset) : 1);
   }
+
+  let leftEdge = 'slide';
+  function setLeftEdge(mode) {
+    leftEdge = mode === 'peek' || mode === 'fade' ? mode : 'slide';
+    requestRender();
+  }
+  window.tink.getSettings().then((state) => setLeftEdge(state.leftEdge));
 
   function slotX(offset) {
     const near = Math.min(1, Math.abs(offset));
@@ -289,7 +297,6 @@ function createShelf(canvas, { onTint, button, title }) {
   }
 
   let rowStart = 0;
-  let slotPx = 0;
   const screenX = (x, z) => toScreen(x, z).left;
 
   function measureRow() {
@@ -298,19 +305,13 @@ function createShelf(canvas, { onTint, button, title }) {
     camera.updateMatrixWorld();
     const half = LAYOUT.width / 2;
     rowStart = pixels('--home-margin') + (screenX(half, PULL) - screenX(-half, PULL)) / 2;
-    slotPx = screenX(slotX(1), BACK) - screenX(0, PULL);
-  }
-
-  // A small window keeps the selected Case no further right than the middle.
-  function anchorAt(focus) {
-    return Math.min(canvas.clientWidth / 2, rowStart + Math.max(0, Math.min(focus, HOLD)) * slotPx);
   }
 
   // A lens shift rather than moving the camera, so the perspective stays centred on the selected Case.
   function layoutRow() {
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
-    camera.setViewOffset(width, height, width / 2 - anchorAt(motion.focus), 0, width, height);
+    camera.setViewOffset(width, height, width / 2 - rowStart, 0, width, height);
   }
 
   const point = new THREE.Vector3();
@@ -582,7 +583,7 @@ function createShelf(canvas, { onTint, button, title }) {
   screens.observe(canvas.parentElement, { attributes: true, attributeFilter: ['class'] });
   for (const section of canvas.parentElement.querySelectorAll(':scope > section')) screens.observe(section, { attributes: true, attributeFilter: ['hidden'] });
 
-  return { show, showRing, ready, forgetCovers, art, sleep, wake, select, flip, open, back, caseState, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
+  return { show, showRing, setLeftEdge, ready, forgetCovers, art, sleep, wake, select, flip, open, back, caseState, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
 }
 
 export { createShelf };

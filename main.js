@@ -157,12 +157,10 @@ function getProfiles() {
   const files = listAvatars();
   return {
     last: current.lastProfile,
-    profiles: current.profiles.map(({ id, name, colour, avatar }) => ({
-      id,
-      name,
-      colour,
-      avatar: files.includes(avatar) ? avatarSrc(avatar) : null,
-    })),
+    profiles: current.profiles.map(({ id, name, colour, avatar, icon }) => {
+      const src = files.includes(avatar) ? avatarSrc(avatar) : null;
+      return { id, name, colour, avatar: src, icon: src ? null : icon || profiles.DEFAULT_ICON };
+    }),
   };
 }
 
@@ -423,6 +421,7 @@ function setFullscreen(on) {
   return state;
 }
 
+const setLeftEdge = (mode) => changeSettings((current) => options.setLeftEdge(current, mode));
 const setSteamKey = (key) => changeSettings((current) => options.setSteamKey(current, key));
 const findAutomatically = (id) => changeSettings((current) => options.clearEmulator(current, id));
 
@@ -545,6 +544,7 @@ app.whenReady().then(async () => {
   handle('finishSetup', (wantsCovers) => finishSetup(wantsCovers === true));
   handle('getSettings', getSettings);
   handle('setFullscreen', (on) => setFullscreen(on === true));
+  handle('setLeftEdge', (mode) => setLeftEdge(String(mode)));
   handle('setSteamKey', (key) => setSteamKey(key));
   handle('findAutomatically', (id) => findAutomatically(String(id)));
   handle('redownloadCovers', redownloadCovers);
