@@ -480,7 +480,7 @@ export async function openSettings({ focusConsole } = {}) {
             if (next === category) return null;
             category = next;
             focus = 0;
-            render({ swap: true });
+            render();
             return 'list';
           }
           if (action === 'right' || action === 'a') {

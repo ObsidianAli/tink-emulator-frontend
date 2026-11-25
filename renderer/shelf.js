@@ -61,7 +61,6 @@ function focusTheme() {
     glowSize: pixels('--focus-glow-size'),
     low: parseFloat(token('--focus-breath-low')) || 1,
     period: durationMs('--focus-period'),
-    fade: durationMs('--focus-fade'),
     arc: parseFloat(token('--focus-arc')) || 0.25,
     lap: durationMs('--focus-lap'),
     halo: parseFloat(token('--focus-rim-halo')) || 0,
@@ -164,8 +163,7 @@ function createShelf(canvas, { onTint, button, title }) {
     live.delete(index);
     poseOf.delete(index);
     clearDetails(index, item);
-    ring.detach(item.group);
-    ring.light(item, 0);
+    ring.detach(item);
     if (sharpIndex === index) sharpIndex = -1;
     item.setPose(restPose());
     item.setCover(null);
@@ -260,7 +258,6 @@ function createShelf(canvas, { onTint, button, title }) {
     item.group.position.set(slotX(offset) - clear, 0, PULL + near * (BACK - PULL));
     item.group.rotation.y = (1 - near) * SELECTED_TURN - side * near * SIDE_TURN;
     item.setDim(near * SIDE_DIM, near);
-    ring.light(item, 1 - near);
     item.setFade(offset < 0 && leftEdge === 'fade' ? Math.max(0, 1 + offset) : 1);
   }
 
@@ -425,9 +422,9 @@ function createShelf(canvas, { onTint, button, title }) {
     layoutRow();
     const buttonAt = placeButton();
     const item = live.get(selected);
-    if (item && selected < games.length) ring.attach(item.group, item.shape);
+    if (item && selected < games.length) ring.attach(item);
     else ring.clear();
-    const { fading, showing } = ring.update(now, dt, ringShown && caseState() === 'front');
+    const showing = ring.update(now, ringShown && caseState() === 'front');
     renderer.render(scene, camera);
     placeTitle(buttonAt);
     if (onRest && Math.abs(motion.focus - selected) < TITLE_NEAR) {
@@ -440,7 +437,7 @@ function createShelf(canvas, { onTint, button, title }) {
       settled = true;
       updateWindow();
     }
-    if (moving || spinning || fading) {
+    if (moving || spinning) {
       lastTime = now;
       nextFrame();
     } else if (showing && onScreen()) {

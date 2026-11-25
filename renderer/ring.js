@@ -20,7 +20,6 @@ uniform float uRadius;
 uniform float uLine;
 uniform float uGlow;
 uniform float uGap;
-uniform float uOpacity;
 uniform float uBreath;
 uniform vec3 uFrom;
 uniform vec3 uTo;
@@ -51,7 +50,7 @@ float box(vec2 p, vec2 b, float r) {
 void main() {
 #if STYLE == 2
   vec2 q = vPos / uPool;
-  float pool = exp(-2.5 * dot(q, q)) * uPoolStrength * uBreath * uOpacity;
+  float pool = exp(-2.5 * dot(q, q)) * uPoolStrength * uBreath;
   if (pool < 0.002) discard;
   gl_FragColor = vec4(mix(uFrom, uTo, smoothstep(-1.0, 1.0, q.x)), pool);
 #else
@@ -78,8 +77,8 @@ void main() {
 #endif
   float under = glow * (1.0 - line);
   float alpha = line + under;
-  if (alpha * uOpacity < 0.002) discard;
-  gl_FragColor = vec4((stroke * line + uGlowColour.rgb * under) / alpha, alpha * uOpacity);
+  if (alpha < 0.002) discard;
+  gl_FragColor = vec4((stroke * line + uGlowColour.rgb * under) / alpha, alpha);
 #endif
 }`;
 
@@ -117,7 +116,6 @@ function createFocusRing(theme) {
     uLine: { value: 0 },
     uGlow: { value: 0 },
     uGap: { value: 0 },
-    uOpacity: { value: 0 },
     uBreath: { value: 1 },
     uFrom: { value: new THREE.Vector3(...theme.from) },
     uTo: { value: new THREE.Vector3(...theme.to) },
@@ -137,14 +135,14 @@ function createFocusRing(theme) {
     mesh.renderOrder = 10;
     mesh.frustumCulled = false;
     mesh.visible = false;
-    return { mesh, material, owner: null, shape: null, opacity: 0 };
+    return { mesh, material, owner: null, shape: null };
   }
 
   // Sizes are themed in CSS pixels, so they turn into world units at the selected case's distance.
   let unitsPerPx = 0;
   const units = (px) => px * unitsPerPx;
 
-  function fit(ring) {
+  function fit() {
     const { width, height, depth, radius } = ring.shape;
     const gap = units(theme.gap);
     const line = units(theme.line);
@@ -169,78 +167,42 @@ function createFocusRing(theme) {
     u.uGap.value = gap;
   }
 
-  // Two rings, so the case being left fades out while the new one fades in.
-  let rings = [makeRing(), makeRing()];
-  let active = 0;
-  let cleared = false;
+  let ring = makeRing();
+  let rim = null;
+  let lit = null;
+  let shownAt = null;
 
-  function attach(group, shape) {
-    cleared = false;
-    if (rings[active].owner === group) return;
-    active = 1 - active;
-    const ring = rings[active];
+  function attach(item) {
+    light(item);
+    if (ring.owner === item.group) return;
     if (ring.owner) ring.owner.remove(ring.mesh);
-    ring.owner = group;
-    ring.shape = shape;
-    ring.opacity = 0;
-    fit(ring);
-    group.add(ring.mesh);
-  }
-
-  function detach(group) {
-    for (const ring of rings) {
-      if (ring.owner !== group) continue;
-      group.remove(ring.mesh);
-      ring.owner = null;
-      ring.opacity = 0;
-      ring.mesh.visible = false;
-    }
+    ring.owner = item.group;
+    ring.shape = item.shape;
+    shownAt = null;
+    fit();
+    item.group.add(ring.mesh);
   }
 
   function clear() {
-    cleared = true;
+    light(null);
+    if (ring.owner) ring.owner.remove(ring.mesh);
+    ring.owner = null;
   }
 
-  function dropRims() {
-    for (const [item, { material }] of lit) {
-      item.setRim(null);
-      material.dispose();
-    }
-    lit.clear();
+  function detach(item) {
+    if (ring.owner === item.group) clear();
   }
 
   function setStyle(name) {
     const next = STYLES[name] ?? STYLES.rim;
     if (next === style) return;
-    dropRims();
-    for (const ring of rings) {
-      if (ring.owner) ring.owner.remove(ring.mesh);
-      ring.mesh.geometry.dispose();
-      ring.material.dispose();
-    }
+    dispose();
     style = next;
-    rings = [makeRing(), makeRing()];
-    active = 0;
+    ring = makeRing();
   }
 
-  const lit = new Map();
-  let rimShown = 0;
-
-  function light(item, amount) {
-    if (style !== STYLES.rim) return;
-    const rim = lit.get(item);
-    if (amount <= 0) {
-      if (!rim) return;
-      item.setRim(null);
-      rim.material.dispose();
-      lit.delete(item);
-      return;
-    }
-    if (rim) {
-      rim.amount = amount;
-      return;
-    }
-    const material = new THREE.ShaderMaterial({
+  function makeRim() {
+    return new THREE.ShaderMaterial({
       vertexShader: rimVertexShader,
       fragmentShader: rimFragmentShader,
       transparent: true,
@@ -251,53 +213,49 @@ function createFocusRing(theme) {
         uTo: { value: new THREE.Vector3(...theme.to) },
         uPower: { value: theme.rimPower },
         uLevel: { value: 0 },
-        uHeight: { value: item.shape.height },
+        uHeight: { value: 1 },
       },
     });
-    lit.set(item, { material, amount });
-    item.setRim(material);
+  }
+
+  // Cases share one material: a shader with no users left is dropped, and compiling it again stalls the next move.
+  function light(item) {
+    if (style !== STYLES.rim || item === lit) return;
+    if (lit) lit.setRim(null);
+    lit = item;
+    if (!item) return;
+    rim ||= makeRim();
+    rim.uniforms.uHeight.value = item.shape.height;
+    item.setRim(rim);
   }
 
   function setScale(next) {
     unitsPerPx = next;
-    for (const ring of rings) if (ring.owner) fit(ring);
+    if (ring.owner) fit();
   }
 
-  function update(now, dt, shown) {
-    const breath = 0.5 - 0.5 * Math.cos((now / theme.period) * Math.PI * 2);
+  function update(now, shown) {
+    const showing = shown && ring.owner !== null;
+    if (showing) shownAt ??= now;
+    else shownAt = null;
+    const breath = 0.5 + 0.5 * Math.cos(((now - shownAt) / theme.period) * Math.PI * 2);
     const level = theme.low + (1 - theme.low) * breath;
-    let fading = false;
-    let showing = false;
-    const step = Math.min(1, dt / theme.fade);
-    const wantRim = shown && !cleared ? 1 : 0;
-    rimShown += Math.sign(wantRim - rimShown) * Math.min(Math.abs(wantRim - rimShown), step);
-    if (rimShown !== wantRim) fading = true;
-    for (const { material, amount } of lit.values()) {
-      material.uniforms.uLevel.value = amount * rimShown * level * theme.rimStrength;
-      if (rimShown > 0) showing = true;
-    }
-    rings.forEach((ring, i) => {
-      const want = i === active && shown && !cleared && ring.owner ? 1 : 0;
-      ring.opacity += Math.sign(want - ring.opacity) * Math.min(Math.abs(want - ring.opacity), step);
-      ring.material.uniforms.uOpacity.value = ring.opacity;
-      ring.material.uniforms.uBreath.value = level;
-      ring.material.uniforms.uPhase.value = (now / theme.lap) % 1;
-      ring.mesh.visible = ring.opacity > 0;
-      if (ring.opacity !== want) fading = true;
-      if (ring.mesh.visible) showing = true;
-    });
-    return { fading, showing };
+    if (rim) rim.uniforms.uLevel.value = showing ? level * theme.rimStrength : 0;
+    ring.material.uniforms.uBreath.value = level;
+    ring.material.uniforms.uPhase.value = (now / theme.lap) % 1;
+    ring.mesh.visible = showing;
+    return showing;
   }
 
   function dispose() {
-    dropRims();
-    for (const ring of rings) {
-      ring.mesh.geometry.dispose();
-      ring.material.dispose();
-    }
+    clear();
+    if (rim) rim.dispose();
+    rim = null;
+    ring.mesh.geometry.dispose();
+    ring.material.dispose();
   }
 
-  return { attach, detach, clear, light, setStyle, setScale, update, dispose, reach: () => units(theme.gap + theme.line) };
+  return { attach, detach, clear, setStyle, setScale, update, dispose, reach: () => units(theme.gap + theme.line) };
 }
 
 export { createFocusRing };

@@ -75,7 +75,8 @@ export function createKeyboard({ design, text = '', max, placeholder, onDone, on
     nameText.classList.toggle('placeholder', value === '');
     keys.forEach((key, i) => {
       const node = nodes[i];
-      node.textContent = key.label || (upper() ? key.id.toUpperCase() : key.id);
+      const label = key.label || (upper() ? key.id.toUpperCase() : key.id);
+      if (node.textContent !== label) node.textContent = label;
       node.classList.toggle('focused', i === at);
       node.classList.toggle('on', key.id === 'shift' && shift);
     });

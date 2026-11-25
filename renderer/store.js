@@ -386,14 +386,14 @@ export function openStore() {
       view = 'list';
       focus = 0;
       if (category === 1 && found === null) {
-        render({ swap: true });
+        render();
         const list = await window.tink.findPcGames().catch(() => []);
         if (token !== loadToken) return;
         found = list;
         render();
         return;
       }
-      render({ swap: true });
+      render();
     }
 
     function close() {

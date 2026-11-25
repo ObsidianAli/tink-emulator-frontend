@@ -52,7 +52,7 @@ export function scrollToNode(list, node, smooth = true, margin = parseFloat(getC
   scrolling.set(list, requestAnimationFrame(step));
 }
 
-// A screen that appears with its row already focused would otherwise fade the highlight in.
+// A screen that appears with its row already focused would otherwise zoom it in.
 const root = document.documentElement;
 function settle() {
   root.classList.add('settling');
