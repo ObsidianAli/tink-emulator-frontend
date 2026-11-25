@@ -1,4 +1,4 @@
-import { element } from './dom.js';
+import { element, focusGlow } from './dom.js';
 import { screen } from './transition.js';
 
 const root = document.getElementById('info');
@@ -89,10 +89,12 @@ export function openInfo(game) {
       }
       if (info.screenshots.length) {
         shots = info.screenshots.map((src) => {
-          const image = element('img', 'info-shot');
+          const shot = element('div', 'info-shot');
+          const image = element('img');
           image.src = src;
           image.alt = '';
-          return image;
+          shot.append(image, focusGlow());
+          return shot;
         });
         row.append(...shots);
         row.hidden = false;

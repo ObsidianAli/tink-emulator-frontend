@@ -131,9 +131,6 @@
   --radius-round: 999px;
   --line-width: 1px;
 
-  --focus-width: calc(var(--space) / 2);
-  --focus-offset: calc(var(--space) / 2);
-  --focus-ring: var(--focus-width) solid var(--accent);
   --label-colour: var(--accent);
 
   --focus-from: #5b8def;
@@ -144,7 +141,6 @@
   --focus-glow-size: var(--space);
   --focus-breath-low: 0.8;
   --focus-period: 2400ms;
-  --focus-fade: 140ms;
   --focus-ease: ease-in-out;
   --focus-arc: 0.3;
   --focus-lap: 4000ms;

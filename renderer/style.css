@@ -426,7 +426,6 @@ main.tray-focused #tray-label {
   box-shadow: 0 0 var(--focus-glow-size) var(--focus-glow), inset 0 0 var(--focus-glow-size) var(--focus-glow);
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--focus-fade) linear;
 }
 
 .focus-glow > span {
@@ -444,19 +443,20 @@ main.tray-focused #tray-label {
   outline: none;
 }
 
-:is(.tray-icon, .home-badge, .profile-option, .profile, .setup-row, .setup-next, .settings-category, .dialog button):focus .focus-glow,
+:is(.tray-icon, .home-badge, .profile-option, .profile, .setup-row, .setup-next, .settings-category, .dialog button, .news-item, .album-shot):focus .focus-glow,
+:is(.tile, .store-tile).focused .focus-glow,
+.info-shot.current .focus-glow,
 .setup-row:focus-within .focus-glow,
 #all-games.selected .focus-glow {
-  opacity: 1;
   animation: focus-breath calc(var(--focus-period) / 2) var(--focus-ease) infinite alternate;
 }
 
 @keyframes focus-breath {
   from {
-    filter: opacity(var(--focus-breath-low));
+    opacity: 1;
   }
   to {
-    filter: opacity(1);
+    opacity: var(--focus-breath-low);
   }
 }
 
@@ -528,23 +528,25 @@ main.grid-open #all-games {
 
 .tile {
   position: relative;
-  overflow: hidden;
   border-radius: var(--cover-radius);
-  background: var(--surface-raised);
   box-shadow: var(--shadow-tile);
   opacity: var(--tile-dim);
-  outline: var(--focus-width) solid transparent;
-  outline-offset: var(--focus-offset);
-  transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out),
-    box-shadow var(--duration-fast) var(--ease-out), outline-color var(--duration-fast) var(--ease-out);
+  transition: transform var(--duration-fast) var(--ease-out);
 }
 
 .tile.focused {
   z-index: 1;
   box-shadow: var(--shadow-tile-focus);
   opacity: 1;
-  outline: var(--focus-ring);
   transform: scale(var(--tile-zoom));
+}
+
+.tile-art {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--surface-raised);
 }
 
 .tile img {
@@ -689,7 +691,6 @@ main.grid-open #all-games {
   background: var(--surface);
   color: var(--text);
   font: inherit;
-  transition: background-color var(--duration-fast) var(--ease-out);
 }
 
 .dialog button:focus {
@@ -753,7 +754,6 @@ main.grid-open #all-games {
   color: var(--text);
   font: inherit;
   text-align: left;
-  transition: background-color var(--duration-fast) var(--ease-out);
 }
 
 .setup-row + .setup-row {
@@ -1015,7 +1015,6 @@ main.grid-open #all-games {
   color: var(--muted);
   font: inherit;
   outline: none;
-  transition: color var(--duration-fast) var(--ease-out);
 }
 
 .profile:focus {
@@ -1036,9 +1035,7 @@ main.grid-open #all-games {
   color: var(--text);
   font-size: var(--text-title);
   font-weight: var(--weight-bold);
-  outline: var(--focus-width) solid transparent;
-  outline-offset: var(--focus-offset);
-  transition: outline-color var(--duration-fast) var(--ease-out), background-color var(--duration-ui) var(--ease-out);
+  transition: background-color var(--duration-ui) var(--ease-out);
 }
 
 .badge svg {
@@ -1103,7 +1100,6 @@ main.grid-open #all-games {
   color: var(--muted);
   font: inherit;
   font-size: var(--keyboard-key-size);
-  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
 .keyboard .key-word {
@@ -1206,7 +1202,6 @@ main.grid-open #all-games {
   color: var(--muted);
   font: inherit;
   text-align: left;
-  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
 .settings-category + .settings-category {
@@ -1366,21 +1361,22 @@ html.settling *::after {
   display: flex;
   flex: none;
   gap: var(--space-2);
-  padding: var(--space);
+  margin: calc(-1 * var(--space));
+  padding: var(--space-2);
   overflow: hidden;
 }
 
 .info-shot {
+  position: relative;
   flex: none;
   height: var(--info-shot-height);
   border-radius: var(--radius);
-  outline: var(--focus-width) solid transparent;
-  outline-offset: var(--focus-offset);
-  transition: outline-color var(--duration-fast) var(--ease-out);
 }
 
-.info-shot.current {
-  outline: var(--focus-ring);
+.info-shot img {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
 }
 
 #loading {
@@ -1583,11 +1579,6 @@ main:has(> #news:not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, #t
   font-size: var(--text-title);
 }
 
-.news-item:focus .focus-glow {
-  opacity: 1;
-  animation: focus-breath calc(var(--focus-period) / 2) var(--focus-ease) infinite alternate;
-}
-
 .news-empty {
   margin: var(--space-4) var(--space);
   color: var(--muted);
@@ -1645,7 +1636,6 @@ main:has(> #news:not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, #t
 .tray-icon {
   --disc: var(--surface-raised);
   background: var(--disc);
-  transition: background-color var(--duration-fast) var(--ease-out);
 }
 
 .tray-icon[data-icon='Store'] {
@@ -1726,12 +1716,6 @@ main:has(> #news:not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, #t
   stroke-linejoin: round;
 }
 
-.icon-hole,
-.icon-cut,
-.icon-edge {
-  transition: fill var(--duration-fast) var(--ease-out), stroke var(--duration-fast) var(--ease-out);
-}
-
 #album {
   position: absolute;
   inset: 0;
@@ -1785,11 +1769,6 @@ main:has(> #album:not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, #
   height: 100%;
   border-radius: var(--album-radius);
   object-fit: cover;
-}
-
-.album-shot:focus .focus-glow {
-  opacity: 1;
-  animation: focus-breath calc(var(--focus-period) / 2) var(--focus-ease) infinite alternate;
 }
 
 .album-fade {
@@ -1981,7 +1960,6 @@ body:has(main > #store:not([hidden])) .backdrop-blob {
   border-radius: var(--cover-radius);
   outline: none;
   opacity: var(--tile-dim);
-  transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 .store-tile.focused {
@@ -2006,11 +1984,6 @@ body:has(main > #store:not([hidden])) .backdrop-blob {
 
 .store-tile.installing .store-art {
   opacity: var(--store-wait-dim);
-}
-
-.store-tile.focused .focus-glow {
-  opacity: 1;
-  animation: focus-breath calc(var(--focus-period) / 2) var(--focus-ease) infinite alternate;
 }
 
 .store-progress {

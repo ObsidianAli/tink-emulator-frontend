@@ -1,4 +1,4 @@
-import { element, scrollToNode } from './dom.js';
+import { element, focusGlow, scrollToNode } from './dom.js';
 
 const SORT_NAMES = { recent: 'Last played', az: 'A–Z', console: 'Console', favourites: 'Favourites' };
 const SORTS = Object.keys(SORT_NAMES);
@@ -38,14 +38,14 @@ async function fillCover(tile, game) {
     try {
       await img.decode();
       whole(img, TILE_ASPECT);
-      tile.replaceChildren(img);
+      tile.firstChild.replaceChildren(img);
       return;
     } catch {
     }
   }
   const plain = element('div', 'tile-plain', game.title);
   plain.style.background = (cover && cover.plain && cover.plain.colour) || '';
-  tile.replaceChildren(plain);
+  tile.firstChild.replaceChildren(plain);
 }
 
 function draw() {
@@ -53,6 +53,7 @@ function draw() {
   tiles = games.map((game) => {
     const tile = element('div', 'tile');
     tile.game = game;
+    tile.append(element('div', 'tile-art'), focusGlow());
     observer.observe(tile);
     return tile;
   });
