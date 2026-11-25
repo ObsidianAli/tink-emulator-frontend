@@ -16,9 +16,11 @@ const KEY_ACTIONS = {
   h: 'hide',
   H: 'hide',
   ',': 'settings',
+  Home: 'first',
+  End: 'last',
 };
 
-const PAD_ACTIONS = { 0: 'a', 1: 'b', 2: 'x', 3: 'y', 8: 'view', 9: 'menu', 10: 'fav', 11: 'hide', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
+const PAD_ACTIONS = { 0: 'a', 1: 'b', 2: 'x', 3: 'y', 6: 'first', 7: 'last', 8: 'view', 9: 'menu', 10: 'fav', 11: 'hide', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
 const DIRECTIONS = new Set(['up', 'down', 'left', 'right']);
 const STICK_DEADZONE = 0.5;
 const REPEAT_DELAY_MS = 400;

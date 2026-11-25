@@ -227,6 +227,13 @@ export function openAlbum() {
             show(true);
             return 'list';
           }
+          if (action === 'first' || action === 'last') {
+            const next = action === 'first' ? 0 : shots.length - 1;
+            if (next === viewing) return null;
+            viewing = next;
+            show(true);
+            return 'list';
+          }
           if (action === 'x') {
             remove();
             return 'confirm';
@@ -236,6 +243,13 @@ export function openAlbum() {
             return 'back';
           }
           return null;
+        }
+        if ((action === 'first' || action === 'last') && nodes.length) {
+          const next = action === 'first' ? 0 : nodes.length - 1;
+          if (next === focus) return null;
+          focus = next;
+          select();
+          return 'list';
         }
         const move = { left: -1, right: 1, up: -COLUMNS, down: COLUMNS }[action];
         if (move !== undefined && nodes.length) {

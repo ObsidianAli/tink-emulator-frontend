@@ -553,6 +553,13 @@ listenForInput((action) => {
   }
   if (!ready) return null;
   if (topFocus >= 0) {
+    if (action === 'first' || action === 'last') {
+      const next = action === 'first' ? 0 : topProfiles.length - 1;
+      if (next === topFocus) return null;
+      topFocus = next;
+      focusTop();
+      return 'move';
+    }
     if (action === 'left' || action === 'right') {
       const next = topFocus + (action === 'right' ? 1 : -1);
       if (next < 0 || next >= topProfiles.length) return null;
@@ -568,6 +575,13 @@ listenForInput((action) => {
     return null;
   }
   if (trayFocus >= 0) {
+    if (action === 'first' || action === 'last') {
+      const next = action === 'first' ? 0 : trayIcons.length - 1;
+      if (next === trayFocus) return null;
+      trayFocus = next;
+      focusTray();
+      return 'move';
+    }
     if (action === 'left' || action === 'right') {
       const next = trayFocus + (action === 'right' ? 1 : -1);
       if (next < 0 || next >= trayIcons.length) return null;
@@ -604,6 +618,12 @@ listenForInput((action) => {
     showHints();
     return 'move';
   }
+  if (action === 'first' || action === 'last') {
+    if (!shelf.select(action === 'first' ? 0 : row.length)) return null;
+    showTitle();
+    showHints();
+    return 'move';
+  }
   if (action === 'fav' || action === 'hide') {
     if (changing || !shelf.game()) return null;
     changeGame(action === 'fav' ? window.tink.toggleFavourite : window.tink.hideGame);
@@ -627,6 +647,7 @@ listenForInput((action) => {
 
 function gridAction(action) {
   if (['left', 'right', 'up', 'down'].includes(action)) return grid.move(action) ? 'move' : null;
+  if (action === 'first' || action === 'last') return grid.jump(action) ? 'move' : null;
   if (action === 'fav' || action === 'hide') {
     if (changing || !grid.game()) return null;
     changeGame(action === 'fav' ? window.tink.toggleFavourite : window.tink.hideGame);

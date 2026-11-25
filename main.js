@@ -19,6 +19,7 @@ const { captureWindow, shotName, safeName } = require('./src/capture');
 const { createAlbum } = require('./src/album');
 const { createCovers } = require('./src/covers');
 const owned = require('./src/owned');
+const { updateFirstSeen } = require('./src/firstseen');
 const installs = require('./src/install');
 const pcgames = require('./src/pcgames');
 const pcadded = require('./src/pcadded');
@@ -66,6 +67,8 @@ let allConsoles = [];
 let settings = { consoles: {} };
 let emulators = {};
 const settingsFile = () => path.join(DATA_DIR, 'settings.json');
+const firstSeenFile = () => path.join(DATA_DIR, 'firstseen.json');
+let firstSeen = {};
 let covers = null;
 
 function makeCovers() {
@@ -111,6 +114,7 @@ async function getLibrary() {
   emulators = detect();
   covers = makeCovers();
   const steamDir = await steam.findSteamDir();
+  lastSteamDir = steamDir;
   const steamGames = (steamDir ? steam.getSteamGames(steamDir) : []).map((game) => ({
     ...game,
     id: `steam:${game.appId}`,
@@ -122,6 +126,7 @@ async function getLibrary() {
   const games = [...getEmulatedGames(settings), ...steamGames, ...pcadded.getAddedGames(settings)];
   gamesById = new Map(games.map((game) => [game.id, game]));
   allConsoles = groupConsoles(games);
+  firstSeen = updateFirstSeen(firstSeenFile(), games.map((game) => game.key));
   return currentLibrary();
 }
 
@@ -132,22 +137,38 @@ function currentLibrary() {
   const visible = profiles.visibleGames(allConsoles, profile);
   const show = ({ id, key, title, console, consoleName }) => ({ id, title, console, consoleName, fav: profile.favourites.includes(key) });
   return {
-    row: profiles.homeRow(visible, profile).map(show),
-    games: profiles.sortGames(visible, profile.sort, profile).map(show),
+    row: profiles.homeRow(visible, profile, firstSeen).map(show),
+    games: profiles.sortGames(visible, profile.sort, profile, firstSeen).map(show),
     sort: profile.sort,
   };
 }
 
 const ownedById = new Map();
+let lastSteamDir = null;
+
+function loadProfiles() {
+  const current = loadSettings(settingsFile());
+  profiles.ensureProfiles(current);
+  return current;
+}
+
+function hiddenOwned(profile) {
+  if (!lastSteamDir || !profile.hiddenGames.some((key) => key.startsWith('steam:'))) return [];
+  const installed = steam.getSteamGames(lastSteamDir).map((game) => game.appId);
+  return owned.getHiddenOwnedGames(lastSteamDir, installed, profile.hiddenGames);
+}
 const lookup = (id) => gamesById.get(id) || ownedById.get(id);
 
 // Games the account owns but hasn't installed; they get covers through the same lookup as library games.
 async function getOwnedGames() {
   const steamDir = await steam.findSteamDir();
+  lastSteamDir = steamDir;
   const installed = steamDir ? steam.getSteamGames(steamDir).map((game) => game.appId) : [];
-  const list = owned.getOwnedGames(steamDir, installed).map((game) => ({
+  const { hiddenGames } = profiles.activeProfile(loadProfiles());
+  const list = owned.getOwnedGames(steamDir, installed, { hidden: hiddenGames }).map((game) => ({
     ...game,
     id: `own:${game.appId}`,
+    key: `steam:${game.appId}`,
     console: 'steam',
     consoleName: STEAM.name,
     fileName: game.appId,
@@ -222,6 +243,7 @@ function changePcGames(change) {
   const games = [...gamesById.values()].filter((game) => game.console !== 'pc').concat(pcadded.getAddedGames(current));
   gamesById = new Map(games.map((game) => [game.id, game]));
   allConsoles = groupConsoles(games);
+  firstSeen = updateFirstSeen(firstSeenFile(), games.map((game) => game.key));
   return result;
 }
 
@@ -638,7 +660,7 @@ function getSettings() {
   profiles.ensureProfiles(current);
   return {
     ...options.buildSettings(current, detect(), app.getVersion()),
-    ...profiles.settingsView(profiles.activeProfile(current), allConsoles),
+    ...profiles.settingsView(profiles.activeProfile(current), allConsoles, hiddenOwned(profiles.activeProfile(current))),
   };
 }
 

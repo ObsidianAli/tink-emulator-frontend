@@ -12,18 +12,25 @@ const ROW_MAX = 12;
 const cleanName = (name) => (typeof name === 'string' ? name.trim().slice(0, NAME_MAX) : '');
 const strings = (list) => (Array.isArray(list) ? list.filter((item) => typeof item === 'string') : []);
 
+function times(map, keep) {
+  const source = map && typeof map === 'object' && !Array.isArray(map) ? map : {};
+  return Object.fromEntries(keep.filter((key) => Number.isFinite(source[key])).map((key) => [key, source[key]]));
+}
+
 function normalise(profile) {
   const avatar = typeof profile.avatar === 'string' && profile.avatar ? profile.avatar : null;
+  const recent = strings(profile.recent).slice(0, RECENT_MAX);
   return {
     id: typeof profile.id === 'string' && profile.id ? profile.id : crypto.randomBytes(4).toString('hex'),
     name: cleanName(profile.name) || 'Player',
     colour: COLOURS.includes(profile.colour) ? profile.colour : COLOURS[0],
     avatar,
     icon: avatar ? null : ICONS.includes(profile.icon) ? profile.icon : DEFAULT_ICON,
-    recent: strings(profile.recent).slice(0, RECENT_MAX),
+    recent,
     favourites: strings(profile.favourites),
     hiddenConsoles: strings(profile.hiddenConsoles),
     hiddenGames: strings(profile.hiddenGames),
+    playedAt: times(profile.playedAt, recent),
     sort: SORTS.includes(profile.sort) ? profile.sort : SORTS[0],
   };
 }
@@ -62,8 +69,9 @@ function removeProfile(settings, id) {
   return true;
 }
 
-function recordPlay(profile, key) {
+function recordPlay(profile, key, now = Date.now()) {
   profile.recent = [key, ...profile.recent.filter((k) => k !== key)].slice(0, RECENT_MAX);
+  profile.playedAt = { ...times(profile.playedAt, profile.recent), [key]: now };
 }
 
 function toggleFavourite(profile, key) {
@@ -104,8 +112,13 @@ function visibleGames(consoles, profile) {
 
 const byTitle = (a, b) => a.title.localeCompare(b.title, 'en', { numeric: true });
 
-function sortGames(games, sort, profile) {
-  const recent = sortByHistory([...games].sort(byTitle), profile.recent);
+function sortByRecency(games, profile, seen) {
+  const stamp = (game) => Math.max((profile.playedAt || {})[game.key] || 0, seen[game.key] || 0);
+  return sortByHistory([...games].sort(byTitle), profile.recent).sort((a, b) => stamp(b) - stamp(a));
+}
+
+function sortGames(games, sort, profile, seen = {}) {
+  const recent = sortByRecency(games, profile, seen);
   if (sort === 'az') return [...games].sort(byTitle);
   if (sort === 'console') return games;
   if (sort === 'favourites') {
@@ -114,14 +127,15 @@ function sortGames(games, sort, profile) {
   return recent;
 }
 
-const homeRow = (games, profile) => sortGames(games, 'recent', profile).slice(0, ROW_MAX);
+const homeRow = (games, profile, seen = {}) => sortGames(games, 'recent', profile, seen).slice(0, ROW_MAX);
 
-function settingsView(profile, consoles) {
+function settingsView(profile, consoles, hiddenOwned = []) {
   return {
     consoleList: consoles.map((item) => ({ id: item.console, name: item.name, hidden: profile.hiddenConsoles.includes(item.console) })),
     hiddenGames: profile.hiddenGames.length,
     hiddenList: consoles
       .flatMap((item) => item.games.map((game) => ({ key: game.key, title: game.title, consoleName: item.name })))
+      .concat(hiddenOwned.map((game) => ({ key: `steam:${game.appId}`, title: game.title, consoleName: 'Steam' })))
       .filter((game) => profile.hiddenGames.includes(game.key))
       .sort((a, b) => a.title.localeCompare(b.title, 'en', { numeric: true })),
   };

@@ -156,6 +156,18 @@ export function openStore() {
       }
     }
 
+    async function hideGame(game) {
+      active.busy = true;
+      try {
+        await window.tink.hideGame(`own:${game.appId}`);
+        owned = owned.filter((item) => item.appId !== game.appId);
+        render();
+      } catch {
+      } finally {
+        active.busy = false;
+      }
+    }
+
     async function toggleFound(item) {
       active.busy = true;
       try {
@@ -373,7 +385,7 @@ export function openStore() {
       if (column === 'categories') return setHints([{ button: 'a', label: 'Open' }, { button: 'b', label: 'Back' }]);
       const current = rows[focus];
       const list = [];
-      if (current && category === 0 && !pending.has(current.appId)) list.push({ button: 'a', label: 'Install' });
+      if (current && category === 0 && !pending.has(current.appId)) list.push({ button: 'a', label: 'Install' }, { button: 'hide', label: 'Hide' });
       else if (current && current.type === 'found') list.push({ button: 'a', label: added.has(current.item.exe) ? 'Remove' : 'Add' });
       else if (current && current.type === 'browse') list.push({ button: 'a', label: 'Open' });
       else if (current && current.type === 'entry') list.push({ button: 'a', label: current.entry.kind === 'exe' ? 'Add' : 'Open' });
@@ -425,6 +437,13 @@ export function openStore() {
       finished,
       handle(action) {
         if (column === 'categories') {
+          if (action === 'first' || action === 'last') {
+            const next = action === 'first' ? 0 : CATEGORIES.length - 1;
+            if (next === category) return null;
+            category = next;
+            showCategory();
+            return 'list';
+          }
           if (action === 'up' || action === 'down') {
             const next = Math.max(0, Math.min(CATEGORIES.length - 1, category + (action === 'down' ? 1 : -1)));
             if (next === category) return null;
@@ -446,6 +465,13 @@ export function openStore() {
         }
         const current = rows[focus];
         const isGrid = category === 0;
+        if (action === 'first' || action === 'last') {
+          const next = action === 'first' ? 0 : nodes.length - 1;
+          if (next < 0 || next === focus) return null;
+          focus = next;
+          focusColumn();
+          return isGrid ? 'move' : 'list';
+        }
         if (isGrid && ['left', 'right', 'up', 'down'].includes(action)) {
           if (action === 'left' && focus % COLUMNS === 0) {
             column = 'categories';
@@ -459,6 +485,10 @@ export function openStore() {
           focus = Math.max(0, Math.min(nodes.length - 1, focus + (action === 'down' ? 1 : -1)));
           focusColumn();
           return focus !== before ? 'list' : null;
+        }
+        if (action === 'hide' && isGrid && current && !pending.has(current.appId)) {
+          hideGame(current);
+          return 'toggle';
         }
         if (action === 'a' && current) {
           if (isGrid) {

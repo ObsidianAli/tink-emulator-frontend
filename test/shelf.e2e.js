@@ -27,7 +27,7 @@ function makeLibrary(root) {
   fs.writeFileSync(path.join(waiter, 'Waiting Game.js'), 'setTimeout(() => {}, 1500);\n');
   fs.writeFileSync(path.join(waiter, 'Aardvark Game.js'), 'setTimeout(() => {}, 1500);\n');
   consoles.switch2 = { folder: waiter, exe: process.execPath };
-  return { consoles, covers: false };
+  return { consoles, covers: false, profiles: [{ id: 'player', name: 'Player', hiddenConsoles: ['steam'] }] };
 }
 
 function fakeCover(seed, width = 400, height = 560) {
@@ -246,6 +246,16 @@ async function main() {
   assert.strictEqual(await hints(), '');
   await key('ArrowRight');
   assert.strictEqual(await title(), 'All games', 'the button is the last place');
+  const jumped = await frameTimes(page, async () => {
+    await key('Home');
+    assert.strictEqual(await title(), 'Aardvark Game', 'Home jumps to the first game');
+    await key('End');
+  });
+  console.log('Home and End along the row:', JSON.stringify(jumped));
+  assert.strictEqual(await title(), 'All games', 'End lands on the button, the true end of the row');
+  assert.ok(await buttonSelected());
+  await key('End');
+  assert.ok(await buttonSelected(), 'End at the end stays put');
   await page.keyboard.press('ArrowLeft');
   await sleep(1500);
   const lastX = (await centreOf('#title')).x;
@@ -289,10 +299,39 @@ async function main() {
   for (let i = 0; i < 4; i++) {
     await key('f');
     sorts.push(await sortName());
+    if (sorts.length === 3) {
+      assert.strictEqual(await page.$$eval('#grid-list .tile', (els) => els.length), 0, 'Favourites shows only favourites');
+      assert.strictEqual(await page.textContent('#grid-list .store-empty'), 'No favourites');
+    }
   }
   assert.deepStrictEqual(sorts, ['A–Z', 'Console', 'Favourites', 'Last played']);
   await key('f');
   assert.strictEqual(readSettings().profiles[0].sort, 'az');
+
+  const tileCount = () => page.$$eval('#grid-list .tile', (els) => els.length);
+  const allTiles = await tileCount();
+  await key('l');
+  await sleep(500);
+  await key('f');
+  await key('f');
+  assert.strictEqual(await sortName(), 'Favourites');
+  assert.strictEqual(await tileCount(), 1, 'only the favourite is listed');
+  await key('l');
+  await sleep(500);
+  assert.strictEqual(await tileCount(), 0, 'unfavouriting removes the tile');
+  assert.strictEqual(await page.textContent('#grid-list .store-empty'), 'No favourites');
+  await key('ArrowRight');
+  await key('l');
+  await key('f');
+  assert.strictEqual(await sortName(), 'Last played', 'sorting still works when empty');
+  await key('f');
+  assert.strictEqual(await sortName(), 'A–Z');
+  assert.strictEqual(await tileCount(), allTiles);
+  await key('End');
+  assert.strictEqual(await page.$eval('#grid-list .tile.focused', (el) => el === el.parentElement.lastElementChild), true, 'End jumps to the last game');
+  assert.notStrictEqual(await gridTitle(), 'Aardvark Game');
+  await key('Home');
+  assert.strictEqual(await gridTitle(), 'Aardvark Game', 'Home jumps to the first game');
 
   await key('s');
   assert.strictEqual(await page.$$eval('#case-menu button', (els) => els.map((el) => el.textContent).join()), 'Favourite,Hide,Game info');

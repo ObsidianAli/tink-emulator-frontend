@@ -158,20 +158,34 @@ function owned(steamDir) {
 
 // Games the signed-in Steam account owns and hasn't installed. With several accounts on the PC, only games tied
 // to this account by its own files are listed; the rest are counted in getOwnedStatus.
-function getOwnedGames(steamDir, installedIds = [], { includeUnsure = false } = {}) {
+function getOwnedGames(steamDir, installedIds = [], { includeUnsure = false, hidden = [] } = {}) {
   const found = owned(steamDir);
   if (!found) return [];
   const installed = new Set([...installedIds].map(String));
+  const away = new Set(hidden);
   return [...found.sure, ...(includeUnsure ? found.unsure : [])]
-    .filter((id) => !installed.has(String(id)))
+    .filter((id) => !installed.has(String(id)) && !away.has(`steam:${id}`))
     .map((id) => ({ appId: String(id), title: found.titles.get(id), art: artUrls(String(id)) }))
     .sort((a, b) => a.title.localeCompare(b.title, 'en', { numeric: true }));
 }
 
-function getOwnedStatus(steamDir) {
+// The owned, uninstalled games a profile has hidden, for the hidden-games list in Settings.
+function getHiddenOwnedGames(steamDir, installedIds = [], hidden = []) {
   const found = owned(steamDir);
-  if (!found) return { accounts: 0, signedIn: false, sure: 0, unsure: 0 };
-  return { accounts: found.accounts, signedIn: found.signedIn, sure: found.sure.size, unsure: found.unsure.size };
+  if (!found) return [];
+  const installed = new Set([...installedIds].map(String));
+  const away = new Set(hidden);
+  return [...found.sure]
+    .filter((id) => !installed.has(String(id)) && away.has(`steam:${id}`))
+    .map((id) => ({ appId: String(id), title: found.titles.get(id) }));
 }
 
-module.exports = { getOwnedGames, getOwnedStatus };
+function getOwnedStatus(steamDir, { hidden = [] } = {}) {
+  const found = owned(steamDir);
+  if (!found) return { accounts: 0, signedIn: false, sure: 0, unsure: 0 };
+  const away = new Set(hidden);
+  const shown = (ids) => [...ids].filter((id) => !away.has(`steam:${id}`)).length;
+  return { accounts: found.accounts, signedIn: found.signedIn, sure: shown(found.sure), unsure: shown(found.unsure) };
+}
+
+module.exports = { getOwnedGames, getHiddenOwnedGames, getOwnedStatus };
