@@ -1,4 +1,5 @@
 import * as THREE from '../node_modules/three/build/three.module.js';
+import { createHeart, disposeHearts } from './heart.js';
 
 const SHAPES = {
   dvd: { width: 1.35, height: 1.9, depth: 0.14, disc: 0.6, radius: 0.07, rim: 0.03 },
@@ -151,6 +152,9 @@ function createCase(shape, colours) {
 
   let mats = materials;
   let fade = 1;
+  let shade = 1;
+  let inFront = false;
+  let heart = null;
   const has = { cover: false, spine: false, back: false, label: false };
 
   const shadow = new THREE.Mesh(geometries.shadow, materials.shadow);
@@ -250,6 +254,7 @@ function createCase(shape, colours) {
       material.opacity = alpha;
     }
     group.visible = alpha > 0;
+    heart?.tint(shade, fade, inFront);
   }
 
   function setLabel(texture) {
@@ -262,12 +267,24 @@ function createCase(shape, colours) {
   }
 
   function setDim(amount, near = 1) {
-    const shade = 1 - amount;
+    shade = 1 - amount;
+    inFront = near < 0.5;
+    heart?.tint(shade, fade, inFront);
     for (const material of [coverMaterial, spineMaterial, backMaterial]) {
       material.color.setScalar(shade);
       material.envMapIntensity = SELECTED_GLOSS.strength + (1 - SELECTED_GLOSS.strength) * near;
       material.roughness = Math.min(1, roughness + SELECTED_GLOSS.extraRoughness * (1 - near));
     }
+  }
+
+  function setHeart(look, scale) {
+    if (!heart) {
+      if (scale <= 0) return;
+      heart = createHeart(colours.heart, shape);
+      heart.tint(shade, fade, inFront);
+      front.add(heart.mesh);
+    }
+    heart.set(look, scale);
   }
 
   let rim = [];
@@ -294,9 +311,10 @@ function createCase(shape, colours) {
   function dispose() {
     for (const material of [coverMaterial, spineMaterial, backMaterial, labelMaterial]) material.dispose();
     if (mats !== materials) for (const material of Object.values(mats)) material.dispose();
+    heart?.dispose();
   }
 
-  return { group, shape, disc: discMesh, setCover, setSpine, setBack, setLabel, setDim, setFade, setRim, setPose, dispose };
+  return { group, shape, disc: discMesh, setCover, setSpine, setBack, setLabel, setDim, setFade, setHeart, setRim, setPose, dispose };
 }
 
 function disposeShared() {
@@ -304,6 +322,7 @@ function disposeShared() {
     for (const geometry of Object.values(geometries)) geometry?.dispose();
   }
   geometryCache.clear();
+  disposeHearts();
   if (!shared) return;
   shared.shadow.map.dispose();
   for (const material of Object.values(shared)) material.dispose();

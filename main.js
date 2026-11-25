@@ -278,9 +278,9 @@ function getProfiles() {
   const files = listAvatars();
   return {
     last: current.lastProfile,
-    profiles: current.profiles.map(({ id, name, colour, avatar, icon }) => {
+    profiles: current.profiles.map(({ id, name, colour, avatar }) => {
       const src = files.includes(avatar) ? avatarSrc(avatar) : null;
-      return { id, name, colour, avatar: src, icon: src ? null : icon || profiles.DEFAULT_ICON };
+      return { id, name, colour, avatar: src };
     }),
   };
 }
@@ -682,7 +682,9 @@ const setFocusStyle = (mode) => changeSettings((current) => options.setFocusStyl
 const setBackground = (mode) => changeSettings((current) => options.setBackground(current, mode));
 const setKeyboard = (mode) => changeSettings((current) => options.setKeyboard(current, mode));
 const setIconStyle = (mode) => changeSettings((current) => options.setIconStyle(current, mode));
+const setSounds = (picked) => changeSettings((current) => options.setSounds(current, picked));
 const setIconRow = (mode) => changeSettings((current) => options.setIconRow(current, mode));
+const setHeart = (mode) => changeSettings((current) => options.setHeart(current, mode));
 const setHomeProfiles = (on) => changeSettings((current) => options.setHomeProfiles(current, on));
 const setSteamKey = (key) => changeSettings((current) => options.setSteamKey(current, key));
 const findAutomatically = (id) => changeSettings((current) => options.clearEmulator(current, id));
@@ -814,7 +816,9 @@ app.whenReady().then(async () => {
   handle('setBackground', (mode) => setBackground(String(mode)));
   handle('setKeyboard', (mode) => setKeyboard(String(mode)));
   handle('setIconStyle', (mode) => setIconStyle(String(mode)));
+  handle('setSounds', (picked) => setSounds(picked && typeof picked === 'object' ? picked : {}));
   handle('setIconRow', (mode) => setIconRow(String(mode)));
+  handle('setHeart', (mode) => setHeart(String(mode)));
   handle('setHomeProfiles', (on) => setHomeProfiles(on === true));
   handle('setSteamKey', (key) => setSteamKey(key));
   handle('findAutomatically', (id) => findAutomatically(String(id)));

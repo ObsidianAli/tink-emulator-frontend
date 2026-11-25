@@ -47,6 +47,13 @@ const ICONS = {
   power: [line('M6.6 7.2a7.8 7.8 0 1 0 10.8 0'), line('M12 3.2v8')],
 };
 
+export const HEART = 'M12 21C5 15.6 2 12.2 2 8.3 2 5.3 4.3 3 7.2 3 9.1 3 10.9 4 12 5.6 13.1 4 14.9 3 16.8 3 19.7 3 22 5.3 22 8.3c0 3.9-3 7.3-10 12.7z';
+export const HEART_WIDTH = 20;
+
+export function heartDrawing() {
+  return draw(['svg', { class: 'heart', viewBox: '2 2 20 20' }, ['path', { d: HEART }]]);
+}
+
 export function trayDrawing(name) {
   const svg = draw(['svg', { viewBox: '0 0 24 24' }, ...ICONS[name]]);
   svg.classList.add('tray-drawing');

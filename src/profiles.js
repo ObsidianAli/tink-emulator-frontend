@@ -1,8 +1,6 @@
 const crypto = require('node:crypto');
 
 const COLOURS = ['blue', 'green', 'orange', 'red', 'purple', 'teal'];
-const ICONS = ['controller', 'planet', 'star'];
-const DEFAULT_ICON = 'star';
 const RECENT_MAX = 200;
 const NAME_MAX = 10;
 const PROFILES_MAX = 8;
@@ -25,7 +23,6 @@ function normalise(profile) {
     name: cleanName(profile.name) || 'Player',
     colour: COLOURS.includes(profile.colour) ? profile.colour : COLOURS[0],
     avatar,
-    icon: avatar ? null : ICONS.includes(profile.icon) ? profile.icon : DEFAULT_ICON,
     recent,
     favourites: strings(profile.favourites),
     hiddenConsoles: strings(profile.hiddenConsoles),
@@ -49,17 +46,16 @@ function addProfile(settings) {
   if (settings.profiles.length >= PROFILES_MAX) return null;
   const taken = settings.profiles.map((p) => p.colour);
   const colour = COLOURS.find((c) => !taken.includes(c)) || COLOURS[settings.profiles.length % COLOURS.length];
-  const icon = ICONS[settings.profiles.length % ICONS.length];
-  const profile = normalise({ name: `Player ${settings.profiles.length + 1}`, colour, icon });
+  const profile = normalise({ name: `Player ${settings.profiles.length + 1}`, colour });
   settings.profiles.push(profile);
   return profile;
 }
 
-function editProfile(profile, { name, colour, avatar, icon }, avatars = []) {
+function editProfile(profile, { name, colour, avatar }, avatars = []) {
   if (cleanName(name)) profile.name = cleanName(name);
   if (COLOURS.includes(colour)) profile.colour = colour;
-  if (ICONS.includes(icon)) Object.assign(profile, { icon, avatar: null });
-  else if (avatars.includes(avatar)) Object.assign(profile, { icon: null, avatar });
+  if (avatar === null) profile.avatar = null;
+  else if (avatars.includes(avatar)) profile.avatar = avatar;
 }
 
 function removeProfile(settings, id) {
@@ -142,6 +138,6 @@ function settingsView(profile, consoles, hiddenOwned = []) {
 }
 
 module.exports = {
-  COLOURS, ICONS, DEFAULT_ICON, RECENT_MAX, PROFILES_MAX, SORTS, ROW_MAX, ensureProfiles, activeProfile, addProfile, editProfile, removeProfile, recordPlay, toggleFavourite,
+  COLOURS, RECENT_MAX, PROFILES_MAX, SORTS, ROW_MAX, ensureProfiles, activeProfile, addProfile, editProfile, removeProfile, recordPlay, toggleFavourite,
   hideGame, showGame, showAllGames, toggleConsole, visibleGames, sortGames, homeRow, sortByHistory, settingsView,
 };

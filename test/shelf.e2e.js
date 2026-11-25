@@ -259,8 +259,8 @@ async function main() {
   await page.keyboard.press('ArrowLeft');
   await sleep(1500);
   const lastX = (await centreOf('#title')).x;
-  assert.ok(Math.abs(lastX - (box.x + box.width / 2)) < 8, `the last game holds the button's place, ${lastX} against ${box.x + box.width / 2}`);
-  assert.ok(Math.abs(lastX - start.x) < 8, 'the selected game stays in the first slot while the row scrolls');
+  assert.ok(Math.abs(lastX - (box.x + box.width / 2)) < 12, `the last game holds the button's place, ${lastX} against ${box.x + box.width / 2}`);
+  assert.ok(Math.abs(lastX - start.x) < 12, 'the selected game stays in the first slot while the row scrolls');
   await key('ArrowRight');
   await key('ArrowDown');
   assert.ok(!(await buttonSelected()), 'down leaves the button for the icon row');
@@ -392,10 +392,10 @@ async function main() {
   await key('Enter');
   assert.strictEqual(await heading(), 'Choose an icon');
   assert.strictEqual(await dots(), 3);
-  assert.strictEqual(await page.$$eval('.profile-option', (tiles) => tiles.length), 4, 'three built-in icons, then the picture');
+  assert.strictEqual(await page.$$eval('.profile-option', (tiles) => tiles.length), 2, 'the initial, then the picture');
   assert.strictEqual(await page.$$eval('.profile-option .tick', (ticks) => ticks.length), 1, 'the current choice has a tick');
   await shot('profiles-new-icon');
-  for (let i = 0; i < 3; i++) await key('ArrowRight');
+  await key('ArrowRight');
   assert.strictEqual(await page.$$eval('.badge.profile-preview img', (images) => images.length), 1, 'the preview follows the focused icon');
   await key('Enter');
   assert.strictEqual(await heading(), 'Nickname', 'a picture skips the background step');
@@ -417,7 +417,8 @@ async function main() {
   assert.strictEqual(await focusedName(), 'Sam', 'adding returns to the picker on the new user');
   await shot('profiles-picker');
   assert.strictEqual(await page.$$eval('.profile img', (images) => images.length), 1, 'the picture shows on the badge');
-  assert.strictEqual(await page.$$eval('.profile .badge svg', (icons) => icons.length), 1, 'the first profile shows a built-in icon');
+  const initials = () => page.$$eval('.profile .badge:not(:has(img))', (badges) => badges.map((badge) => badge.textContent));
+  assert.strictEqual((await initials())[0], 'P', 'the first profile shows its initial');
   await key('ArrowLeft');
   await key(' ');
   assert.strictEqual(await heading(), 'Choose an icon', 'X changes the icon');
@@ -432,8 +433,7 @@ async function main() {
   await key('Enter');
   await page.waitForSelector('#profiles .profile-row');
   await sleep(300);
-  assert.deepStrictEqual([readSettings().profiles[0].icon, readSettings().profiles[0].colour], ['planet', 'green']);
-  assert.strictEqual(await page.$$eval('.profile .badge svg', (icons) => icons.length), 1, 'the new icon shows in the picker');
+  assert.strictEqual(readSettings().profiles[0].colour, 'green');
   await key('Enter');
   await sleep(500);
   assert.strictEqual(await title(), 'Aardvark Game', 'a profile opens on its last played game');

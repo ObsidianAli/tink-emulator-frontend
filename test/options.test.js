@@ -40,6 +40,15 @@ test('left edge defaults to slide and ignores unknown values', () => {
   assert.strictEqual(options.buildSettings(settings, {}, '1').leftEdge, 'fade');
 });
 
+test('favourite heart defaults to sticker and ignores unknown values', () => {
+  const settings = { consoles: {} };
+  assert.strictEqual(options.buildSettings(settings, {}, '1').heart, 'sticker');
+  options.setHeart(settings, 'small');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').heart, 'small');
+  options.setHeart(settings, 'huge');
+  assert.strictEqual(options.buildSettings(settings, {}, '1').heart, 'small');
+});
+
 test('background defaults to tint and ignores unknown values', () => {
   const settings = { consoles: {} };
   assert.strictEqual(options.buildSettings(settings, {}, '1').background, 'tint');
@@ -118,6 +127,9 @@ test('icon style and row have defaults and ignore unknown values', () => {
   const settings = { consoles: {} };
   const read = () => options.buildSettings(settings, {}, '1');
   assert.deepStrictEqual([read().iconStyle, read().iconRow], ['disc', 'separate']);
+  options.setSounds(settings, { store: 'b', album: 'zzz', nope: 'a' });
+  options.setSounds(settings, { move: 'soft' });
+  assert.deepStrictEqual(read().sounds, { store: 'b', move: 'soft' });
   options.setIconStyle(settings, 'glyph');
   options.setIconRow(settings, 'bar');
   options.setIconStyle(settings, 'rainbow');

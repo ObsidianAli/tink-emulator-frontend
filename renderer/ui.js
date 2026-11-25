@@ -269,6 +269,9 @@ async function renderTray() {
   renderTop(profiles, profile, shown.homeProfiles !== false);
   tray.dataset.icons = shown.iconStyle;
   tray.dataset.row = shown.iconRow;
+  setSounds(shown.sounds);
+  shelf.setHeartLook(shown.heart);
+  grid.setHeartLook(shown.heart);
   tray.replaceChildren(...trayIcons.map((icon) => {
     const node = document.createElement('button');
     node.className = 'tray-icon';
@@ -326,13 +329,24 @@ async function switchProfile() {
   }
 }
 
+function showFavourites(library) {
+  if (library.row.length !== row.length || library.row.some((game, i) => game.id !== row[i].id)) return false;
+  if (inGrid && !grid.update(library.games, library.sort)) return false;
+  row = library.row;
+  games = library.games;
+  sort = library.sort;
+  shelf.update(row);
+  return true;
+}
+
 async function changeGame(change) {
   const game = focusedGame();
   if (changing || !game) return;
   changing = true;
   try {
     await change(game.id);
-    showLibrary(await window.tink.refreshLibrary());
+    const library = await window.tink.refreshLibrary();
+    if (!showFavourites(library)) showLibrary(library);
   } finally {
     changing = false;
   }

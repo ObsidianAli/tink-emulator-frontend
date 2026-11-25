@@ -164,7 +164,7 @@
   --clock-period-gap: calc(var(--space) / 2);
   --clock-gap: calc(var(--space) * 1.5);
   --clock-icon-size: calc(var(--space) * 3);
-  --clock-icon-stroke: 2.2;
+  --clock-icon-stroke: 2.4;
   --clock-offline-opacity: 0.45;
   --settings-side-width: calc(var(--space) * 40);
   --settings-row-padding: var(--space-2) var(--space-3);
@@ -198,6 +198,8 @@
   --profile-preview-size-full: calc(var(--space) * 14);
   --profile-preview-top-full: var(--space-3);
   --profile-option-size: calc(var(--space) * 12);
+  --profile-grid-columns: 5;
+  --badge-initial-size: 46cqh;
   --profile-tick-size: calc(var(--space) * 3.5);
   --profile-tick-inset: calc(var(--space) / -4);
   --profile-tick-glyph: 80%;
@@ -253,6 +255,17 @@
   --cover-radius: calc(var(--space) / 2);
   --shadow-tile: 0 8px 20px rgba(0, 0, 0, 0.35);
   --shadow-tile-focus: 0 20px 40px rgba(0, 0, 0, 0.5);
+
+  --heart: #ff5d8f;
+  --heart-edge: #fff;
+  --heart-edge-width: 3.4;
+  --heart-shadow: rgba(0, 0, 0, 0.5);
+  --heart-drop: drop-shadow(0 1px 2px var(--heart-shadow));
+  --heart-tilt: 12deg;
+  --heart-sticker-size: 0.2;
+  --heart-sticker-inset: 0.07;
+  --heart-small-size: 0.16;
+  --heart-small-inset: 0.15;
 
   --loading-cover-top: 44%;
   --loading-cover-height: 46vh;

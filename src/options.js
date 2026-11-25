@@ -2,6 +2,7 @@ const { CONSOLES, EMULATORS, isConsole, isEmulator } = require('./presets');
 const { resolveEmulator } = require('./setup');
 const { isFile } = require('./detect');
 const { buttonLabel } = require('./pad');
+const { SOUND_CHOICES } = require('../renderer/sound');
 
 const wantsFullscreen = (settings) => settings.fullscreen !== false;
 
@@ -23,6 +24,12 @@ const iconStyle = (settings) => (ICON_STYLES.includes(settings.iconStyle) ? sett
 
 const ICON_ROWS = ['separate', 'bar'];
 const iconRow = (settings) => (ICON_ROWS.includes(settings.iconRow) ? settings.iconRow : 'separate');
+
+const HEARTS = ['sticker', 'small'];
+const heart = (settings) => (HEARTS.includes(settings.heart) ? settings.heart : 'sticker');
+
+const isSound = (name, id) => Object.hasOwn(SOUND_CHOICES, name) && SOUND_CHOICES[name].options.some(([option]) => option === id);
+const sounds = (settings) => Object.fromEntries(Object.entries(settings.sounds || {}).filter(([name, id]) => isSound(name, id)));
 
 const steamKey = (settings) => (typeof settings.steamGridDbKey === 'string' ? settings.steamGridDbKey.trim() : '');
 
@@ -60,6 +67,8 @@ function buildSettings(settings, detected, version) {
     keyboard: keyboard(settings),
     iconStyle: iconStyle(settings),
     iconRow: iconRow(settings),
+    heart: heart(settings),
+    sounds: sounds(settings),
     homeProfiles: showsHomeProfiles(settings),
     screenshotButton: screenshotButton(settings),
     covers: settings.covers === true,
@@ -109,6 +118,14 @@ function setIconRow(settings, mode) {
   if (ICON_ROWS.includes(mode)) settings.iconRow = mode;
 }
 
+function setHeart(settings, mode) {
+  if (HEARTS.includes(mode)) settings.heart = mode;
+}
+
+function setSounds(settings, picked) {
+  settings.sounds = { ...sounds(settings), ...sounds({ sounds: picked }) };
+}
+
 function setSteamKey(settings, key) {
   const clean = typeof key === 'string' ? key.trim().slice(0, 200) : '';
   if (clean) settings.steamGridDbKey = clean;
@@ -120,4 +137,4 @@ function setScreenshotButton(settings, id) {
   else delete settings.screenshotButton;
 }
 
-module.exports = { buildSettings, clearEmulator, setFullscreen, setLeftEdge, setFocusStyle, setBackground, setKeyboard, setIconStyle, setIconRow, setHomeProfiles, setSteamKey, setScreenshotButton, screenshotButton, wantsFullscreen, steamKey };
+module.exports = { buildSettings, clearEmulator, setFullscreen, setLeftEdge, setFocusStyle, setBackground, setKeyboard, setIconStyle, setIconRow, setHeart, setSounds, setHomeProfiles, setSteamKey, setScreenshotButton, screenshotButton, wantsFullscreen, steamKey };
