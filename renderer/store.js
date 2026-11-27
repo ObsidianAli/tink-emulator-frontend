@@ -8,7 +8,6 @@ const CATEGORIES = [
   { id: 'pc', name: 'Add games' },
 ];
 const COLUMNS = 5;
-const GENERAL_FAILURE = "Steam couldn't start this download.";
 const POLL_MS = 2000;
 // Steam can sit on a drive question for a while; after this the request counts as given up.
 const WAIT_FOR_STEAM_MS = 3 * 60 * 1000;
@@ -65,28 +64,26 @@ async function startInstall(appId, library) {
   pending.set(appId, { state: 'none', percent: 0, since: Date.now() });
   active.paint(appId);
   schedulePoll();
-  let started = GENERAL_FAILURE;
+  let started = false;
   try {
     started = await window.tink.installGame(appId, library);
   } catch {
   }
-  if (started === true) return;
+  if (started) return;
   pending.delete(appId);
   if (!active) return;
   active.paint(appId);
-  if (!active.busy) await showDialog({ message: typeof started === 'string' ? started : GENERAL_FAILURE });
+  if (!active.busy) await showDialog({ message: "Steam couldn't start this install." });
 }
 
+// A drive without an id leaves the choice to Steam.
 async function pickDrive(appId) {
-  let drives = GENERAL_FAILURE;
+  let drives = [];
   try {
     drives = await window.tink.getInstallDrives(appId);
   } catch {
   }
-  if (!Array.isArray(drives) || !drives.length) {
-    await showDialog({ message: typeof drives === 'string' ? drives : GENERAL_FAILURE });
-    return null;
-  }
+  if (!drives.length) return { id: null };
   const choices = drives.filter((drive) => drive.fits);
   if (!choices.length) {
     await showDialog({ message: 'Not enough space.' });

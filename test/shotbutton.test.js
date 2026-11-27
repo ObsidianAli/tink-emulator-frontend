@@ -155,11 +155,11 @@ test('learning ends with nothing on timeout, cancel or a failing pad', async (t)
 });
 
 test('the screenshot button is saved, shown and cleared', () => {
-  const settings = {};
-  assert.strictEqual(options.buildSettings(settings, '1').screenshotButton, null);
+  const settings = { consoles: {} };
+  assert.strictEqual(options.buildSettings(settings, {}, '1').screenshotButton, null);
   options.setScreenshotButton(settings, 'hid:054c:0ce6:9');
-  assert.deepStrictEqual(options.buildSettings(settings, '1').screenshotButton, { id: 'hid:054c:0ce6:9', label: 'Create' });
+  assert.deepStrictEqual(options.buildSettings(settings, {}, '1').screenshotButton, { id: 'hid:054c:0ce6:9', label: 'Create' });
   options.setScreenshotButton(settings, null);
   assert.strictEqual('screenshotButton' in settings, false);
-  assert.strictEqual(options.screenshotButton({ screenshotButton: { odd: true } }), null);
+  assert.strictEqual(options.screenshotButton({ consoles: {}, screenshotButton: { odd: true } }), null);
 });

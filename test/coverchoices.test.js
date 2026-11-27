@@ -9,6 +9,7 @@ const { artUrls } = require('../src/steam');
 
 const GRID = 'https://www.steamgriddb.com/api/v2';
 const CDN = 'https://cdn2.steamgriddb.com';
+const SNES = 'https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Super_Nintendo_Entertainment_System/master/Named_Boxarts/';
 const SIZE = '?dimensions=600x900&types=static';
 
 const png = (name) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(name)]);
@@ -41,6 +42,7 @@ const doomRoutes = {
   ...gridImages(['a', 'b', 'c', 'd', 'never']),
 };
 const portal = { console: 'steam', key: 'steam:400', title: 'Portal', fileName: '400', art: artUrls('400') };
+const metroid = { console: 'snes', key: 'snes:Super Metroid (Japan, USA) (En,Ja).sfc', title: 'Super Metroid', fileName: 'Super Metroid (Japan, USA) (En,Ja)' };
 
 function setup(t, { routes = {}, enabled = true, key = 'k' } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tink-choices-'));
@@ -106,6 +108,21 @@ test("a Steam game offers Steam's own art, then SteamGridDB by app id", async (t
     },
   });
   assert.deepStrictEqual(await names(open(portal), true), ['plain', 'tall', 'header', 'a', 'b']);
+});
+
+test('an emulated game offers libretro box art for its name and the other regions, then SteamGridDB', async (t) => {
+  const { covers, open } = setup(t, {
+    routes: {
+      [`${SNES}Super%20Metroid%20(Japan%2C%20USA).png`]: png('both'),
+      [`${SNES}Super%20Metroid%20(Europe).png`]: png('europe'),
+      [`${SNES}Super%20Metroid%20(Japan).png`]: png('both'),
+      [`${GRID}/search/autocomplete/Super%20Metroid`]: json([{ id: 9 }]),
+      [`${GRID}/grids/game/9${SIZE}`]: json([grid('a')]),
+      ...gridImages(['a']),
+    },
+  });
+  await covers.getCover(metroid);
+  assert.deepStrictEqual(await names(open(metroid), true), ['both', 'europe', 'a']);
 });
 
 test('a picked cover survives a restart, a new download and covers being off', async (t) => {

@@ -25,12 +25,12 @@ test('old settings and Covers move into the data folder once', () => {
   const root = temp();
   const oldDir = path.join(root, 'old');
   const data = path.join(root, 'data');
-  fs.mkdirSync(path.join(oldDir, 'covers', 'pc'), { recursive: true });
-  fs.writeFileSync(path.join(oldDir, 'settings.json'), '{"covers":true}');
-  fs.writeFileSync(path.join(oldDir, 'covers', 'pc', 'a.png'), 'x');
+  fs.mkdirSync(path.join(oldDir, 'covers', 'snes'), { recursive: true });
+  fs.writeFileSync(path.join(oldDir, 'settings.json'), '{"consoles":{}}');
+  fs.writeFileSync(path.join(oldDir, 'covers', 'snes', 'a.png'), 'x');
   migrateOldData(data, oldDir);
-  assert.strictEqual(fs.readFileSync(path.join(data, 'settings.json'), 'utf8'), '{"covers":true}');
-  assert.ok(fs.existsSync(path.join(data, 'covers', 'pc', 'a.png')));
+  assert.strictEqual(fs.readFileSync(path.join(data, 'settings.json'), 'utf8'), '{"consoles":{}}');
+  assert.ok(fs.existsSync(path.join(data, 'covers', 'snes', 'a.png')));
   assert.ok(!fs.existsSync(path.join(oldDir, 'settings.json')));
 });
 

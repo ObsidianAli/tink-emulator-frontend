@@ -1,23 +1,68 @@
-import { element, focusGlow, focusRow } from './dom.js';
+import { element, focusGlow, focusRow, shortPath } from './dom.js';
 
 const root = document.getElementById('setup');
 let active = null;
 
 // Registered before the shelf's handler, so a press that closes a dialog isn't also taken as a choice here.
 listenForInput((action) => {
-  if (!active || document.querySelector('.dialog-scrim')) return null;
+  if (!active || active.busy || document.querySelector('.dialog-scrim')) return null;
   return active.handle(action);
 });
 
-export function runSetup() {
+export function runSetup(initial) {
   return new Promise((resolve) => {
+    let state = initial;
+    let screen = 0;
     let focus = 0;
     let buttons = [];
+    let items = [];
 
-    const rows = [
-      { label: 'Download', covers: true },
-      { label: 'Skip', covers: false },
+    const emulatorRows = () => [
+      ...state.emulators.map((item) => ({
+        label: item.label,
+        sub: item.consoles,
+        status: item.found ? 'Found' : 'Not found',
+        found: item.found,
+        activate: () => pickExe(item.id),
+      })),
+      ...state.manual.map((item) => ({
+        label: `${item.label} emulator`,
+        status: item.found ? 'Chosen' : 'Not chosen',
+        found: item.found,
+        activate: () => pickExe(item.id),
+      })),
     ];
+
+    const folderRows = () => state.consoles.map((item) => ({
+      label: item.name,
+      status: item.folder ? shortPath(item.folder) : 'Skip',
+      found: Boolean(item.folder),
+      activate: () => pickFolder(item.id),
+      clear: item.folder ? () => change(window.tink.clearFolder(item.id)) : null,
+    }));
+
+    const coverRows = () => [
+      { label: 'Download', activate: () => finish(true) },
+      { label: 'Skip', activate: () => finish(false) },
+    ];
+
+    const SCREENS = [
+      { title: 'Emulators', rows: emulatorRows, next: 'Next' },
+      { title: 'Games folders', rows: folderRows, next: 'Next' },
+      { title: 'Covers', rows: coverRows, hint: 'Choose' },
+    ];
+
+    async function change(request) {
+      active.busy = true;
+      const result = await request;
+      active.busy = false;
+      if (result && result.error) await showDialog({ message: result.error });
+      else if (result && result.state) state = result.state;
+      render();
+    }
+
+    const pickExe = (id) => change(window.tink.pickExe(id));
+    const pickFolder = (id) => change(window.tink.pickFolder(id));
 
     async function finish(covers) {
       active.busy = true;
@@ -27,38 +72,81 @@ export function runSetup() {
       resolve();
     }
 
+    function go(step) {
+      screen += step;
+      focus = 0;
+      render();
+    }
+
     function render() {
+      const { title, rows, next } = SCREENS[screen];
+      items = rows();
       const list = element('div', 'setup-list');
       list.setAttribute('role', 'list');
-      buttons = rows.map((item, index) => {
+      buttons = items.map((item) => {
         const row = element('button', 'setup-row');
         row.type = 'button';
-        row.append(element('span', 'setup-name', item.label), focusGlow());
-        row.addEventListener('click', () => {
-          focus = index;
-          finish(item.covers);
-        });
+        const name = element('span', 'setup-name', item.label);
+        if (item.sub) name.append(element('span', 'setup-sub', item.sub));
+        row.append(name);
+        if (item.status) row.append(element('span', item.found ? 'setup-status found' : 'setup-status', item.status));
+        row.append(focusGlow());
         return row;
       });
       list.append(...buttons);
-      root.replaceChildren(element('h1', '', 'Covers'), list);
+      if (state.steamFound && screen === 0) list.append(element('p', 'setup-note', 'Steam found'));
+      const children = [element('h1', '', title), list];
+      if (next) {
+        const button = element('button', 'setup-next', next);
+        button.type = 'button';
+        button.append(focusGlow());
+        buttons.push(button);
+        children.push(button);
+      }
+      root.replaceChildren(...children);
+      buttons.forEach((button, index) => button.addEventListener('click', () => {
+        focus = index;
+        choose();
+      }));
+      focus = Math.min(focus, buttons.length - 1);
       focusRow(buttons[focus], false);
-      setHints([{ button: 'a', label: 'Choose' }]);
+      showSetupHints();
+    }
+
+    function showSetupHints() {
+      const onNext = focus >= items.length;
+      const hints = [{ button: 'a', label: onNext ? 'Next' : SCREENS[screen].hint || 'Pick' }];
+      if (!onNext && items[focus].clear) hints.push({ button: 'x', label: 'Skip' });
+      if (screen > 0) hints.push({ button: 'b', label: 'Back' });
+      setHints(hints);
+    }
+
+    function choose() {
+      if (focus >= items.length) go(1);
+      else items[focus].activate();
     }
 
     active = {
       busy: false,
       handle(action) {
-        if (active.busy) return null;
         if (action === 'up' || action === 'down') {
           const before = focus;
           focus = Math.max(0, Math.min(buttons.length - 1, focus + (action === 'down' ? 1 : -1)));
           focusRow(buttons[focus]);
+          showSetupHints();
           return focus !== before ? 'list' : null;
         }
         if (action === 'a') {
-          finish(rows[focus].covers);
+          choose();
           return 'confirm';
+        }
+        if (action === 'b' && screen > 0) {
+          go(-1);
+          return 'back';
+        }
+        if (action === 'x' && focus < items.length && items[focus].clear) {
+          items[focus].clear();
+          return 'toggle';
         }
         return null;
       },

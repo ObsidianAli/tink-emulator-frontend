@@ -7,13 +7,15 @@ function part(name, tag = 'div') {
   return node;
 }
 
+const layers = [0, 1].map(() => part('backdrop-art', 'canvas'));
 const pictures = [0, 1].map(() => part('backdrop-picture'));
-root.append(...pictures, part('backdrop-dim'), part('backdrop-fade'));
+const blobs = ['a', 'b', 'c'].map((name) => part(`backdrop-blob backdrop-blob-${name}`));
+root.append(...layers, part('backdrop-shade'), ...blobs, part('backdrop-vignette'), ...pictures, part('backdrop-dim'), part('backdrop-fade'));
 document.body.prepend(root);
 
 const KEEP_HEROES = 3;
 
-let mode = 'picture';
+let mode = 'tint';
 let source = null;
 let colour = '';
 let game = null;
@@ -21,6 +23,17 @@ let resting = false;
 
 const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const number = (name) => parseFloat(token(name));
+
+function paint(canvas, image) {
+  canvas.width = number('--art-width');
+  canvas.height = number('--art-height');
+  const ctx = canvas.getContext('2d');
+  const scale = Math.max(canvas.width / image.width, canvas.height / image.height) * number('--art-overscan');
+  const w = image.width * scale;
+  const h = image.height * scale;
+  ctx.filter = `blur(${token('--art-blur')}) saturate(${token('--art-saturate')})`;
+  ctx.drawImage(image, (canvas.width - w) / 2, (canvas.height - h) * number('--art-focus'), w, h);
+}
 
 function crossfade(pair, fill) {
   const [old, next] = pair;
@@ -34,7 +47,12 @@ function crossfade(pair, fill) {
   old.classList.remove('shown');
 }
 
-const pictured = () => mode === 'picture' || mode === 'soft' || mode === 'calm';
+function show() {
+  if (mode !== 'art' || !source) layers[0].classList.replace('shown', 'gone');
+  else crossfade(layers, (next) => paint(next, source));
+}
+
+const pictured = () => mode === 'picture' || mode === 'soft';
 const heroes = new Map();
 let shown = null;
 let wanted = null;
@@ -164,16 +182,19 @@ export function setBackground(next) {
   if (next === mode) return;
   mode = next;
   document.body.dataset.background = mode;
+  show();
   heroes.clear();
   if (pictured()) present();
   else clearPictures();
 }
 
 export function setArt(image, tint, id) {
-  if (image === source && id === game) return;
+  const changed = image !== source;
+  if (!changed && id === game) return;
   source = image;
   colour = tint;
   game = id;
+  if (mode === 'art' && changed) show();
   settle();
 }
 

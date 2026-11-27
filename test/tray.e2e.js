@@ -3,7 +3,6 @@ const os = require('node:os');
 const path = require('node:path');
 const assert = require('node:assert');
 const { _electron: electron } = require('playwright');
-const { pcGames } = require('./pcseed');
 
 const outDir = path.resolve(process.argv[2] || path.join(__dirname, '..', 'out', 'tray'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -13,9 +12,12 @@ async function main() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tink-tray-e2e-'));
   const data = path.join(root, 'data');
   const empty = path.join(root, 'empty');
+  const games = path.join(root, 'games', 'GameCube');
   fs.mkdirSync(data);
   fs.mkdirSync(empty);
-  fs.writeFileSync(path.join(data, 'settings.json'), JSON.stringify({ pcGames: pcGames(root, ['Luigis Mansion', 'Wind Waker']), setupDone: true }));
+  fs.mkdirSync(games, { recursive: true });
+  for (const name of ['Luigis Mansion (USA).rvz', 'Wind Waker (USA).rvz']) fs.writeFileSync(path.join(games, name), '');
+  fs.writeFileSync(path.join(data, 'settings.json'), JSON.stringify({ consoles: { gamecube: { folder: games } }, setupDone: true }));
 
   const app = await electron.launch({
     args: [path.join(__dirname, '..'), `--user-data-dir=${path.join(root, 'user')}`],
@@ -95,7 +97,7 @@ async function main() {
   await page.waitForSelector('#panel:not([hidden])');
   await sleep(500);
   assert.strictEqual(await page.textContent('#panel h1'), 'Controllers');
-  assert.strictEqual(await page.textContent('#panel .empty-state p'), 'No controllers');
+  assert.strictEqual(await page.textContent('#panel .setup-note'), 'No controllers');
   assert.ok(await page.$eval('#tray', (node) => getComputedStyle(node).visibility === 'hidden'), 'it is a full screen, Home is hidden');
   await page.evaluate(() => {
     const pad = { id: 'Test Pad (Vendor: 1234)', buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0] };

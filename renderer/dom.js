@@ -11,6 +11,11 @@ export function focusGlow() {
   return glow;
 }
 
+export function shortPath(folder) {
+  const parts = folder.split(/[\\/]/).filter(Boolean);
+  return parts.length > 2 ? `…\\${parts.slice(-2).join('\\')}` : folder;
+}
+
 const scrolling = new WeakMap();
 
 export function focusRow(node, smooth = true) {

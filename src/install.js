@@ -8,6 +8,13 @@ const FINISHING = 262144 | 524288 | 1048576 | 2097152;
 
 const isAppId = (appId) => /^\d{1,10}$/.test(String(appId));
 
+// Steam does the download itself; Tink only asks it to start.
+async function install(appId, open) {
+  if (!isAppId(appId)) return false;
+  await open(`steam://install/${Number(appId)}`);
+  return true;
+}
+
 const manifestFile = (folder, appId) => path.join(folder, 'steamapps', `appmanifest_${appId}.acf`);
 
 const findManifest = (steamDir, appId) => libraryFolders(steamDir).map((folder) => manifestFile(folder, appId)).find((file) => fs.existsSync(file));
@@ -47,4 +54,4 @@ function progress(appId, steamDir) {
   return { state: 'queued', percent: 0 };
 }
 
-module.exports = { progress, isAppId, manifestFile, findManifest, isDownloading };
+module.exports = { install, progress, isAppId, manifestFile, findManifest, isDownloading };
