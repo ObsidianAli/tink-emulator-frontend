@@ -196,7 +196,6 @@ const steamInstall = createSteamInstall({
   findSteamDir: steam.findSteamDir,
   processes: steam.listProcesses,
   runningAppId: steam.getRunningAppId,
-  open: (url) => shell.openExternal(url),
   inGame: () => playing !== null,
   log,
 });
@@ -209,37 +208,28 @@ async function ownedAppId(appId) {
 
 async function getInstallDrives(appId) {
   const id = await ownedAppId(appId);
-  return id ? steamInstall.drives(id) : [];
+  return id ? steamInstall.drives(id) : "Steam couldn't start this download.";
 }
 
 async function installGame(appId, library) {
   const id = await ownedAppId(appId);
-  if (!id) return false;
+  if (!id) return "Steam couldn't start this download.";
   const outcome = await steamInstall.install(id, typeof library === 'string' ? library : null);
-  if (outcome === 'placed') await comeBack();
-  else if (outcome === 'asked') bringBackWhenSteamTakesIt(id);
-  return Boolean(outcome);
+  if (outcome === true) await comeBack();
+  return outcome;
+}
+
+function loginItemPath() {
+  return process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
+}
+
+function setStartWithWindows(on) {
+  if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: on, path: loginItemPath() });
+  return getSettings();
 }
 
 async function comeBack() {
   if (win && !win.isDestroyed() && !playing) await showTink();
-}
-
-const STEAM_ANSWER_MS = 3 * 60 * 1000;
-const STEAM_ANSWER_CHECK_MS = 1000;
-
-// Steam comes to the front for the install. Once it has written a manifest it needs nothing more from the user;
-// until then it may be asking which drive to use, so Tink stays out of the way.
-async function bringBackWhenSteamTakesIt(appId) {
-  const steamDir = await steam.findSteamDir();
-  const until = Date.now() + STEAM_ANSWER_MS;
-  while (Date.now() < until) {
-    await sleep(STEAM_ANSWER_CHECK_MS);
-    if (installs.progress(appId, steamDir).state !== 'none') {
-      await comeBack();
-      return;
-    }
-  }
 }
 
 async function getFileIcon(exe) {
@@ -727,6 +717,8 @@ function getSettings() {
   profiles.ensureProfiles(current);
   return {
     ...options.buildSettings(current, detect(), app.getVersion()),
+    packaged: app.isPackaged,
+    startWithWindows: app.isPackaged && app.getLoginItemSettings({ path: loginItemPath() }).openAtLogin,
     ...profiles.settingsView(profiles.activeProfile(current), allConsoles, hiddenOwned(profiles.activeProfile(current))),
   };
 }
@@ -848,6 +840,7 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   if (SECOND_INSTANCE) return;
   updater = makeUpdater();
+  if (app.isPackaged && !FINISHING) steamInstall.warm().catch((error) => log('Steam did not start quietly', error));
   if (updater && FINISHING) {
     if (await updater.finishUpdate()) return app.quit();
   } else if (updater) {
@@ -883,6 +876,7 @@ app.whenReady().then(async () => {
   handle('finishSetup', (wantsCovers) => finishSetup(wantsCovers === true));
   handle('getSettings', getSettings);
   handle('setFullscreen', (on) => setFullscreen(on === true));
+  handle('setStartWithWindows', (on) => setStartWithWindows(on === true));
   handle('setFocusStyle', (mode) => setFocusStyle(String(mode)));
   handle('setBackground', (mode) => setBackground(String(mode)));
   handle('setTextStyle', (mode) => setTextStyle(String(mode)));

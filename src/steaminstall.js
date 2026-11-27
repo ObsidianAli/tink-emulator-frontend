@@ -4,7 +4,7 @@ const { spawn } = require('node:child_process');
 const { readVdfFile, listedFolders, gameProcesses } = require('./steam');
 const { parseAppInfo } = require('./steambin');
 const { child, autoLogin } = require('./owned');
-const { install: askSteam, isAppId, manifestFile, findManifest, isDownloading } = require('./install');
+const { isAppId, manifestFile, findManifest, isDownloading } = require('./install');
 
 const POLL_MS = 500;
 const CLOSE_WAIT_MS = 30 * 1000;
@@ -21,6 +21,17 @@ const realClock = {
   now: () => Date.now(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 };
+
+const GENERAL = "Steam couldn't start this download.";
+const MESSAGES = {
+  'Steam would ask who is signing in': 'Steam needs to sign in on its own first.',
+  'a download is active': 'Wait for the current download to finish.',
+  'an install is running': 'Wait for the current download to finish.',
+  'a game is running': 'Close the game first.',
+  'a Steam game is running': 'Close the game first.',
+  'not enough space': 'Not enough space on that drive.',
+};
+const explain = (error) => MESSAGES[error && error.message] || GENERAL;
 
 const check = (ok, reason) => {
   if (!ok) throw new Error(reason);
@@ -173,7 +184,7 @@ function start(exe, args) {
 
 const steamIn = (rows) => rows.some(({ exe }) => exe && path.basename(exe).toLowerCase() === 'steam.exe');
 
-function createSteamInstall({ findSteamDir, processes, runningAppId, open, run = start, freeSpace = diskFree, inGame = () => false, clock = realClock, log = () => {} }) {
+function createSteamInstall({ findSteamDir, processes, runningAppId, run = start, freeSpace = diskFree, inGame = () => false, clock = realClock, log = () => {} }) {
   let last = Promise.resolve();
   let unfinished = 0;
   let restarted = Promise.resolve();
@@ -250,20 +261,18 @@ function createSteamInstall({ findSteamDir, processes, runningAppId, open, run =
 
   async function installOne(id, library) {
     const appId = String(Number(id));
-    if (library) {
-      try {
-        await placeAndWait(await findSteamDir(), appId, library);
-        return 'placed';
-      } catch (error) {
-        log(`Leaving the install of ${appId} to Steam: ${error.message}`);
-      }
+    try {
+      check(library, 'no library');
+      await placeAndWait(await findSteamDir(), appId, library);
+      return true;
+    } catch (error) {
+      log(`Could not install ${appId}: ${error.message}`);
+      return explain(error);
     }
-    if (inGame()) return false;
-    return (await askSteam(appId, open)) ? 'asked' : false;
   }
 
   function install(id, library) {
-    if (!isAppId(id)) return Promise.resolve(false);
+    if (!isAppId(id)) return Promise.resolve(GENERAL);
     unfinished++;
     const job = last.then(() => installOne(id, library)).finally(() => { unfinished--; });
     last = job.catch(() => {});
@@ -271,7 +280,8 @@ function createSteamInstall({ findSteamDir, processes, runningAppId, open, run =
   }
 
   async function drives(id) {
-    if (unfinished || !isAppId(id)) return [];
+    if (unfinished) return explain(new Error('an install is running'));
+    if (!isAppId(id)) return GENERAL;
     try {
       const { folders, size } = await prepare(await findSteamDir(), String(Number(id)));
       return await Promise.all(folders.map(async (folder) => {
@@ -280,11 +290,20 @@ function createSteamInstall({ findSteamDir, processes, runningAppId, open, run =
       }));
     } catch (error) {
       log(`No choice of drive for ${id}: ${error.message}`);
-      return [];
+      return explain(error);
     }
   }
 
-  return { drives, install, settled: () => restarted };
+  async function warm() {
+    const steamDir = await findSteamDir();
+    const exe = steamDir && path.join(steamDir, 'steam.exe');
+    if (!exe || !isFile(exe)) return;
+    const rows = await processes();
+    if (!rows || !rows.length || steamIn(rows)) return;
+    await run(exe, ['-silent']);
+  }
+
+  return { drives, install, warm, settled: () => restarted };
 }
 
 module.exports = { createSteamInstall, isSafeFolderName, smallestSize, manifestText };

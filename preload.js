@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('tink', {
   finishSetup: (covers) => ipcRenderer.invoke('finishSetup', covers),
   getSettings: () => ipcRenderer.invoke('getSettings'),
   setFullscreen: (on) => ipcRenderer.invoke('setFullscreen', on),
+  setStartWithWindows: (on) => ipcRenderer.invoke('setStartWithWindows', on),
   setHeart: (mode) => ipcRenderer.invoke('setHeart', mode),
   setGameOptions: (mode) => ipcRenderer.invoke('setGameOptions', mode),
   setCoverPicker: (mode) => ipcRenderer.invoke('setCoverPicker', mode),

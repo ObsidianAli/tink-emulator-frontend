@@ -34,6 +34,7 @@ const BACKGROUNDS = { tint: 'Tint', flat: 'Flat', colour: 'Colour', picture: 'Pi
 const TEXT_STYLES = { plain: 'Plain', outline: 'Outline', pill: 'Pill', fade: 'Fade' };
 const GAME_OPTIONS = { case: 'Beside the case', panel: 'Side panel' };
 const COVER_PICKERS = { page: 'Page', case: 'On the case' };
+const SCREENS = { full: 'Fullscreen', window: 'Window' };
 
 export async function openSettings({ focusConsole, focusCategory } = {}) {
   let state = await window.tink.getSettings();
@@ -334,11 +335,13 @@ export async function openSettings({ focusConsole, focusCategory } = {}) {
         ],
         display: () => [
           {
-            label: 'Start in fullscreen',
-            status: state.fullscreen ? 'On' : 'Off',
-            hint: 'Switch',
-            sound: 'toggle',
-            activate: () => change(window.tink.setFullscreen(!state.fullscreen), { reload: false }),
+            ...choose('screen', 'Screen', SCREENS, 'screen', () => {}),
+            current: () => (state.fullscreen ? 'full' : 'window'),
+            choose: (value) => {
+              state.fullscreen = value === 'full';
+              for (const row of rows) row.paint?.();
+              window.tink.setFullscreen(state.fullscreen);
+            },
           },
           choose('highlight', 'Highlight', HIGHLIGHTS, 'focusStyle', (value) => window.tink.setFocusStyle(value)),
           choose('keyboard', 'Keyboard', KEYBOARDS, 'keyboard', (value) => window.tink.setKeyboard(value)),
@@ -357,6 +360,13 @@ export async function openSettings({ focusConsole, focusCategory } = {}) {
         sounds: soundRows,
         system: () => [
           { label: 'Version', status: state.version, plain: true },
+          ...(state.packaged ? [{
+            label: 'Start with Windows',
+            status: state.startWithWindows ? 'On' : 'Off',
+            hint: 'Switch',
+            sound: 'toggle',
+            activate: () => change(window.tink.setStartWithWindows(!state.startWithWindows), { reload: false }),
+          }] : []),
           { id: 'update', label: 'Check for updates', status: update, hint: 'Check', activate: checkUpdates },
           {
             id: 'screenshot',

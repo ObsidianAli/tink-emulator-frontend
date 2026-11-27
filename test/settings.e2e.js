@@ -168,14 +168,6 @@ async function main() {
   await key('ArrowDown');
   assert.strictEqual(await heading(), 'Display');
   await key('ArrowRight');
-  assert.ok((await focusedRow()).startsWith('Start in fullscreen | On'), await focusedRow());
-  assert.strictEqual(await isFullscreen(), true);
-  await key('Enter');
-  assert.strictEqual(readSettings().fullscreen, false);
-  assert.strictEqual(await isFullscreen(), false);
-  await key('Enter');
-  assert.strictEqual(await isFullscreen(), true);
-
   const chosenPill = () => page.$eval('#settings .setup-row:focus .setup-pill.on', (pill) => pill.textContent);
   const pickValue = async (row, current, target, settingsKey, stored) => {
     assert.ok((await focusedRow()).startsWith(row), await focusedRow());
@@ -186,6 +178,12 @@ async function main() {
     assert.strictEqual(await chosenPill(), target);
     assert.strictEqual(readSettings()[settingsKey], stored);
   };
+
+  assert.strictEqual(await isFullscreen(), true);
+  await pickValue('Screen', 'Fullscreen', 'Window', 'fullscreen', false);
+  assert.strictEqual(await isFullscreen(), false);
+  await pickValue('Screen', 'Window', 'Fullscreen', 'fullscreen', true);
+  assert.strictEqual(await isFullscreen(), true);
 
   await shot('6-display');
 
