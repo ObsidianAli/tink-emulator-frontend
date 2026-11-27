@@ -61,6 +61,7 @@
   --surface-raised: #252931;
   --line: rgba(255, 255, 255, 0.08);
   --text: #f3f4f6;
+  --warm-white: #f1e8da;
   --muted: #9aa0aa;
   --dim: #5d636e;
   --accent: #4da3ff;
@@ -68,19 +69,9 @@
   --scrim: rgba(8, 9, 12, 0.5);
   --hint-bg: rgba(15, 17, 21, 0.92);
   --black: #000;
-  --tint-strength: 28%;
-  --tint-reach: 80%;
 
   --art-width: 160;
   --art-height: 90;
-  --art-overscan: 1.4;
-  --art-focus: 0.4;
-  --art-blur: 8px;
-  --art-saturate: 1;
-  --art-zoom: 1.05;
-  --art-opacity: 0.32;
-  --art-opacity-behind: 0.15;
-  --art-shade: linear-gradient(to bottom, rgba(15, 17, 21, 0.3), rgba(15, 17, 21, 0) 35%, rgba(15, 17, 21, 0.75));
 
   --flat-colour: #101216;
 
@@ -95,6 +86,12 @@
   --soft-blur: 6px;
   --soft-saturate: 1.2;
   --soft-shade: rgba(15, 17, 21, 0.38);
+  --calm-blur: 6px;
+  --calm-saturate: 0.85;
+  --calm-contrast: 0.9;
+  --calm-zoom: 1.04;
+  --calm-shade: linear-gradient(to bottom, rgba(12, 14, 18, 0.72) 0, rgba(12, 14, 18, 0) 18%, rgba(12, 14, 18, 0) 68%, rgba(12, 14, 18, 0.88) 100%);
+  --plus-size: 36%;
   --soft-dim-behind: 0.7;
   --picture-dim-behind: 0.8;
 
@@ -111,26 +108,6 @@
     linear-gradient(180deg, rgba(12, 14, 18, 0.86) 0, rgba(12, 14, 18, 0.7) 24%, rgba(12, 14, 18, 0) 52%),
     linear-gradient(0deg, rgba(12, 14, 18, 0.9) 0, rgba(12, 14, 18, 0.55) 14%, rgba(12, 14, 18, 0) 34%);
 
-  --drift-neutral: #3b4b6e;
-  --drift-lightness: 0.5;
-  --drift-chroma: 0.12;
-  --drift-hue-shift: 60;
-  --drift-mix: 55%;
-  --drift-size: 80vmax;
-  --drift-falloff: 70%;
-  --drift-opacity: 0.6;
-  --drift-opacity-behind: 0.35;
-  --drift-period-a: 47s;
-  --drift-period-b: 61s;
-  --drift-period-c: 73s;
-  --drift-ease: ease-in-out;
-  --drift-a-from: -32vmax -28vmax;
-  --drift-a-to: -20vmax -20vmax;
-  --drift-b-from: 45vw -20vmax;
-  --drift-b-to: 35vw -8vmax;
-  --drift-c-from: -10vmax 25vh;
-  --drift-c-to: 5vmax 18vh;
-  --drift-vignette: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.5));
 
   --profile-blue: #2f6fd6;
   --profile-green: #2f9e5b;
@@ -147,6 +124,7 @@
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-bold: 600;
+  --weight-heavy: 700;
 
   --space: 8px;
   --space-2: calc(var(--space) * 2);
@@ -161,6 +139,9 @@
   --line-width: 1px;
 
   --label-colour: var(--accent);
+  --name-colour: var(--warm-white);
+  --name-weight: var(--weight-heavy);
+  --name-spacing: 0.02em;
 
   --focus-from: #5b8def;
   --focus-to: #c9b9f6;
@@ -215,6 +196,8 @@
   --scale-overlay: 0.96;
 
   --glyph-size: var(--space-4);
+  --glyph-line: 2px;
+  --empty-icon-size: calc(var(--space) * 14);
   --dialog-width: calc(var(--space) * 70);
   --hints-height: calc(var(--space) * 10);
   --button-min-width: calc(var(--space) * 20);
@@ -367,4 +350,18 @@
   --store-wait-dim: 0.55;
   --store-icon-size: calc(var(--space) * 5);
   --store-spin-period: 1s;
+}
+
+body[data-names=plain] {
+  --name-colour: var(--text);
+  --name-weight: var(--weight-bold);
+  --name-spacing: 0;
+}
+
+body[data-corners=round] {
+  --radius: calc(var(--space) * 1.5);
+  --radius-large: var(--space-3);
+  --cover-radius: calc(var(--space) * 1.5);
+  --news-radius: var(--space-3);
+  --album-radius: var(--space-3);
 }

@@ -1,5 +1,6 @@
 import { element, focusGlow, focusRow } from './dom.js';
 import { screen } from './transition.js';
+import { controllerDrawing } from './icons.js';
 
 const root = document.getElementById('panel');
 let active = null;
@@ -22,7 +23,11 @@ export function openPanel({ title, rows, empty = '' }) {
       const list = element('div', 'setup-list');
       list.setAttribute('role', 'list');
       nodes = [];
-      if (current.length === 0) list.append(element('p', 'setup-note', empty));
+      if (current.length === 0) {
+        const note = element('div', 'empty-state');
+        note.append(controllerDrawing(), element('p', '', empty));
+        list.append(note);
+      }
       for (const row of current) {
         const node = element('button', 'setup-row');
         node.type = 'button';

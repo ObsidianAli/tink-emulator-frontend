@@ -27,10 +27,12 @@ export function hideSettings() {
   root.hidden = true;
 }
 
-const HIGHLIGHTS = { rim: 'Rim', snake: 'Snake', under: 'Under' };
+const HIGHLIGHTS = { rim: 'Rim', snake: 'Snake', under: 'Under', raised: 'Raised' };
+const CORNERS = { soft: 'Soft', round: 'Round' };
 const KEYBOARDS = { grid: 'Grid', full: 'Full' };
 const HEARTS = { sticker: 'Sticker', small: 'Small' };
-const BACKGROUNDS = { tint: 'Tint', flat: 'Flat', colour: 'Colour', picture: 'Picture', soft: 'Soft picture', art: 'Art', drift: 'Drift' };
+const BACKGROUNDS = { flat: 'Flat', colour: 'Colour', picture: 'Picture', soft: 'Soft picture', calm: 'Calm picture' };
+const NAME_STYLES = { plain: 'Plain', warm: 'Warm' };
 const TEXT_STYLES = { plain: 'Plain', outline: 'Outline', pill: 'Pill', fade: 'Fade' };
 const GAME_OPTIONS = { case: 'Beside the case', panel: 'Side panel' };
 const COVER_PICKERS = { page: 'Page', case: 'On the case' };
@@ -303,7 +305,14 @@ export async function openSettings({ focusCategory } = {}) {
               window.tink.setFullscreen(state.fullscreen);
             },
           },
-          choose('highlight', 'Highlight', HIGHLIGHTS, 'focusStyle', (value) => window.tink.setFocusStyle(value)),
+          choose('highlight', 'Highlight', HIGHLIGHTS, 'focusStyle', (value) => {
+            document.body.dataset.highlight = value;
+            window.tink.setFocusStyle(value);
+          }),
+          choose('corners', 'Corners', CORNERS, 'corners', (value) => {
+            document.body.dataset.corners = value;
+            window.tink.setCorners(value);
+          }),
           choose('keyboard', 'Keyboard', KEYBOARDS, 'keyboard', (value) => window.tink.setKeyboard(value)),
           {
             label: 'Profiles on Home',
@@ -314,6 +323,7 @@ export async function openSettings({ focusCategory } = {}) {
           },
           choose('background', 'Background', BACKGROUNDS, 'background', (value) => window.tink.setBackground(value)),
           choose('text', 'Text', TEXT_STYLES, 'textStyle', (value) => window.tink.setTextStyle(value)),
+          choose('names', 'Names', NAME_STYLES, 'names', (value) => window.tink.setNames(value)),
           choose('heart', 'Favourite heart', HEARTS, 'heart', (value) => window.tink.setHeart(value)),
           choose('gameOptions', 'Game options', GAME_OPTIONS, 'gameOptions', (value) => window.tink.setGameOptions(value)),
         ],
@@ -475,7 +485,7 @@ export async function openSettings({ focusCategory } = {}) {
     }
 
     function showSettingsHints() {
-      if (column === 'categories') return setHints([{ button: 'a', label: 'Open' }, { button: 'b', label: 'Close' }]);
+      if (column === 'categories') return setHints([{ button: 'a', label: 'Open' }, { button: 'b', label: 'Back' }]);
       const row = rows[focus];
       if (typing) return setHints([{ button: 'a', label: 'Save' }, { button: 'b', label: 'Cancel' }]);
       const hints = [{ button: 'a', label: row.hint || 'Start' }];

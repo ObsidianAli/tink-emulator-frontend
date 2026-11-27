@@ -47,15 +47,26 @@ test('changing a cover defaults to the case and ignores unknown values', () => {
   assert.strictEqual(options.buildSettings(settings, '1').coverPicker, 'page');
 });
 
-test('background defaults to tint and ignores unknown values', () => {
+test('background defaults to picture and ignores unknown values', () => {
   const settings = {};
-  assert.strictEqual(options.buildSettings(settings, '1').background, 'tint');
-  for (const mode of ['flat', 'colour', 'picture', 'soft', 'art', 'tint', 'drift']) {
+  assert.strictEqual(options.buildSettings(settings, '1').background, 'picture');
+  for (const mode of ['flat', 'colour', 'picture', 'soft', 'calm']) {
     options.setBackground(settings, mode);
     assert.strictEqual(options.buildSettings(settings, '1').background, mode);
   }
   options.setBackground(settings, 'video');
-  assert.strictEqual(options.buildSettings(settings, '1').background, 'drift');
+  assert.strictEqual(options.buildSettings(settings, '1').background, 'calm');
+  settings.background = 'drift';
+  assert.strictEqual(options.buildSettings(settings, '1').background, 'picture');
+});
+
+test('names default to warm and ignore unknown values', () => {
+  const settings = {};
+  assert.strictEqual(options.buildSettings(settings, '1').names, 'warm');
+  options.setNames(settings, 'plain');
+  assert.strictEqual(options.buildSettings(settings, '1').names, 'plain');
+  options.setNames(settings, 'bold');
+  assert.strictEqual(options.buildSettings(settings, '1').names, 'plain');
 });
 
 test('text style defaults to plain and ignores unknown values', () => {
@@ -67,6 +78,15 @@ test('text style defaults to plain and ignores unknown values', () => {
   }
   options.setTextStyle(settings, 'bold');
   assert.strictEqual(options.buildSettings(settings, '1').textStyle, 'fade');
+});
+
+test('corners default to soft and ignore unknown values', () => {
+  const settings = {};
+  assert.strictEqual(options.buildSettings(settings, '1').corners, 'soft');
+  options.setCorners(settings, 'round');
+  assert.strictEqual(options.buildSettings(settings, '1').corners, 'round');
+  options.setCorners(settings, 'sharp');
+  assert.strictEqual(options.buildSettings(settings, '1').corners, 'round');
 });
 
 test('highlight defaults to rim and ignores unknown values', () => {
