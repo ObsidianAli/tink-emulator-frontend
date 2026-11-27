@@ -175,7 +175,7 @@ async function main() {
   assert.strictEqual(await page.textContent('#info .info-console'), 'Steam');
   assert.ok((await page.textContent('#info .info-overview')).includes('more cake'));
   assert.strictEqual(await page.$$eval('#info .info-shot', (els) => els.length), 5);
-  assert.strictEqual(await hints(), '←→Screenshots BBack');
+  assert.strictEqual(await hints(), 'Screenshots BBack');
   const current = () => page.$$eval('#info .info-shot', (els) => els.findIndex((el) => el.classList.contains('current')));
   assert.strictEqual(await current(), 0);
   await key('ArrowRight');

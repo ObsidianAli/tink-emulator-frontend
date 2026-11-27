@@ -95,7 +95,7 @@ async function main() {
   await page.waitForSelector('#panel:not([hidden])');
   await sleep(500);
   assert.strictEqual(await page.textContent('#panel h1'), 'Controllers');
-  assert.strictEqual(await page.textContent('#panel .setup-note'), 'No controllers');
+  assert.strictEqual(await page.textContent('#panel .empty-state p'), 'No controllers');
   assert.ok(await page.$eval('#tray', (node) => getComputedStyle(node).visibility === 'hidden'), 'it is a full screen, Home is hidden');
   await page.evaluate(() => {
     const pad = { id: 'Test Pad (Vendor: 1234)', buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0] };

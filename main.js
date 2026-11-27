@@ -666,9 +666,11 @@ function setFullscreen(on) {
 
 const setFocusStyle = (mode) => changeSettings((current) => options.setFocusStyle(current, mode));
 const setBackground = (mode) => changeSettings((current) => options.setBackground(current, mode));
+const setCorners = (mode) => changeSettings((current) => options.setCorners(current, mode));
 const setTextStyle = (mode) => changeSettings((current) => options.setTextStyle(current, mode));
 const setKeyboard = (mode) => changeSettings((current) => options.setKeyboard(current, mode));
 const setSounds = (picked) => changeSettings((current) => options.setSounds(current, picked));
+const setNames = (mode) => changeSettings((current) => options.setNames(current, mode));
 const setHeart = (mode) => changeSettings((current) => options.setHeart(current, mode));
 const setGameOptions = (mode) => changeSettings((current) => options.setGameOptions(current, mode));
 const setCoverPicker = (mode) => changeSettings((current) => options.setCoverPicker(current, mode));
@@ -778,9 +780,11 @@ app.whenReady().then(async () => {
   handle('setStartWithWindows', (on) => setStartWithWindows(on === true));
   handle('setFocusStyle', (mode) => setFocusStyle(String(mode)));
   handle('setBackground', (mode) => setBackground(String(mode)));
+  handle('setCorners', (mode) => setCorners(String(mode)));
   handle('setTextStyle', (mode) => setTextStyle(String(mode)));
   handle('setKeyboard', (mode) => setKeyboard(String(mode)));
   handle('setSounds', (picked) => setSounds(picked && typeof picked === 'object' ? picked : {}));
+  handle('setNames', (mode) => setNames(String(mode)));
   handle('setHeart', (mode) => setHeart(String(mode)));
   handle('setGameOptions', (mode) => setGameOptions(String(mode)));
   handle('setCoverPicker', (mode) => setCoverPicker(String(mode)));

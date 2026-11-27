@@ -281,6 +281,9 @@ async function renderTray() {
   currentProfile = profile;
   renderTop(profiles, profile, shown.homeProfiles !== false);
   document.body.dataset.text = shown.textStyle;
+  document.body.dataset.names = shown.names;
+  document.body.dataset.corners = shown.corners;
+  document.body.dataset.highlight = shown.focusStyle;
   setSounds(shown.sounds);
   gameOptions = shown.gameOptions;
   coverPicker = shown.coverPicker;

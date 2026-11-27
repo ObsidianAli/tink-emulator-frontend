@@ -160,7 +160,7 @@ async function main() {
 
   await changeCover('beside');
   await title('Pixel Deep1 of 4');
-  assert.strictEqual(await hints(), '←→Cover AUse BBack');
+  assert.strictEqual(await hints(), 'Cover AUse BBack');
   await until(() => getComputedStyle(document.getElementById('title')).opacity === '1');
   assert.ok(await page.$('#options:not(.open)'), 'the rows make room');
   await key('ArrowLeft');

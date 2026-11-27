@@ -141,6 +141,9 @@ async function main() {
   await pickValue('Highlight', 'Rim', 'Snake', 'focusStyle', 'snake');
   await pickValue('Highlight', 'Snake', 'Rim', 'focusStyle', 'rim');
   await key('ArrowDown');
+  await pickValue('Corners', 'Soft', 'Round', 'corners', 'round');
+  await pickValue('Corners', 'Round', 'Soft', 'corners', 'soft');
+  await key('ArrowDown');
   await pickValue('Keyboard', 'Grid', 'Full', 'keyboard', 'full');
   await pickValue('Keyboard', 'Full', 'Grid', 'keyboard', 'grid');
   await key('ArrowDown');
@@ -152,7 +155,7 @@ async function main() {
   assert.ok((await focusedRow()).startsWith('Profiles on Home | On'), await focusedRow());
   assert.strictEqual(readSettings().homeProfiles, true);
   await key('ArrowDown');
-  await pickValue('Background', 'Tint', 'Drift', 'background', 'drift');
+  await pickValue('Background', 'Picture', 'Calm picture', 'background', 'calm');
 
   await key('Escape');
   await key('ArrowDown');
@@ -200,7 +203,7 @@ async function main() {
   await key('ArrowDown');
   assert.strictEqual(await focusedRow(), 'Add user');
   await key('Enter');
-  assert.strictEqual(await stepTitle(), 'Choose a background', 'with no pictures the icon step is skipped');
+  assert.strictEqual(await stepTitle(), 'Colour', 'with no pictures the icon step is skipped');
   await key('Enter');
   assert.strictEqual(await stepTitle(), 'Nickname');
   await page.keyboard.type('Kim');
@@ -223,7 +226,7 @@ async function main() {
   assert.strictEqual(await focusedRow(), 'Nickname | Jo');
   await key('ArrowDown');
   await key('Enter');
-  assert.strictEqual(await stepTitle(), 'Choose a background');
+  assert.strictEqual(await stepTitle(), 'Colour');
   await key('Escape');
   await backInSettings();
   assert.strictEqual(await focusedRow(), 'Icon | J', 'B on the first step goes back');
@@ -241,7 +244,7 @@ async function main() {
   await key('Escape');
   assert.ok(!(await settingsOpen()), 'B closes Settings');
   await sleep(600);
-  assert.strictEqual(await page.evaluate(() => document.body.dataset.background), 'drift');
+  assert.strictEqual(await page.evaluate(() => document.body.dataset.background), 'calm');
   assert.strictEqual(await page.textContent('#title'), 'Luigis Mansion');
   await shot('15-shelf-after-settings');
 

@@ -54,6 +54,14 @@ export function heartDrawing() {
   return draw(['svg', { class: 'heart', viewBox: '2 2 20 20' }, ['path', { d: HEART }]]);
 }
 
+export function plusDrawing() {
+  return draw(['svg', { class: 'plus-drawing', viewBox: '0 0 24 24' }, line('M12 5v14M5 12h14')]);
+}
+
+export function controllerDrawing() {
+  return draw(['svg', { viewBox: '0 0 24 24' }, ['path', { class: 'icon-fill', 'fill-rule': 'evenodd', d: 'M7 5.2h10a5 5 0 0 1 4.9 4.1l1 5.9a3.5 3.5 0 0 1-6.2 2.8l-1.6-2H8.9l-1.6 2a3.5 3.5 0 0 1-6.2-2.8l1-5.9A5 5 0 0 1 7 5.2zM6.15 8.45h1.7v1.7h1.7v1.7h-1.7v1.7h-1.7v-1.7h-1.7v-1.7h1.7zM16.5 8.8a1 1 0 1 0 2 0a1 1 0 1 0-2 0zM16.5 13.2a1 1 0 1 0 2 0a1 1 0 1 0-2 0zM14.3 11a1 1 0 1 0 2 0a1 1 0 1 0-2 0zM18.7 11a1 1 0 1 0 2 0a1 1 0 1 0-2 0z' }]]);
+}
+
 export function trayDrawing(name) {
   const svg = draw(['svg', { viewBox: '0 0 24 24' }, ...ICONS[name]]);
   svg.classList.add('tray-drawing');

@@ -10,7 +10,7 @@ body {
   display: flex;
   flex-direction: column;
   margin: 0;
-  background: radial-gradient(ellipse at top, color-mix(in srgb, var(--tint) var(--tint-strength), var(--bg)), var(--bg) var(--tint-reach));
+  background: var(--flat-colour);
   color: var(--text);
   font-family: var(--font);
   font-size: var(--text-body);
@@ -18,11 +18,6 @@ body {
   line-height: var(--line-height);
   overflow: hidden;
   transition: --tint var(--duration-case) var(--ease-out);
-}
-
-body:is([data-background=flat], [data-background=picture], [data-background=soft]) {
-  background: var(--flat-colour);
-  transition: none;
 }
 
 body[data-background=colour] {
@@ -46,43 +41,11 @@ body:has(#blackout.black) {
   pointer-events: none;
 }
 
-body:not([data-background=art]) .backdrop-art,
-body:not([data-background=drift]) .backdrop-blob,
-body:not([data-background=art]) .backdrop-shade,
-body:not([data-background=drift]) .backdrop-vignette,
 body:not([data-text=fade]) .backdrop-fade,
-body:not([data-background=picture], [data-background=soft]) .backdrop-picture,
-body:not([data-background=colour], [data-background=picture], [data-background=soft]) .backdrop-dim,
+body:not([data-background=picture], [data-background=soft], [data-background=calm]) .backdrop-picture,
+body:not([data-background=colour], [data-background=picture], [data-background=soft], [data-background=calm]) .backdrop-dim,
 body.resting #backdrop {
   display: none;
-}
-
-.backdrop-art {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  scale: var(--art-zoom);
-  opacity: 0;
-  transition: opacity var(--duration-case) step-end;
-}
-
-.backdrop-art.shown {
-  z-index: 1;
-  opacity: var(--art-opacity);
-  transition: opacity var(--duration-case) var(--ease-out);
-}
-
-.backdrop-art.gone {
-  transition: opacity var(--duration-case) var(--ease-out);
-}
-
-.backdrop-shade {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  background: var(--art-shade);
 }
 
 .backdrop-picture {
@@ -111,6 +74,15 @@ body.resting #backdrop {
   position: absolute;
   inset: 0;
   background: var(--picture-shade);
+}
+
+body[data-background=calm] .backdrop-picture > img {
+  scale: var(--calm-zoom);
+  filter: blur(var(--calm-blur)) saturate(var(--calm-saturate)) contrast(var(--calm-contrast));
+}
+
+body[data-background=calm] .backdrop-picture-shade {
+  background: var(--calm-shade);
 }
 
 canvas + .backdrop-picture-shade {
@@ -144,69 +116,6 @@ body:has(main > section:not([hidden]), main.beside:not(.picking)) .backdrop-dim 
 
 body:is([data-background=colour], [data-background=soft]):has(main > section:not([hidden]), main.beside:not(.picking)) .backdrop-dim {
   opacity: var(--soft-dim-behind);
-}
-
-.backdrop-blob {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: var(--drift-size);
-  height: var(--drift-size);
-  margin: calc(var(--drift-size) / -2);
-  border-radius: 50%;
-  opacity: var(--drift-opacity);
-  animation: var(--drift-period-a) var(--drift-ease) infinite alternate drift-a;
-  transition: opacity var(--duration-screen-in) var(--ease-screen);
-  will-change: translate;
-}
-
-.backdrop-blob-a {
-  background: radial-gradient(closest-side, oklch(from color-mix(in oklab, var(--tint) var(--drift-mix), var(--drift-neutral)) var(--drift-lightness) max(c, var(--drift-chroma)) h), transparent var(--drift-falloff));
-}
-
-.backdrop-blob-b {
-  background: radial-gradient(closest-side, oklch(from color-mix(in oklab, var(--tint) var(--drift-mix), var(--drift-neutral)) var(--drift-lightness) max(c, var(--drift-chroma)) calc(h + var(--drift-hue-shift))), transparent var(--drift-falloff));
-  animation-name: drift-b;
-  animation-duration: var(--drift-period-b);
-}
-
-.backdrop-blob-c {
-  background: radial-gradient(closest-side, var(--drift-neutral), transparent var(--drift-falloff));
-  animation-name: drift-c;
-  animation-duration: var(--drift-period-c);
-}
-
-.backdrop-vignette {
-  position: absolute;
-  inset: 0;
-  background: var(--drift-vignette);
-}
-
-@keyframes drift-a {
-  from { translate: var(--drift-a-from); }
-  to { translate: var(--drift-a-to); }
-}
-
-@keyframes drift-b {
-  from { translate: var(--drift-b-from); }
-  to { translate: var(--drift-b-to); }
-}
-
-@keyframes drift-c {
-  from { translate: var(--drift-c-from); }
-  to { translate: var(--drift-c-to); }
-}
-
-body:is(.window-hidden, :has(#blackout.black)) .backdrop-blob {
-  animation-play-state: paused;
-}
-
-body:has(main > :is(#settings, #profiles, #info, #grid, #panel):not([hidden])) .backdrop-art.shown {
-  opacity: var(--art-opacity-behind);
-}
-
-body:has(main > :is(#settings, #profiles, #info, #grid, #panel):not([hidden])) .backdrop-blob {
-  opacity: var(--drift-opacity-behind);
 }
 
 #blackout {
@@ -669,14 +578,6 @@ main:has(> #covers:not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, 
   visibility: hidden;
 }
 
-body:has(main > #covers:not([hidden])) .backdrop-art.shown {
-  opacity: var(--art-opacity-behind);
-}
-
-body:has(main > #covers:not([hidden])) .backdrop-blob {
-  opacity: var(--drift-opacity-behind);
-}
-
 #grid-list .store-empty {
   grid-column: 1 / -1;
   text-align: center;
@@ -808,8 +709,11 @@ body:has(main > #covers:not([hidden])) .backdrop-blob {
   box-sizing: border-box;
   height: var(--hints-height);
   padding: 0 var(--space-8);
-  border-top: var(--line-width) solid var(--line);
   font-size: var(--text-small);
+}
+
+body:has(main > :is(#grid, #news, #settings, #store, #profiles, #panel, #album, #covers, #info, #setup):not([hidden])) #hints {
+  border-top: var(--line-width) solid var(--line);
 }
 
 .hint {
@@ -820,12 +724,41 @@ body:has(main > #covers:not([hidden])) .backdrop-blob {
 
 .glyph {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  min-width: var(--glyph-size);
-  padding: 0 var(--space);
   height: var(--glyph-size);
+}
+
+.glyph svg {
+  height: 100%;
+  overflow: visible;
+}
+
+.glyph-fill {
+  fill: var(--text);
+}
+
+.glyph-ring {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: var(--glyph-line);
+}
+
+.glyph-ink {
+  fill: var(--on-light);
+  font-weight: var(--weight-bold);
+}
+
+.glyph-stroke {
+  fill: none;
+  stroke: var(--on-light);
+  stroke-width: var(--glyph-line);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.glyph-text {
+  align-items: center;
+  box-sizing: border-box;
+  padding: 0 var(--space);
   border-radius: var(--radius-round);
   background: var(--text);
   color: var(--on-light);
@@ -2241,14 +2174,6 @@ main:has(> #store:not([hidden])) > :is(#shelf, #title, #clock, #home-profiles, #
   visibility: hidden;
 }
 
-body:has(main > #store:not([hidden])) .backdrop-art.shown {
-  opacity: var(--art-opacity-behind);
-}
-
-body:has(main > #store:not([hidden])) .backdrop-blob {
-  opacity: var(--drift-opacity-behind);
-}
-
 .store-content {
   display: flex;
   flex: 1;
@@ -2468,4 +2393,55 @@ body:has(main > #store:not([hidden])) .backdrop-blob {
   100% {
     transform: none;
   }
+}
+
+:is(#title, #grid-title, #options h1, .info-text h1) {
+  color: var(--name-colour);
+  font-size: var(--title-home-size);
+  font-weight: var(--name-weight);
+  letter-spacing: var(--name-spacing);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  color: var(--muted);
+  font-size: var(--text-body);
+}
+
+.empty-state svg {
+  width: var(--empty-icon-size);
+  height: var(--empty-icon-size);
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+.plus-drawing {
+  width: var(--plus-size);
+  height: var(--plus-size);
+}
+
+body[data-highlight=raised] :is(.setup-row, .setup-next, .settings-category, #settings .setup-row, #options .setup-row, #store .setup-row):focus {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+body[data-highlight=raised] .setup-row:focus .setup-pill {
+  color: var(--muted);
+}
+
+body[data-highlight=raised] .setup-row:focus .setup-pill.on {
+  background: var(--surface);
+  color: var(--text);
+}
+
+body[data-names=plain] {
+  --name-colour: var(--text);
+  --name-weight: var(--weight-bold);
+  --name-spacing: 0;
 }

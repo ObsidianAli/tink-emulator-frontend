@@ -77,6 +77,6 @@ export function openMenu({ choices, anchor = null }) {
     void root.offsetWidth;
     root.classList.add('open');
     scrim.classList.add('open');
-    setHints([{ button: 'a', label: 'Choose' }, { button: 'b', label: 'Close' }]);
+    setHints([{ button: 'a', label: 'Choose' }, { button: 'b', label: 'Back' }]);
   });
 }

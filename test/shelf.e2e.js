@@ -317,9 +317,9 @@ async function main() {
   const dots = () => page.$$eval('#profiles .profile-dots i', (items) => items.length);
   const focusedName = () => page.evaluate(() => document.activeElement.innerText.trim());
   await key('ArrowRight');
-  assert.strictEqual(await focusedName(), '+\nAdd user');
+  assert.strictEqual(await focusedName(), 'Add user');
   await key('Enter');
-  assert.strictEqual(await heading(), 'Choose an icon');
+  assert.strictEqual(await heading(), 'Icon');
   assert.strictEqual(await dots(), 3);
   assert.strictEqual(await page.$$eval('.profile-option', (tiles) => tiles.length), 2, 'the initial, then the picture');
   assert.strictEqual(await page.$$eval('.profile-option .tick', (ticks) => ticks.length), 1, 'the current choice has a tick');
@@ -350,7 +350,7 @@ async function main() {
   assert.strictEqual((await initials())[0], 'P', 'the first profile shows its initial');
   await key('ArrowLeft');
   await key(' ');
-  assert.strictEqual(await heading(), 'Choose an icon', 'X changes the icon');
+  assert.strictEqual(await heading(), 'Icon', 'X changes the icon');
   assert.strictEqual(await dots(), 2);
   await key('ArrowLeft');
   await key('Enter');
