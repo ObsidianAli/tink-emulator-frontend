@@ -672,6 +672,7 @@ const setKeyboard = (mode) => changeSettings((current) => options.setKeyboard(cu
 const setSounds = (picked) => changeSettings((current) => options.setSounds(current, picked));
 const setNames = (mode) => changeSettings((current) => options.setNames(current, mode));
 const setHeart = (mode) => changeSettings((current) => options.setHeart(current, mode));
+const setCases = (mode) => changeSettings((current) => options.setCases(current, mode));
 const setGameOptions = (mode) => changeSettings((current) => options.setGameOptions(current, mode));
 const setCoverPicker = (mode) => changeSettings((current) => options.setCoverPicker(current, mode));
 const setHomeProfiles = (on) => changeSettings((current) => options.setHomeProfiles(current, on));
@@ -786,6 +787,7 @@ app.whenReady().then(async () => {
   handle('setSounds', (picked) => setSounds(picked && typeof picked === 'object' ? picked : {}));
   handle('setNames', (mode) => setNames(String(mode)));
   handle('setHeart', (mode) => setHeart(String(mode)));
+  handle('setCases', (mode) => setCases(String(mode)));
   handle('setGameOptions', (mode) => setGameOptions(String(mode)));
   handle('setCoverPicker', (mode) => setCoverPicker(String(mode)));
   handle('setHomeProfiles', (on) => setHomeProfiles(on === true));

@@ -287,6 +287,7 @@ async function renderTray() {
   setSounds(shown.sounds);
   gameOptions = shown.gameOptions;
   coverPicker = shown.coverPicker;
+  shelf.setCaseLook(shown.cases);
   shelf.setHeartLook(shown.heart);
   grid.setHeartLook(shown.heart);
   tray.replaceChildren(...trayIcons.map((icon) => {
@@ -561,6 +562,7 @@ async function goToSettings(focusCategory) {
     const changed = await openSettings({ focusCategory });
     const shown = await window.tink.getSettings();
     shelf.setFocusStyle(shown.focusStyle);
+    shelf.setCaseLook(shown.cases);
     await screen(async () => {
       hideSettings();
       setBackground(shown.background);

@@ -31,6 +31,7 @@ const HIGHLIGHTS = { rim: 'Rim', snake: 'Snake', under: 'Under', raised: 'Raised
 const CORNERS = { soft: 'Soft', round: 'Round' };
 const KEYBOARDS = { grid: 'Grid', full: 'Full' };
 const HEARTS = { sticker: 'Sticker', small: 'Small' };
+const CASES = { classic: 'Classic', framed: 'Framed' };
 const BACKGROUNDS = { flat: 'Flat', colour: 'Colour', picture: 'Picture', soft: 'Soft picture', calm: 'Calm picture' };
 const NAME_STYLES = { plain: 'Plain', warm: 'Warm' };
 const TEXT_STYLES = { plain: 'Plain', outline: 'Outline', pill: 'Pill', fade: 'Fade' };
@@ -325,6 +326,7 @@ export async function openSettings({ focusCategory } = {}) {
           choose('text', 'Text', TEXT_STYLES, 'textStyle', (value) => window.tink.setTextStyle(value)),
           choose('names', 'Names', NAME_STYLES, 'names', (value) => window.tink.setNames(value)),
           choose('heart', 'Favourite heart', HEARTS, 'heart', (value) => window.tink.setHeart(value)),
+          choose('cases', 'Cases', CASES, 'cases', (value) => window.tink.setCases(value)),
           choose('gameOptions', 'Game options', GAME_OPTIONS, 'gameOptions', (value) => window.tink.setGameOptions(value)),
         ],
         sounds: soundRows,

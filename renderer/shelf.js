@@ -1,5 +1,6 @@
 import * as THREE from '../node_modules/three/build/three.module.js';
-import { SHAPES, shapeFor, coverAspect, spineAspect, createCase, disposeShared } from './case.js';
+import * as classic from './case.js';
+import * as framed from './case-framed.js';
 import { createTextures } from './textures.js';
 import { createFocusRing } from './ring.js';
 
@@ -17,8 +18,12 @@ const SIDE_DIM = 0.35;
 const SPARE = 2;
 const SETTLED = 0.0005;
 const TITLE_NEAR = 0.05;
-const LAYOUT = SHAPES.dvd;
-const shapeOf = (game) => shapeFor(game.console);
+const CASES = { classic, framed };
+let cases = classic;
+let LAYOUT = cases.SHAPES.dvd;
+const shapeOf = (game) => cases.shapeFor(game.console);
+const coverAspect = (shape) => cases.coverAspect(shape);
+const spineAspect = (shape) => cases.spineAspect(shape);
 const SHARP_STEP = 64;
 const SHARP_MAX = 2048;
 // A slow Cover load can't keep the screen black for longer than this.
@@ -131,6 +136,11 @@ function createShelf(canvas, { onTint, button, title }) {
   key.position.set(-2, 3, 6);
   scene.add(key);
 
+  const rimLight = new THREE.DirectionalLight(token('--case-rim-light'), 0);
+  const rimStrength = parseFloat(token('--case-rim-light-strength')) || 0;
+  rimLight.position.set(4, 5, -3);
+  scene.add(rimLight);
+
   const colours = { shell: token('--surface'), blank: token('--surface-raised'), heart: heartTheme() };
   const row = new THREE.Group();
   scene.add(row);
@@ -177,7 +187,7 @@ function createShelf(canvas, { onTint, button, title }) {
   function takeCase(shape) {
     const pool = pools.get(shape) || [];
     pools.set(shape, pool);
-    return pool.pop() || createCase(shape, colours);
+    return pool.pop() || cases.createCase(shape, colours);
   }
 
   function releaseCase(index) {
@@ -341,6 +351,27 @@ function createShelf(canvas, { onTint, button, title }) {
     ring.setStyle(name);
     requestRender();
   }
+
+  function dropCases() {
+    for (const i of [...live.keys()]) releaseCase(i);
+    for (const pool of pools.values()) pool.forEach((item) => item.dispose());
+    pools.clear();
+    cases.disposeShared();
+  }
+
+  function setCaseLook(name) {
+    const next = CASES[name] || classic;
+    if (next === cases) return;
+    if (!asleep) {
+      dropCases();
+      textures.forget();
+    }
+    cases = next;
+    LAYOUT = cases.SHAPES.dvd;
+    rimLight.intensity = cases === framed ? rimStrength : 0;
+    if (!asleep) show(games, selected);
+  }
+
   window.tink.getSettings().then((state) => {
     setFocusStyle(state.focusStyle);
   });
@@ -577,10 +608,7 @@ function createShelf(canvas, { onTint, button, title }) {
     clearTimeout(breathTimer);
     frameRequested = false;
     lastTime = null;
-    for (const i of [...live.keys()]) releaseCase(i);
-    for (const pool of pools.values()) pool.forEach((item) => item.dispose());
-    pools.clear();
-    disposeShared();
+    dropCases();
     for (const mesh of seeThrough) mesh.material.dispose();
     ring.dispose();
     textures.forget();
@@ -614,7 +642,7 @@ function createShelf(canvas, { onTint, button, title }) {
   screens.observe(canvas.parentElement, { attributes: true, attributeFilter: ['class'] });
   for (const section of canvas.parentElement.querySelectorAll(':scope > section')) screens.observe(section, { attributes: true, attributeFilter: ['hidden'] });
 
-  return { show, update, whenSettled, showRing, setHeartLook, setFocusStyle, setAlone, ready, forgetCovers, drawCover, tryCover, refreshCover, art, sleep, wake, select, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
+  return { show, update, whenSettled, showRing, setHeartLook, setFocusStyle, setCaseLook, setAlone, ready, forgetCovers, drawCover, tryCover, refreshCover, art, sleep, wake, select, selected: () => selected, onButton: () => games.length > 0 && selected === games.length, game: () => games[selected] || null };
 }
 
 export { createShelf };
