@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('tink', {
   setStartWithWindows: (on) => ipcRenderer.invoke('setStartWithWindows', on),
   setNames: (mode) => ipcRenderer.invoke('setNames', mode),
   setHeart: (mode) => ipcRenderer.invoke('setHeart', mode),
+  setCases: (mode) => ipcRenderer.invoke('setCases', mode),
   setGameOptions: (mode) => ipcRenderer.invoke('setGameOptions', mode),
   setCoverPicker: (mode) => ipcRenderer.invoke('setCoverPicker', mode),
   setFocusStyle: (mode) => ipcRenderer.invoke('setFocusStyle', mode),

@@ -11,6 +11,15 @@ test('fullscreen is on unless it was turned off', () => {
   assert.strictEqual(options.wantsFullscreen(settings), true);
 });
 
+test('cases default to classic and ignore unknown values', () => {
+  const settings = {};
+  assert.strictEqual(options.buildSettings(settings, '1').cases, 'classic');
+  options.setCases(settings, 'framed');
+  assert.strictEqual(options.buildSettings(settings, '1').cases, 'framed');
+  options.setCases(settings, 'box');
+  assert.strictEqual(options.buildSettings(settings, '1').cases, 'framed');
+});
+
 test('profiles on Home are on unless turned off', () => {
   const settings = {};
   assert.strictEqual(options.buildSettings(settings, '1').homeProfiles, true);

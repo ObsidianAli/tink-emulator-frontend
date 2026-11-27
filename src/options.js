@@ -26,6 +26,9 @@ const keyboard = (settings) => (KEYBOARDS.includes(settings.keyboard) ? settings
 const HEARTS = ['sticker', 'small'];
 const heart = (settings) => (HEARTS.includes(settings.heart) ? settings.heart : 'sticker');
 
+const CASES = ['classic', 'framed'];
+const cases = (settings) => (CASES.includes(settings.cases) ? settings.cases : 'classic');
+
 const GAME_OPTIONS = ['case', 'panel'];
 const gameOptions = (settings) => (GAME_OPTIONS.includes(settings.gameOptions) ? settings.gameOptions : 'case');
 
@@ -54,6 +57,7 @@ function buildSettings(settings, version) {
     corners: corners(settings),
     keyboard: keyboard(settings),
     heart: heart(settings),
+    cases: cases(settings),
     gameOptions: gameOptions(settings),
     coverPicker: coverPicker(settings),
     sounds: sounds(settings),
@@ -100,6 +104,10 @@ function setHeart(settings, mode) {
   if (HEARTS.includes(mode)) settings.heart = mode;
 }
 
+function setCases(settings, mode) {
+  if (CASES.includes(mode)) settings.cases = mode;
+}
+
 function setGameOptions(settings, mode) {
   if (GAME_OPTIONS.includes(mode)) settings.gameOptions = mode;
 }
@@ -123,4 +131,4 @@ function setScreenshotButton(settings, id) {
   else delete settings.screenshotButton;
 }
 
-module.exports = { buildSettings, setFullscreen, setFocusStyle, setBackground, setTextStyle, setNames, setCorners, setKeyboard, setHeart, setGameOptions, setCoverPicker, setSounds, setHomeProfiles, setSteamKey, setScreenshotButton, screenshotButton, wantsFullscreen, steamKey };
+module.exports = { buildSettings, setFullscreen, setFocusStyle, setBackground, setTextStyle, setNames, setCorners, setKeyboard, setHeart, setCases, setGameOptions, setCoverPicker, setSounds, setHomeProfiles, setSteamKey, setScreenshotButton, screenshotButton, wantsFullscreen, steamKey };
