@@ -4,7 +4,7 @@ const path = require('node:path');
 const { gameProcesses } = require('./steam');
 const { descendants } = require('./win32');
 const { cleanPcTitle, gameFolder, titleFor, inside } = require('./pcgames');
-const { PC } = require('./presets');
+const { PC } = require('./kinds');
 
 const MAX_GAMES = 500;
 const MAX_TITLE = 120;

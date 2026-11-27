@@ -1,17 +1,15 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, nativeImage, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeImage, powerMonitor } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const steam = require('./src/steam');
-const { CONSOLES, EMULATORS, STEAM, coverColour, launchSpec } = require('./src/presets');
-const { getEmulatedGames, groupConsoles } = require('./src/library');
-const { detectEmulators, defaultSearchDirs } = require('./src/detect');
+const { STEAM, coverColour } = require('./src/kinds');
 const { loadSettings, saveSettings } = require('./src/settings');
 const setup = require('./src/setup');
 const profiles = require('./src/profiles');
 const options = require('./src/options');
 const { resolveDataDir, migrateOldData } = require('./src/paths');
 const { createLog } = require('./src/log');
-const { playGame, closeEmulator } = require('./src/launcher');
+const { playGame } = require('./src/launcher');
 const { startSession } = require('./src/session');
 const win32 = require('./src/win32');
 const { watchCombo, watchPress, learnButton, openButtons, loadPadReader } = require('./src/pad');
@@ -30,6 +28,8 @@ const { createGameInfo } = require('./src/gameinfo');
 const { createNews } = require('./src/news');
 const { powerAction } = require('./src/power');
 const { createUpdater, FINISH_FLAG } = require('./src/update');
+const shellMode = require('./src/shell');
+const { spawn } = require('node:child_process');
 
 const BACKGROUND = '#0f1115';
 const BACKDROP = '#000';
@@ -39,7 +39,8 @@ const REFOCUS_CHECK_MS = 100;
 const UPDATE_CHECK_DELAY_MS = 10 * 1000;
 const RESUME_CHECK_DELAY_MS = 15 * 1000;
 
-const FINISHING = process.argv.includes(FINISH_FLAG) && /\.new$/i.test(path.dirname(process.execPath));
+const tinkExe = () => process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
+const FINISHING =process.argv.includes(FINISH_FLAG) && /\.new$/i.test(path.dirname(process.execPath));
 // The portable exe unpacks to a temp folder, so "beside Tink" means beside the exe the user started.
 const TINK_DIR = process.env.PORTABLE_EXECUTABLE_DIR
   || (FINISHING ? path.dirname(process.execPath).slice(0, -'.new'.length) : path.dirname(process.execPath));
@@ -66,9 +67,8 @@ process.on('unhandledRejection', (reason) => log('Unhandled rejection', reason))
 
 let win = null;
 let gamesById = new Map();
-let allConsoles = [];
-let settings = { consoles: {} };
-let emulators = {};
+let allGames = [];
+let settings = {};
 const settingsFile = () => path.join(DATA_DIR, 'settings.json');
 const firstSeenFile = () => path.join(DATA_DIR, 'firstseen.json');
 let firstSeen = {};
@@ -124,7 +124,6 @@ function createWindow() {
 
 async function getLibrary() {
   settings = loadSettings(settingsFile());
-  emulators = detect();
   covers = makeCovers();
   heroes = null;
   const steamDir = await steam.findSteamDir();
@@ -137,9 +136,9 @@ async function getLibrary() {
     fileName: game.appId,
     key: `steam:${game.appId}`,
   }));
-  const games = [...getEmulatedGames(settings), ...steamGames, ...pcadded.getAddedGames(settings)];
+  const games = [...steamGames, ...pcadded.getAddedGames(settings)];
   gamesById = new Map(games.map((game) => [game.id, game]));
-  allConsoles = groupConsoles(games);
+  allGames = games;
   firstSeen = updateFirstSeen(firstSeenFile(), games.map((game) => game.key));
   return currentLibrary();
 }
@@ -148,7 +147,7 @@ function currentLibrary() {
   const current = loadSettings(settingsFile());
   profiles.ensureProfiles(current);
   const profile = profiles.activeProfile(current);
-  const visible = profiles.visibleGames(allConsoles, profile);
+  const visible = profiles.visibleGames(allGames, profile);
   const show = ({ id, key, title, console }) => ({ id, title, console, fav: profile.favourites.includes(key) });
   return {
     row: profiles.homeRow(visible, profile, firstSeen).map(show),
@@ -248,18 +247,9 @@ async function getInstallProgress(appId) {
   return installs.progress(id, await steam.findSteamDir());
 }
 
-function emulatorExes() {
-  const current = loadSettings(settingsFile());
-  const chosen = [...Object.values(current.emulators || {}), ...Object.values(current.consoles || {}).map((entry) => entry && entry.exe)];
-  return [...Object.values(detect()), ...chosen].filter((exe) => typeof exe === 'string');
-}
-
 async function findPcGames() {
   const have = new Set(pcadded.getAddedGames(loadSettings(settingsFile())).map((game) => game.path.toLowerCase()));
-  const found = await pcgames.findPcGames({
-    readShortcut: (file) => shell.readShortcutLink(file),
-    exclude: { exes: emulatorExes() },
-  });
+  const found = await pcgames.findPcGames({ readShortcut: (file) => shell.readShortcutLink(file) });
   return found.filter((game) => !have.has(game.exe.toLowerCase()));
 }
 
@@ -270,7 +260,7 @@ function changePcGames(change) {
   settings = current;
   const games = [...gamesById.values()].filter((game) => game.console !== 'pc').concat(pcadded.getAddedGames(current));
   gamesById = new Map(games.map((game) => [game.id, game]));
-  allConsoles = groupConsoles(games);
+  allGames = games;
   firstSeen = updateFirstSeen(firstSeenFile(), games.map((game) => game.key));
   return result;
 }
@@ -426,7 +416,7 @@ let padReader;
 function getPadReader() {
   if (padReader === undefined) {
     padReader = loadPadReader();
-    if (!padReader) log("Could not load XInput, so Select + Start won't close games. They still come back when the emulator closes.");
+    if (!padReader) log("Could not load XInput, so Select + Start won't close games. They still come back when the game closes.");
   }
   return padReader;
 }
@@ -639,70 +629,8 @@ async function launchSteam(game) {
   if (outcome.status === 'ended') changeActive((profile) => profiles.recordPlay(profile, game.key));
 }
 
-function emulatorExe(game) {
-  const chosen = settings.consoles[game.console] && settings.consoles[game.console].exe;
-  if (chosen) return chosen;
-  const emulator = CONSOLES[game.console].emulator;
-  return emulator ? setup.resolveEmulator(settings, emulators, emulator) : null;
-}
-
-function detect() {
-  return detectEmulators(defaultSearchDirs(process.env, TINK_DIR));
-}
-
-async function getSetup() {
-  const current = loadSettings(settingsFile());
-  if (!setup.needsSetup(current)) return { needed: false };
-  return setupState(current);
-}
-
-async function setupState(current) {
-  return setup.buildSetup(current, detect(), Boolean(await steam.findSteamDir()));
-}
-
-// The renderer only says which emulator or Console; paths never come from it.
-async function pick(properties, filters) {
-  const result = await dialog.showOpenDialog(win, { properties, filters });
-  return result.canceled || !result.filePaths[0] ? null : result.filePaths[0];
-}
-
-async function changeSetup(change) {
-  const current = loadSettings(settingsFile());
-  const inSetup = setup.needsSetup(current);
-  const error = await change(current);
-  if (error === null) return null;
-  if (error) return { error };
-  // Marks setup as started so quitting halfway doesn't count as finished.
-  if (inSetup && current.setupDone === undefined) current.setupDone = false;
-  saveSettings(settingsFile(), current);
-  return { state: await setupState(current) };
-}
-
-async function pickExe(id) {
-  return changeSetup(async (current) => {
-    const exe = await pick(['openFile'], [{ name: 'Programs', extensions: ['exe'] }]);
-    if (!exe) return null;
-    if (!fs.statSync(exe, { throwIfNoEntry: false })?.isFile() || path.extname(exe).toLowerCase() !== '.exe') {
-      return "That isn't a program.";
-    }
-    setup.setEmulatorExe(current, id, exe);
-    return undefined;
-  });
-}
-
-async function pickFolder(id) {
-  return changeSetup(async (current) => {
-    const folder = await pick(['openDirectory']);
-    if (!folder) return null;
-    setup.setConsoleFolder(current, id, folder);
-    return undefined;
-  });
-}
-
-async function clearFolder(id) {
-  return changeSetup((current) => {
-    setup.setConsoleFolder(current, id, null);
-  });
+function getSetup() {
+  return { needed: setup.needsSetup(loadSettings(settingsFile())) };
 }
 
 function finishSetup(wantsCovers) {
@@ -716,10 +644,10 @@ function getSettings() {
   const current = loadSettings(settingsFile());
   profiles.ensureProfiles(current);
   return {
-    ...options.buildSettings(current, detect(), app.getVersion()),
+    ...options.buildSettings(current, app.getVersion()),
     packaged: app.isPackaged,
     startWithWindows: app.isPackaged && app.getLoginItemSettings({ path: loginItemPath() }).openAtLogin,
-    ...profiles.settingsView(profiles.activeProfile(current), allConsoles, hiddenOwned(profiles.activeProfile(current))),
+    ...profiles.settingsView(profiles.activeProfile(current), allGames, hiddenOwned(profiles.activeProfile(current))),
   };
 }
 
@@ -749,7 +677,6 @@ const setSteamKey = (key) => {
   heroes = null;
   return changeSettings((current) => options.setSteamKey(current, key));
 };
-const findAutomatically = (id) => changeSettings((current) => options.clearEmulator(current, id));
 
 async function redownloadCovers() {
   const current = loadSettings(settingsFile());
@@ -759,30 +686,6 @@ async function redownloadCovers() {
   await (covers || makeCovers()).redownload();
   await (heroes || makeHeroes()).redownload();
   heroes = null;
-}
-
-async function launchEmulated(game) {
-  const emulator = CONSOLES[game.console].emulator;
-  const name = emulator ? EMULATORS[emulator].label : `The ${game.consoleName} emulator`;
-  const exe = emulatorExe(game);
-  if (!exe || !fs.existsSync(exe)) return { error: `${name} isn't set up.`, fix: 'settings', console: game.console };
-  if (!fs.existsSync(game.path)) return { error: "This game file can't be found.", fix: 'rescan' };
-  sendGame('loading', { id: game.id, title: game.title });
-  let outcome;
-  try {
-    const spec = launchSpec(game.console, exe, game.path, options.wantsFullscreen(settings));
-    const { child, exited } = playGame(spec);
-    outcome = await play(game, { kind: 'emulator', child, exited }, () => closeEmulator(child));
-  } catch (error) {
-    sendGame('failed');
-    outcome = { status: 'failed', error };
-  }
-  if (outcome.status === 'failed') {
-    log(`Could not start ${name} for ${game.consoleName}`, outcome.error);
-    return { error: `${name} couldn't be started.`, fix: 'settings', console: game.console };
-  }
-  if (outcome.status === 'ended') changeActive((profile) => profiles.recordPlay(profile, game.key));
-  return {};
 }
 
 async function launch(id) {
@@ -799,8 +702,7 @@ async function launch(id) {
     }
     return {};
   }
-  if (game.console === 'pc') return launchPc(game);
-  return launchEmulated(game);
+  return launchPc(game);
 }
 
 function handle(name, fn) {
@@ -870,9 +772,6 @@ app.whenReady().then(async () => {
     return text;
   });
   handle('getSetup', getSetup);
-  handle('pickExe', (id) => pickExe(String(id)));
-  handle('pickFolder', (id) => pickFolder(String(id)));
-  handle('clearFolder', (id) => clearFolder(String(id)));
   handle('finishSetup', (wantsCovers) => finishSetup(wantsCovers === true));
   handle('getSettings', getSettings);
   handle('setFullscreen', (on) => setFullscreen(on === true));
@@ -887,7 +786,6 @@ app.whenReady().then(async () => {
   handle('setCoverPicker', (mode) => setCoverPicker(String(mode)));
   handle('setHomeProfiles', (on) => setHomeProfiles(on === true));
   handle('setSteamKey', (key) => setSteamKey(key));
-  handle('findAutomatically', (id) => findAutomatically(String(id)));
   handle('redownloadCovers', redownloadCovers);
   handle('getProfiles', getProfiles);
   handle('getAvatars', getAvatars);
@@ -908,7 +806,6 @@ app.whenReady().then(async () => {
     const game = lookup(String(id));
     if (game) profiles.hideGame(profile, game.key);
   }));
-  handle('toggleConsole', (id) => { changeActive((profile) => profiles.toggleConsole(profile, String(id))); return getSettings(); });
   handle('setSort', (sort) => {
     changeActive((profile) => { if (profiles.SORTS.includes(sort)) profile.sort = sort; });
     return currentLibrary();
@@ -948,7 +845,17 @@ app.whenReady().then(async () => {
   handle('deleteShot', (id) => album().remove(String(id)));
   handle('learnScreenshotButton', learnScreenshotButton);
   handle('clearScreenshotButton', clearScreenshotButton);
-  handle('power', (action) => (action === 'close' ? app.quit() : app.isPackaged && powerAction(String(action))));
+  handle('getBoot', async () => ({ available: app.isPackaged, on: app.isPackaged && await shellMode.isShell(tinkExe()) }));
+  handle('setBoot', async (on) => {
+    if (!app.isPackaged) return { available: false, on: false };
+    await shellMode.setShell(tinkExe(), on === true);
+    return { available: true, on: await shellMode.isShell(tinkExe()) };
+  });
+  handle('power', async (action) => {
+    if (action !== 'close') return app.isPackaged && powerAction(String(action));
+    if (app.isPackaged && await shellMode.isShell(tinkExe())) spawn('explorer.exe', [], { detached: true, stdio: 'ignore' }).unref();
+    app.quit();
+  });
   ipcMain.handle('logError', (_event, text) => log('Screen error', String(text).slice(0, 2000)));
   createWindow();
 });

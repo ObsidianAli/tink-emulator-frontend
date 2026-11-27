@@ -4,30 +4,19 @@ const os = require('node:os');
 const path = require('node:path');
 const zlib = require('node:zlib');
 const { _electron: electron } = require('playwright');
+const { pcGames } = require('./pcseed');
 
 const outDir = path.resolve(process.argv[2] || path.join(__dirname, '..', 'out', 'e2e'));
 const WORDS = ['Star', 'Moon', 'Pixel', 'Deep', 'Castle', 'Sky', 'Quiet', 'Neon', 'Iron', 'Lost', 'Wild', 'Paper',
   'Garden', 'Knights', 'Racer', 'Forge', 'Woods', 'Drift', 'Coast', 'Tower', 'Harbor', 'Planet', 'River', 'Storm'];
 
+const TITLES = [
+  ...Array.from({ length: 60 }, (_, i) => `${WORDS[i % WORDS.length]} ${WORDS[(i * 7 + 3) % WORDS.length]} ${Math.floor(i / 24) + 1}`),
+  'Aardvark Game',
+];
+
 function makeLibrary(root) {
-  const counts = { ps2: 40, gamecube: 24, snes: 24, gba: 16, switch: 12, ps1: 12, nes: 12 };
-  const extensions = { ps2: '.iso', gamecube: '.rvz', snes: '.sfc', gba: '.gba', switch: '.nsp', ps1: '.chd', nes: '.nes' };
-  const consoles = {};
-  for (const [id, count] of Object.entries(counts)) {
-    const folder = path.join(root, id);
-    fs.mkdirSync(folder, { recursive: true });
-    for (let i = 0; i < count; i++) {
-      const name = `${WORDS[i % WORDS.length]} ${WORDS[(i * 7 + 3) % WORDS.length]} ${Math.floor(i / 24) + 1} (USA)`;
-      fs.writeFileSync(path.join(folder, name + extensions[id]), '');
-    }
-    consoles[id] = { folder };
-  }
-  const waiter = path.join(root, 'switch2');
-  fs.mkdirSync(waiter);
-  fs.writeFileSync(path.join(waiter, 'Waiting Game.js'), 'setTimeout(() => {}, 1500);\n');
-  fs.writeFileSync(path.join(waiter, 'Aardvark Game.js'), 'setTimeout(() => {}, 1500);\n');
-  consoles.switch2 = { folder: waiter, exe: process.execPath };
-  return { consoles, covers: false, profiles: [{ id: 'player', name: 'Player', hiddenConsoles: ['steam'] }] };
+  return { pcGames: pcGames(root, TITLES), covers: false, setupDone: true, profiles: [{ id: 'player', name: 'Player' }] };
 }
 
 function fakeCover(seed, width = 400, height = 560) {
@@ -72,11 +61,11 @@ function fakeCover(seed, width = 400, height = 560) {
   ]);
 }
 
-function seedCovers(userData, gamesRoot) {
-  const dir = path.join(userData, 'covers', 'gamecube');
+function seedCovers(userData) {
+  const dir = path.join(userData, 'covers', 'pc');
   fs.mkdirSync(dir, { recursive: true });
-  fs.readdirSync(path.join(gamesRoot, 'gamecube')).forEach((file, i) => {
-    fs.writeFileSync(path.join(dir, file.replace(/\.[^.]+$/, '') + '.png'), fakeCover(i));
+  TITLES.slice(0, 24).forEach((title, i) => {
+    fs.writeFileSync(path.join(dir, `${title}.png`), fakeCover(i));
   });
 }
 
@@ -141,7 +130,7 @@ async function main() {
   const userData = path.join(root, 'user');
   fs.mkdirSync(userData);
   fs.writeFileSync(path.join(userData, 'settings.json'), JSON.stringify(makeLibrary(path.join(root, 'games'))));
-  seedCovers(userData, path.join(root, 'games'));
+  seedCovers(userData);
   fs.mkdirSync(path.join(userData, 'avatars'));
   fs.writeFileSync(path.join(userData, 'avatars', 'sam.png'), fakeCover(3));
 
@@ -175,7 +164,6 @@ async function main() {
     return { x: box.x + box.width / 2, bottom: box.bottom };
   });
   const buttonSelected = () => page.$eval('#all-games', (el) => el.classList.contains('selected'));
-  const visibleWindow = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((w) => w.isVisible() && w.isFocusable()));
 
   await page.waitForSelector('#title:not(:empty)');
   assert.strictEqual(await title(), 'Aardvark Game', 'a profile that has played nothing sees games A to Z');
@@ -243,8 +231,7 @@ async function main() {
   assert.ok(await buttonSelected());
 
   await key('Enter');
-  const total = 40 + 24 + 24 + 16 + 12 + 12 + 12 + 2;
-  assert.strictEqual(await page.$$eval('#grid-list .tile', (tiles) => tiles.length), total, 'every game is in the grid');
+  assert.strictEqual(await page.$$eval('#grid-list .tile', (tiles) => tiles.length), TITLES.length, 'every game is in the grid');
   assert.strictEqual(await sortName(), 'A–Z');
   assert.strictEqual(await hints(), 'APlay YSort BBack');
   assert.strictEqual(await page.$eval('#shelf', (el) => getComputedStyle(el).visibility), 'hidden');
@@ -309,46 +296,17 @@ async function main() {
   await key('Escape');
   assert.strictEqual(await hints(), 'APlay YSort BBack');
 
-  while ((await gridTitle()) !== 'Waiting Game') await page.keyboard.press('ArrowRight');
-  await sleep(300);
-  await page.keyboard.press('Enter');
-  await page.waitForSelector('#loading:not([hidden])', { timeout: 2000 });
-  await page.waitForSelector('#loading-cover.shown canvas, #loading-cover.shown.plain', { timeout: 2000 });
-  assert.strictEqual(await page.textContent('#loading-hint'), 'Hold Select + Start to quit');
-  assert.strictEqual(await page.$eval('#shelf', (el) => getComputedStyle(el).visibility), 'hidden', 'only the loading screen shows');
-  await shot('loading');
-  const shown = await visibleWindow();
-  await page.waitForSelector('#loading', { state: 'hidden', timeout: 10000 });
-  await page.waitForFunction(() => !document.getElementById('blackout').classList.contains('black'), null, { timeout: 2000 });
-  console.log('play: window shown while running', shown, '/ back after exit', await visibleWindow());
-  assert.ok(await page.$('#grid:not([hidden])'), 'the grid is still open after a play');
-  assert.strictEqual(await gridTitle(), 'Waiting Game', 'the cursor stays on the played game');
-  assert.deepStrictEqual(readSettings().profiles[0].recent, ['switch2:Waiting Game.js']);
-
   await key('Escape');
   assert.strictEqual(await title(), 'All games');
   assert.ok(await buttonSelected());
-  for (let i = 0; i < 11; i++) await page.keyboard.press('ArrowLeft');
+  for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowLeft');
   await sleep(500);
   assert.strictEqual(await title(), 'Aardvark Game', 'the row has twelve games');
   await key('ArrowLeft');
-  assert.strictEqual(await title(), 'Waiting Game', 'the played game is at the front of the row');
-  await key('ArrowLeft');
-  assert.strictEqual(await title(), 'Waiting Game', 'nothing comes before it');
-  await shot('home-after-play');
-
-  await key('ArrowRight');
-  assert.strictEqual(await title(), 'Aardvark Game');
-  await page.keyboard.press('Enter');
-  await sleep(3000);
-  assert.strictEqual(await title(), 'Aardvark Game', 'the cursor stays on the played game');
-  await key('ArrowLeft');
-  assert.strictEqual(await title(), 'Aardvark Game', 'the played game leads the row at once');
-  await key('ArrowRight');
-  assert.strictEqual(await title(), 'Waiting Game');
+  assert.strictEqual(await title(), 'Aardvark Game', 'nothing comes before it');
+  await shot('home-first');
 
   const [first] = readSettings().profiles;
-  assert.deepStrictEqual(first.recent, ['switch2:Aardvark Game.js', 'switch2:Waiting Game.js']);
   assert.ok(first.name && first.id, 'old settings got a profile');
   await key('Tab');
   await page.waitForSelector('#profiles:not([hidden])');

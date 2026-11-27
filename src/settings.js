@@ -4,10 +4,10 @@ const path = require('node:path');
 function loadSettings(file) {
   try {
     const settings = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (settings && typeof settings.consoles === 'object' && settings.consoles) return settings;
+    if (settings && typeof settings === 'object' && !Array.isArray(settings)) return settings;
   } catch {
   }
-  return { consoles: {} };
+  return {};
 }
 
 // Writes a temp file first and renames it over the real one, so a crash never leaves half a file.

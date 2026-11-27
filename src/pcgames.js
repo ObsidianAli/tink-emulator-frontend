@@ -1,7 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
-const { EMULATORS } = require('./presets');
 
 const MAX_EXE_DEPTH = 3;
 const MAX_SHORTCUT_DEPTH = 3;
@@ -76,13 +75,7 @@ function isJunkExe(file) {
   return JUNK_PARTS.test(stem) || words(stem).some((word) => JUNK_WORDS.has(word)) || LAUNCHERS.test(stem) || APPS.test(stem);
 }
 
-function isEmulatorExe(file, exclude) {
-  const base = path.basename(file).toLowerCase();
-  const stem = base.replace(/\.exe$/i, '');
-  if (OTHER_EMULATORS.test(stem)) return true;
-  if (Object.values(EMULATORS).some((emulator) => emulator.exe.toLowerCase() === base)) return true;
-  return (exclude.exes || []).some((exe) => exe && (lower(exe) === lower(file) || inside(path.dirname(exe), file)));
-}
+const isEmulatorExe = (file) => OTHER_EMULATORS.test(path.basename(file).replace(/\.exe$/i, ''));
 
 function cleanPcTitle(raw) {
   let name = String(raw || '').replace(/\.(exe|lnk)$/i, '');
@@ -138,8 +131,8 @@ function exesIn(folder, depth = 0) {
 const squash = (text) => text.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 // Better to skip a game than to start the wrong program, so an unclear folder gives nothing.
-function pickExe(folder, title, exclude) {
-  const candidates = exesIn(folder).filter((hit) => !isJunkExe(hit.file) && !isEmulatorExe(hit.file, exclude));
+function pickExe(folder, title) {
+  const candidates = exesIn(folder).filter((hit) => !isJunkExe(hit.file) && !isEmulatorExe(hit.file));
   if (!candidates.length) return null;
   const want = squash(title);
   const named = candidates.filter((hit) => {
@@ -195,7 +188,7 @@ function gameRoots(env, drives) {
   return [...roots];
 }
 
-function fromRoots(roots, exclude) {
+function fromRoots(roots) {
   const found = [];
   for (const root of roots) {
     for (const entry of readDir(root)) {
@@ -204,12 +197,12 @@ function fromRoots(roots, exclude) {
       if (ROOT_NAME.test(entry.name) && roots.some((other) => lower(other) === lower(folder))) continue;
       const gog = fromGogInfo(folder);
       if (gog) {
-        if (!gog.dlc && isFile(gog.exe) && !isJunkExe(gog.exe) && !isEmulatorExe(gog.exe, exclude)) found.push({ title: gog.title, exe: gog.exe, folder, source: 'gog' });
+        if (!gog.dlc && isFile(gog.exe) && !isJunkExe(gog.exe) && !isEmulatorExe(gog.exe)) found.push({ title: gog.title, exe: gog.exe, folder, source: 'gog' });
         continue;
       }
       const title = cleanPcTitle(entry.name);
       if (JUNK_TITLE.test(title)) continue;
-      const pick = pickExe(folder, title, exclude);
+      const pick = pickExe(folder, title);
       // An exe that doesn't match the folder's name needs other signs of a game, or a ROM folder with a checksum tool would count.
       if (pick && (pick.named || looksLikeAGame(path.dirname(pick.file)) || looksLikeAGame(folder))) found.push({ title, exe: pick.file, folder, source: 'folder' });
     }
@@ -217,7 +210,7 @@ function fromRoots(roots, exclude) {
   return found;
 }
 
-function fromEpic(env, exclude) {
+function fromEpic(env) {
   const dir = path.join(env.ProgramData || 'C:\\ProgramData', 'Epic', 'EpicGamesLauncher', 'Data', 'Manifests');
   const found = [];
   for (const entry of readDir(dir)) {
@@ -228,7 +221,7 @@ function fromEpic(env, exclude) {
     if (item.MainGameAppName && item.AppName && item.MainGameAppName !== item.AppName) continue;
     if (item.LaunchCommand && String(item.LaunchCommand).trim()) continue;
     const exe = path.join(item.InstallLocation, item.LaunchExecutable);
-    if (!/\.exe$/i.test(exe) || !isFile(exe) || LAUNCHERS.test(path.basename(exe, '.exe')) || isEmulatorExe(exe, exclude)) continue;
+    if (!/\.exe$/i.test(exe) || !isFile(exe) || LAUNCHERS.test(path.basename(exe, '.exe')) || isEmulatorExe(exe)) continue;
     found.push({ title: String(item.DisplayName), exe, folder: item.InstallLocation, source: 'epic' });
   }
   return found;
@@ -252,12 +245,12 @@ function parseRegistryKeys(text) {
   return keys;
 }
 
-function fromGogRegistry(text, exclude) {
+function fromGogRegistry(text) {
   const found = [];
   for (const { values } of parseRegistryKeys(text)) {
     if (!values.gameName || !values.exe || values.dependsOn || values.launchParam) continue;
     const exe = values.exe;
-    if (!/\.exe$/i.test(exe) || !isFile(exe) || isJunkExe(exe) || isEmulatorExe(exe, exclude)) continue;
+    if (!/\.exe$/i.test(exe) || !isFile(exe) || isJunkExe(exe) || isEmulatorExe(exe)) continue;
     found.push({ title: values.gameName, exe, folder: values.path || path.dirname(exe), source: 'gog' });
   }
   return found;
@@ -290,7 +283,7 @@ function looksLikeAGame(folder) {
 const JUNK_TITLE = /\b(launcher|installer|setup files|redist\w*|tools?|sdk|season|bluray|1080p|720p|2160p|x26[45])\b/i;
 const SHORTCUT_JUNK = /\b(uninstall|readme|manual|website|support|help|soundtrack|editor|configur\w*|settings|launcher|server|tools?|benchmark|workshop|mod ?kit|dedicated|artbook|wallpapers?)\b/i;
 
-function fromShortcuts(env, readShortcut, roots, exclude) {
+function fromShortcuts(env, readShortcut, roots) {
   const found = [];
   const seen = new Set();
   for (const dir of shortcutDirs(env)) {
@@ -304,7 +297,7 @@ function fromShortcuts(env, readShortcut, roots, exclude) {
       const exe = link && link.target;
       if (!exe || !/\.exe$/i.test(exe) || (link.args && String(link.args).trim()) || seen.has(lower(exe))) continue;
       const name = path.basename(file, '.lnk');
-      if (SHORTCUT_JUNK.test(name) || isJunkExe(exe) || isEmulatorExe(exe, exclude) || /steamapps/i.test(exe) || /^[a-z]:\\windows\\/i.test(exe)) continue;
+      if (SHORTCUT_JUNK.test(name) || isJunkExe(exe) || isEmulatorExe(exe) || /steamapps/i.test(exe) || /^[a-z]:\\windows\\/i.test(exe)) continue;
       if (!isFile(exe)) continue;
       const known = roots.some((root) => inside(root, exe));
       const { folder } = gameFolder(exe);
@@ -338,13 +331,13 @@ function merge(entries) {
   return kept.sort((a, b) => a.title.localeCompare(b.title, 'en', { numeric: true }));
 }
 
-async function findPcGames({ env = process.env, drives = fixedDrives(), readShortcut = () => null, readRegistry = readRegistryTree, exclude = {} } = {}) {
+async function findPcGames({ env = process.env, drives = fixedDrives(), readShortcut = () => null, readRegistry = readRegistryTree } = {}) {
   const roots = gameRoots(env, drives);
-  const gog = fromGogRegistry(await readRegistry(GOG_KEY).catch(() => ''), exclude);
-  const epic = fromEpic(env, exclude);
-  const folders = fromRoots(roots, exclude);
+  const gog = fromGogRegistry(await readRegistry(GOG_KEY).catch(() => ''));
+  const epic = fromEpic(env);
+  const folders = fromRoots(roots);
   const known = [...roots, ...epic.map((game) => game.folder), ...gog.map((game) => game.folder)];
-  const shortcuts = fromShortcuts(env, readShortcut, known, exclude);
+  const shortcuts = fromShortcuts(env, readShortcut, known);
   return merge([...epic, ...gog, ...shortcuts, ...folders]).map(({ title, exe, folder, source }) => ({ title, exe, folder, source }));
 }
 

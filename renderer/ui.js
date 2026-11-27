@@ -413,7 +413,7 @@ async function openGameMenu() {
     if (choice === 'hide') await changeGame(window.tink.hideGame, game);
     else if (choice === 'remove') await changeGame(window.tink.removePcGame, game);
     else if (marked) await showChanges();
-    if (choice === 'settings') await goToSettings(null, 'covers');
+    if (choice === 'settings') await goToSettings('covers');
   } finally {
     inMenu = false;
     showHints();
@@ -510,11 +510,8 @@ async function play() {
   }
 }
 
-async function explain({ error, fix, console }) {
-  if (fix === 'settings') {
-    const ok = await showDialog({ message: error, confirm: 'Open Settings', cancel: 'Not now' });
-    if (ok) await goToSettings(console);
-  } else if (fix === 'rescan') {
+async function explain({ error, fix }) {
+  if (fix === 'rescan') {
     const ok = await showDialog({ message: error, confirm: 'Rescan', cancel: 'Not now' });
     if (ok) await loadLibrary();
   } else {
@@ -554,11 +551,11 @@ async function goToNews() {
   }
 }
 
-async function goToSettings(focusConsole, focusCategory) {
+async function goToSettings(focusCategory) {
   if (inSettings) return;
   inSettings = true;
   try {
-    const changed = await openSettings({ focusConsole, focusCategory });
+    const changed = await openSettings({ focusCategory });
     const shown = await window.tink.getSettings();
     shelf.setFocusStyle(shown.focusStyle);
     await screen(async () => {
@@ -838,7 +835,7 @@ function offerUpdate() {
 
 async function start() {
   const setup = await window.tink.getSetup();
-  if (setup.needed) await runSetup(setup);
+  if (setup.needed) await runSetup();
   inPicker = true;
   playSound('startup');
   try {

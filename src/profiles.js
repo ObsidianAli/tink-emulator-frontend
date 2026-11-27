@@ -25,7 +25,6 @@ function normalise(profile) {
     avatar,
     recent,
     favourites: strings(profile.favourites),
-    hiddenConsoles: strings(profile.hiddenConsoles),
     hiddenGames: strings(profile.hiddenGames),
     playedAt: times(profile.playedAt, recent),
     sort: SORTS.includes(profile.sort) ? profile.sort : SORTS[0],
@@ -88,23 +87,13 @@ function showGame(profile, key) {
   profile.hiddenGames = profile.hiddenGames.filter((k) => k !== key);
 }
 
-function toggleConsole(profile, id) {
-  const hidden = profile.hiddenConsoles.includes(id);
-  profile.hiddenConsoles = hidden ? profile.hiddenConsoles.filter((c) => c !== id) : [...profile.hiddenConsoles, id];
-}
-
 function sortByHistory(games, recent) {
   const rank = new Map(recent.map((key, index) => [key, index]));
   const played = games.filter((game) => rank.has(game.key)).sort((a, b) => rank.get(a.key) - rank.get(b.key));
   return [...played, ...games.filter((game) => !rank.has(game.key))];
 }
 
-function visibleGames(consoles, profile) {
-  return consoles
-    .filter((item) => !profile.hiddenConsoles.includes(item.console))
-    .flatMap((item) => item.games)
-    .filter((game) => !profile.hiddenGames.includes(game.key));
-}
+const visibleGames = (games, profile) => games.filter((game) => !profile.hiddenGames.includes(game.key));
 
 const byTitle = (a, b) => a.title.localeCompare(b.title, 'en', { numeric: true });
 
@@ -121,12 +110,11 @@ function sortGames(games, sort, profile, seen = {}) {
 
 const homeRow = (games, profile, seen = {}) => sortByRecency(games, profile, seen).slice(0, ROW_MAX);
 
-function settingsView(profile, consoles, hiddenOwned = []) {
+function settingsView(profile, games, hiddenOwned = []) {
   return {
-    consoleList: consoles.map((item) => ({ id: item.console, name: item.name, hidden: profile.hiddenConsoles.includes(item.console) })),
     hiddenGames: profile.hiddenGames.length,
-    hiddenList: consoles
-      .flatMap((item) => item.games.map((game) => ({ key: game.key, title: game.title, consoleName: item.name })))
+    hiddenList: games
+      .map((game) => ({ key: game.key, title: game.title, consoleName: game.consoleName }))
       .concat(hiddenOwned.map((game) => ({ key: `steam:${game.appId}`, title: game.title, consoleName: 'Steam' })))
       .filter((game) => profile.hiddenGames.includes(game.key))
       .sort((a, b) => a.title.localeCompare(b.title, 'en', { numeric: true })),
@@ -135,5 +123,5 @@ function settingsView(profile, consoles, hiddenOwned = []) {
 
 module.exports = {
   COLOURS, RECENT_MAX, PROFILES_MAX, SORTS, ROW_MAX, ensureProfiles, activeProfile, addProfile, editProfile, removeProfile, recordPlay, toggleFavourite,
-  hideGame, showGame, showAllGames, toggleConsole, visibleGames, sortGames, homeRow, sortByHistory, settingsView,
+  hideGame, showGame, showAllGames, visibleGames, sortGames, homeRow, sortByHistory, settingsView,
 };

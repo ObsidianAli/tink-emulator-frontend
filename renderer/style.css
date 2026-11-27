@@ -575,11 +575,11 @@ main.tray-focused #tray-label {
   mask-composite: exclude;
 }
 
-:is(.profile, .setup-row, .setup-next, .settings-category, .dialog button):focus {
+:is(.profile, .setup-row, .settings-category, .dialog button):focus {
   outline: none;
 }
 
-:is(.tray-icon, .home-badge, .profile-option, .profile, .setup-row, .setup-next, .settings-category, .dialog button, .news-item, .album-shot):focus .focus-glow,
+:is(.tray-icon, .home-badge, .profile-option, .profile, .setup-row, .settings-category, .dialog button, .news-item, .album-shot):focus .focus-glow,
 :is(.tile, .store-tile).focused .focus-glow,
 .info-shot.current .focus-glow,
 .setup-row:focus-within .focus-glow,
@@ -932,8 +932,7 @@ body:has(main > #covers:not([hidden])) .backdrop-blob {
   scrollbar-width: none;
 }
 
-.setup-row,
-.setup-next {
+.setup-row {
   position: relative;
   display: flex;
   align-items: center;
@@ -954,19 +953,9 @@ body:has(main > #covers:not([hidden])) .backdrop-blob {
   margin-top: var(--space);
 }
 
-.setup-row:focus,
-.setup-next:focus {
+.setup-row:focus {
   background: var(--text);
   color: var(--on-light);
-}
-
-.setup-next {
-  flex: none;
-  justify-content: center;
-  width: auto;
-  align-self: flex-end;
-  min-width: var(--button-min-width);
-  font-weight: var(--weight-bold);
 }
 
 .setup-name {
@@ -975,13 +964,6 @@ body:has(main > #covers:not([hidden])) .backdrop-blob {
   gap: var(--space-2);
   min-width: 0;
   white-space: nowrap;
-}
-
-.setup-sub {
-  overflow: hidden;
-  font-size: var(--text-small);
-  opacity: 0.6;
-  text-overflow: ellipsis;
 }
 
 .setup-status {

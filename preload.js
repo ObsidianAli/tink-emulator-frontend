@@ -1,10 +1,9 @@
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
 contextBridge.exposeInMainWorld('tink', {
-  getSetup: () => ipcRenderer.invoke('getSetup'),
-  pickExe: (id) => ipcRenderer.invoke('pickExe', id),
-  pickFolder: (id) => ipcRenderer.invoke('pickFolder', id),
-  clearFolder: (id) => ipcRenderer.invoke('clearFolder', id),
+  getBoot: () => ipcRenderer.invoke('getBoot'),
+  setBoot: (on) => ipcRenderer.invoke('setBoot', on),
+  getSetup:() => ipcRenderer.invoke('getSetup'),
   finishSetup: (covers) => ipcRenderer.invoke('finishSetup', covers),
   getSettings: () => ipcRenderer.invoke('getSettings'),
   setFullscreen: (on) => ipcRenderer.invoke('setFullscreen', on),
@@ -19,7 +18,6 @@ contextBridge.exposeInMainWorld('tink', {
   setSounds: (picked) => ipcRenderer.invoke('setSounds', picked),
   setHomeProfiles: (on) => ipcRenderer.invoke('setHomeProfiles', on),
   setSteamKey: (key) => ipcRenderer.invoke('setSteamKey', key),
-  findAutomatically: (id) => ipcRenderer.invoke('findAutomatically', id),
   redownloadCovers: () => ipcRenderer.invoke('redownloadCovers'),
   logError: (text) => ipcRenderer.invoke('logError', text),
   getProfiles: () => ipcRenderer.invoke('getProfiles'),
@@ -30,7 +28,6 @@ contextBridge.exposeInMainWorld('tink', {
   removeProfile: (id) => ipcRenderer.invoke('removeProfile', id),
   toggleFavourite: (id) => ipcRenderer.invoke('toggleFavourite', id),
   hideGame: (id) => ipcRenderer.invoke('hideGame', id),
-  toggleConsole: (id) => ipcRenderer.invoke('toggleConsole', id),
   setSort: (sort) => ipcRenderer.invoke('setSort', sort),
   showGame: (key) => ipcRenderer.invoke('showGame', key),
   showHiddenGames: () => ipcRenderer.invoke('showHiddenGames'),

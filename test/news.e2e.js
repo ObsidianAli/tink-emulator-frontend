@@ -3,6 +3,7 @@ const os = require('node:os');
 const path = require('node:path');
 const assert = require('node:assert');
 const { _electron: electron } = require('playwright');
+const { pcGames } = require('./pcseed');
 
 const outDir = path.resolve(process.argv[2] || path.join(__dirname, '..', 'out', 'news'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -13,12 +14,9 @@ async function main() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tink-news-e2e-'));
   const data = path.join(root, 'data');
   const empty = path.join(root, 'empty');
-  const games = path.join(root, 'games', 'GameCube');
   fs.mkdirSync(path.join(data, 'news'), { recursive: true });
   fs.mkdirSync(empty);
-  fs.mkdirSync(games, { recursive: true });
-  fs.writeFileSync(path.join(games, 'Wind Waker (USA).rvz'), '');
-  fs.writeFileSync(path.join(data, 'settings.json'), JSON.stringify({ consoles: { gamecube: { folder: games } }, setupDone: true }));
+  fs.writeFileSync(path.join(data, 'settings.json'), JSON.stringify({ pcGames: pcGames(root, ['Wind Waker']), setupDone: true }));
   const now = Date.now();
   const items = ['0.8.0', '0.7.0', '0.6.1', '0.6.0', '0.5.0', '0.4.1', '0.4.0'].map((version, i) => ({
     id: `tink:${version}`, kind: 'tink', title: `Tink ${version}`, game: '', date: now - i * 3 * 86400000, text: TEXT, image: null,

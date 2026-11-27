@@ -3,20 +3,18 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { _electron: electron } = require('playwright');
+const { pcGames } = require('./pcseed');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tink-home-e2e-'));
   const data = path.join(root, 'data');
-  const folder = path.join(root, 'snes');
   fs.mkdirSync(data);
-  fs.mkdirSync(folder);
-  for (const name of ['Star Moon', 'Pixel Deep']) fs.writeFileSync(path.join(folder, `${name} (USA).sfc`), '');
   const file = path.join(data, 'settings.json');
   fs.writeFileSync(file, JSON.stringify({
     setupDone: true,
-    consoles: { snes: { folder } },
+    pcGames: pcGames(root, ['Star Moon', 'Pixel Deep']),
     profiles: [
       { id: 'p1', name: 'Ali', colour: 'blue' },
       { id: 'p2', name: 'Sam', colour: 'green' },

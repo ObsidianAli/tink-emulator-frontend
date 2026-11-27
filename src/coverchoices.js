@@ -1,11 +1,10 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
-const { CONSOLES, coverColour } = require('./presets');
-const { download, griddbJson, libretroUrl, nameVariants, limiter, Rejected, PARALLEL, TIMEOUT_MS } = require('./covers');
+const { coverColour } = require('./kinds');
+const { download, griddbJson, limiter, Rejected, PARALLEL, TIMEOUT_MS } = require('./covers');
 
 const MAX_CHOICES = 24;
 const MAX_MATCHES = 3;
-const REGIONS = ['USA', 'Europe', 'Japan'];
 const GRIDS = '?dimensions=600x900&types=static';
 
 const hash = (data) => crypto.createHash('sha1').update(data).digest('hex');
@@ -55,14 +54,7 @@ function openChoices({ game, covers, steamGridKey, fetch: fetchFn = globalThis.f
   const fetchImage = (url) => ask(() => download(fetchFn, url, timeoutMs));
   const gridDb = (route) => ask(() => griddbJson(fetchFn, steamGridKey, route, timeoutMs));
 
-  function directUrls() {
-    if (game.art) return [game.art.cover, game.art.fallback];
-    const system = CONSOLES[game.console] && CONSOLES[game.console].libretro;
-    if (!system) return [];
-    const names = nameVariants(game.fileName);
-    const bare = names[names.length - 1];
-    return [...names, ...REGIONS.map((region) => `${bare} (${region})`)].map((name) => libretroUrl(system, name));
-  }
+  const directUrls = () => (game.art ? [game.art.cover, game.art.fallback] : []);
 
   async function gridRoutes() {
     if (game.art) return [`/grids/steam/${encodeURIComponent(game.fileName)}`];

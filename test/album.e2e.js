@@ -3,6 +3,7 @@ const os = require('node:os');
 const path = require('node:path');
 const assert = require('node:assert');
 const { _electron: electron } = require('playwright');
+const { pcGames } = require('./pcseed');
 
 const outDir = path.resolve(process.argv[2] || path.join(__dirname, '..', 'out', 'album'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -13,12 +14,9 @@ async function main() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tink-album-e2e-'));
   const data = path.join(root, 'data');
   const empty = path.join(root, 'empty');
-  const games = path.join(root, 'games', 'GameCube');
   fs.mkdirSync(data, { recursive: true });
   fs.mkdirSync(empty);
-  fs.mkdirSync(games, { recursive: true });
-  fs.writeFileSync(path.join(games, 'Wind Waker (USA).rvz'), '');
-  fs.writeFileSync(path.join(data, 'settings.json'), JSON.stringify({ consoles: { gamecube: { folder: games } }, setupDone: true }));
+  fs.writeFileSync(path.join(data, 'settings.json'), JSON.stringify({ pcGames: pcGames(root, ['Wind Waker']), setupDone: true }));
 
   const app = await electron.launch({
     args: [path.join(__dirname, '..'), `--user-data-dir=${path.join(root, 'user')}`],

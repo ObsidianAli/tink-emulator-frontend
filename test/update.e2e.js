@@ -33,7 +33,7 @@ async function main() {
   const app = path.join(root, 'Tink');
   const data = path.join(app, 'data');
   fs.mkdirSync(path.join(data, 'covers'), { recursive: true });
-  fs.writeFileSync(path.join(data, 'settings.json'), JSON.stringify({ consoles: {}, setupDone: true }));
+  fs.writeFileSync(path.join(data, 'settings.json'), JSON.stringify({ setupDone: true }));
   fs.writeFileSync(path.join(data, 'covers', 'keep.txt'), 'cover');
   const settingsBefore = fs.readFileSync(path.join(data, 'settings.json'), 'utf8');
 
