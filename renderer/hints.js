@@ -9,7 +9,7 @@ function setHints(hints) {
     const glyphs = [].concat(button).map((name) => {
       const glyph = document.createElement('span');
       glyph.className = 'glyph';
-      glyph.textContent = name.toUpperCase();
+      glyph.textContent = name === 'hide' ? 'R3' : name.toUpperCase();
       return glyph;
     });
     hint.append(...glyphs, label);

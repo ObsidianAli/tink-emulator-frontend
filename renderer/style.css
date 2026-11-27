@@ -2,6 +2,10 @@ html, body {
   height: 100%;
 }
 
+body:not(.mouse-active), body:not(.mouse-active) * {
+  cursor: none;
+}
+
 body {
   display: flex;
   flex-direction: column;
