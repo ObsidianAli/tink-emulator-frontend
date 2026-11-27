@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 const { addPcGame, removePcGame, rememberRealExe, getAddedGames, pcMatcher } = require('../src/pcadded');
+const { groupConsoles } = require('../src/library');
 const { startSession } = require('../src/session');
 
 const here = (...parts) => path.join(path.parse(process.cwd()).root, ...parts);
@@ -9,17 +10,19 @@ const GAME = here('Games', 'Hollow Quest');
 const EXE = path.join(GAME, 'Start.exe');
 const exists = () => true;
 
-test('an added game gets a clean title and a library entry as a PC game', () => {
-  const settings = {};
+test('an added game gets a clean title and a library entry on the PC console', () => {
+  const settings = { consoles: {} };
   const { id } = addPcGame(settings, { exe: path.join(GAME, 'Hollow_Quest.exe') }, { isFile: exists });
   const [game] = getAddedGames(settings);
   assert.strictEqual(game.id, `pc:${id}`);
   assert.deepStrictEqual([game.console, game.consoleName, game.title, game.installDir], ['pc', 'PC', 'Hollow Quest', GAME]);
   assert.strictEqual(game.fileName, 'Hollow Quest');
+  const groups = groupConsoles([{ ...game }, { id: 'x', console: 'steam', consoleName: 'Steam', title: 'A' }]);
+  assert.deepStrictEqual(groups.map((g) => g.console), ['steam', 'pc']);
 });
 
 test('adding the same exe twice keeps one entry, and a given title is cleaned', () => {
-  const settings = {};
+  const settings = { consoles: {} };
   const first = addPcGame(settings, { exe: EXE, title: 'Hollow_Quest [Repack]' }, { isFile: exists });
   const second = addPcGame(settings, { exe: EXE.toUpperCase(), title: 'Other' }, { isFile: exists });
   assert.strictEqual(first.id, second.id);
@@ -28,7 +31,7 @@ test('adding the same exe twice keeps one entry, and a given title is cleaned', 
 });
 
 test('bad input is refused and nothing is saved', () => {
-  const settings = {};
+  const settings = { consoles: {} };
   for (const exe of [undefined, 5, '', 'relative.exe', here('x', 'readme.txt'), `${here('x')}\0.exe`, 'a'.repeat(2000)]) {
     assert.ok(addPcGame(settings, { exe }, { isFile: exists }).error, String(exe));
   }
@@ -37,7 +40,7 @@ test('bad input is refused and nothing is saved', () => {
 });
 
 test('removing takes the library id or the bare id and ignores anything else', () => {
-  const settings = {};
+  const settings = { consoles: {} };
   const { id } = addPcGame(settings, { exe: EXE }, { isFile: exists });
   assert.strictEqual(removePcGame(settings, '../x'), false);
   assert.strictEqual(removePcGame(settings, 'pc:ffffffffff'), false);
@@ -46,7 +49,7 @@ test('removing takes the library id or the bare id and ignores anything else', (
 });
 
 test('the real exe is only remembered when it belongs to the game', () => {
-  const settings = {};
+  const settings = { consoles: {} };
   const { id } = addPcGame(settings, { exe: EXE }, { isFile: exists });
   assert.strictEqual(rememberRealExe(settings, id, here('Elsewhere', 'evil.exe')), false);
   assert.strictEqual(rememberRealExe(settings, id, EXE), false);
@@ -192,7 +195,7 @@ test('an added game looks its cover up on SteamGridDB by name', async () => {
   };
   const covers = createCovers({ dir, enabled: true, steamGridKey: 'k', fetch });
   const [game] = (() => {
-    const settings = {};
+    const settings = { consoles: {} };
     addPcGame(settings, { exe: EXE, title: 'Hollow Quest' }, { isFile: exists });
     return getAddedGames(settings);
   })();

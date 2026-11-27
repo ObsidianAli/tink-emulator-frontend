@@ -1,10 +1,39 @@
 const test = require('node:test');
 const { mock } = require('node:test');
 const assert = require('node:assert');
-const { playGame } = require('../src/launcher');
+const { spawn } = require('node:child_process');
+const path = require('node:path');
+const { closeEmulator, playGame } = require('../src/launcher');
 const { watchCombo, holdTimer, loadPadReader, comboDown } = require('../src/pad');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const stub = (mode) => spawn(process.execPath, [path.join(__dirname, 'stub-emulator-stubborn.js'), mode], { stdio: ['pipe', 'ignore', 'ignore'] });
+const started = (child) => new Promise((resolve) => child.once('spawn', resolve));
+
+test('an emulator that closes when asked is never forced', async () => {
+  const child = stub('polite');
+  await started(child);
+  let forced = false;
+  await closeEmulator(child, { waitMs: 2000, ask: (c) => c.stdin.end(), force: () => { forced = true; } });
+  assert.strictEqual(forced, false);
+});
+
+test('an emulator that ignores the polite close is forced after the wait', async () => {
+  const child = stub('stubborn');
+  await started(child);
+  const begun = Date.now();
+  await closeEmulator(child, { waitMs: 500 });
+  assert.ok(Date.now() - begun >= 500, 'waited before forcing');
+  assert.ok(child.exitCode !== null || child.signalCode !== null, 'it exited');
+});
+
+test('closing an emulator that already exited does nothing', async () => {
+  const child = stub('polite');
+  await started(child);
+  child.stdin.end();
+  await new Promise((resolve) => child.once('exit', resolve));
+  await closeEmulator(child, { ask: () => assert.fail('asked'), force: () => assert.fail('forced') });
+});
 
 // Mocked timers only fire timeouts set inside a tick correctly when time moves in small steps.
 function advance(t, ms) {
@@ -114,11 +143,11 @@ test('the real XInput loads through koffi', { skip: process.platform !== 'win32'
 });
 
 test('holding the combo closes the game', async () => {
-  const spec = { exe: process.execPath, args: ['-e', 'setInterval(() => {}, 1000)'] };
+  const spec = { exe: process.execPath, args: [path.join(__dirname, 'stub-emulator-stubborn.js'), 'stubborn'] };
   const pad = fakePad();
   pad.held = true;
   const { child, exited } = playGame(spec);
-  const stop = watchCombo(() => child.kill(), { read: pad.read, holdMs: 100 });
+  const stop = watchCombo(() => closeEmulator(child, { waitMs: 300 }), { read: pad.read, holdMs: 100 });
   await exited;
   stop();
   const reads = pad.reads;

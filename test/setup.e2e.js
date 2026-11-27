@@ -24,7 +24,15 @@ async function launch(root, userData) {
   const page = await app.firstWindow();
   page.errors = [];
   page.on('pageerror', (error) => page.errors.push(error.message));
-  return { app, page };
+  await app.evaluate(({ dialog }) => {
+    dialog.showOpenDialog = async () => {
+      const next = globalThis.nextPick;
+      globalThis.nextPick = null;
+      return next ? { canceled: false, filePaths: [next] } : { canceled: true, filePaths: [] };
+    };
+  });
+  const pick = (file) => app.evaluate((_electron, value) => { globalThis.nextPick = value; }, file);
+  return { app, page, pick };
 }
 
 async function main() {
@@ -32,8 +40,22 @@ async function main() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tink-setup-e2e-'));
   const userData = path.join(root, 'user');
   fs.mkdirSync(path.join(root, 'tink'), { recursive: true });
+  for (const exe of ['Dolphin.exe', 'Cemu.exe', 'pcsx2-qt.exe']) fs.writeFileSync(path.join(root, 'tink', exe), '');
+  const eden = path.join(root, 'picked', 'eden.exe');
+  const stub = path.join(root, 'picked', 'ps5.exe');
+  fs.mkdirSync(path.dirname(eden), { recursive: true });
+  fs.writeFileSync(eden, '');
+  fs.writeFileSync(stub, '');
+  const notExe = path.join(root, 'picked', 'notes.txt');
+  fs.writeFileSync(notExe, '');
+  const gamecube = path.join(root, 'games', 'GameCube');
+  const snes = path.join(root, 'games', 'SNES');
+  fs.mkdirSync(gamecube, { recursive: true });
+  fs.mkdirSync(snes, { recursive: true });
+  for (const name of ['Wind Waker (USA).rvz', 'Luigis Mansion (USA).rvz']) fs.writeFileSync(path.join(gamecube, name), '');
+  fs.writeFileSync(path.join(snes, 'Super Metroid (USA).sfc'), '');
 
-  let { app, page } = await launch(root, userData);
+  let { app, page, pick } = await launch(root, userData);
   const shot = async (name) => {
     await sleep(500);
     await page.screenshot({ path: path.join(outDir, `${name}.png`) });
@@ -45,46 +67,90 @@ async function main() {
   const focused = () => page.evaluate(() => document.activeElement.textContent);
   const title = () => page.textContent('#setup h1');
   const hints = () => page.$$eval('#hints .hint', (els) => els.map((el) => el.textContent).join(' '));
-  const saved = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8'));
+  const down = async (times) => { for (let i = 0; i < times; i++) await key('ArrowDown'); };
 
   await page.waitForSelector('#setup h1');
-  assert.strictEqual(await title(), 'Covers', 'first run goes straight to Covers');
-  assert.strictEqual(await focused(), 'Download');
   console.log('screen 1:', await title(), '| focus:', await focused(), '| hints:', await hints());
-  await shot('1-covers');
+  await shot('1-emulators-found-and-missing');
+
+  await down(2);
+  await pick(notExe);
+  await key('Enter');
+  await shot('1-not-a-program');
+  assert.ok(await page.$('.dialog'), 'a friendly message shows for a non-exe');
+  await key('Enter');
+  await pick(eden);
+  await key('Enter');
+  console.log('after picking Eden:', (await page.textContent('.setup-row:nth-child(3)')));
+  await shot('1-eden-picked');
+
+  await down(5);
+  await pick(stub);
+  await key('Enter');
+  await shot('1-switch2-picked');
+  await down(2);
+  console.log('focus on Next:', await focused(), '| hints:', await hints());
+  await shot('1-next-focused');
+  await key('Enter');
+
+  console.log('screen 2:', await title(), '| hints:', await hints());
+  await shot('2-folders-empty');
+  await pick(gamecube);
+  await key('Enter');
+  await down(10);
+  await pick(snes);
+  await key('Enter');
+  console.log('hints on a Console with a folder:', await hints());
+  await shot('2-folders-picked');
+  await key(' ');
+  assert.ok(!(await page.textContent('.setup-row:nth-child(11)')).includes(snes), 'X clears the folder');
+  await pick(snes);
+  await key('Enter');
+
+  await key('Escape');
+  console.log('back on:', await title());
+  await down(20);
+  await key('Enter');
+  await down(30);
+  await key('Enter');
+  console.log('screen 3:', await title(), '| focus:', await focused(), '| hints:', await hints());
+  await shot('3-covers');
   await key('ArrowDown');
-  assert.strictEqual(await focused(), 'Skip');
-  await shot('1-covers-skip');
+  await shot('3-covers-not-now');
   await key('ArrowUp');
 
+  const saved = () => JSON.parse(fs.readFileSync(path.join(userData, 'settings.json'), 'utf8'));
+  assert.strictEqual(saved().setupDone, false, 'half-way settings are marked unfinished');
   await key('Enter');
-  await page.waitForSelector('#title:not(:empty), #message:not([hidden])');
+  await page.waitForSelector('#title:not(:empty)');
   await shot('home-after-setup');
-  const done = saved(userData);
+  const done = saved();
   console.log('saved settings:', JSON.stringify(done));
   assert.strictEqual(done.setupDone, true);
   assert.strictEqual(done.covers, true);
+  assert.strictEqual(done.consoles.gamecube.folder, gamecube);
+  assert.strictEqual(done.emulators.eden, eden);
   assert.ok(!fs.existsSync(path.join(userData, 'settings.json.tmp')));
   console.log('errors:', page.errors.length ? page.errors : 'none');
   await app.close();
 
   ({ app, page } = await launch(root, userData));
-  await page.waitForSelector('#profiles .profile, #title:not(:empty)');
+  await page.waitForSelector('#title:not(:empty)');
   assert.strictEqual(await page.$('#setup:not([hidden])'), null, 'setup is gone on the next start');
   console.log('second start: home opens without setup');
   await app.close();
 
   const oldUser = path.join(root, 'old-user');
   fs.mkdirSync(oldUser);
-  fs.writeFileSync(path.join(oldUser, 'settings.json'), JSON.stringify({ consoles: { snes: { folder: 'D:\\SNES' } }, emulators: {}, setupDone: true }));
+  fs.writeFileSync(path.join(oldUser, 'settings.json'), JSON.stringify({ consoles: { snes: { folder: snes } } }));
   ({ app, page } = await launch(root, oldUser));
-  await page.waitForSelector('#profiles .profile, #title:not(:empty)');
+  await page.waitForSelector('#title:not(:empty)');
   assert.strictEqual(await page.$('#setup:not([hidden])'), null);
-  console.log('old console and emulator keys are ignored');
+  console.log('existing settings: home opens without setup');
   await app.close();
 
   const padUser = path.join(root, 'pad-user');
-  ({ app, page } = await launch(root, padUser));
+  ({ app, page, pick } = await launch(root, padUser));
   await page.waitForSelector('#setup h1');
   await page.evaluate(() => {
     const pad = { buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0] };
@@ -97,12 +163,22 @@ async function main() {
     await page.evaluate((b) => { window.__pad.buttons[b].pressed = false; }, button);
     await sleep(120);
   };
+  for (let i = 0; i < 10; i++) await press(13);
+  await press(0);
+  assert.strictEqual(await title(), 'Games folders', 'pad: A on Next moves on');
+  await press(1);
+  assert.strictEqual(await title(), 'Emulators', 'pad: B goes back');
+  for (let i = 0; i < 10; i++) await press(13);
+  await press(0);
+  for (let i = 0; i < 22; i++) await press(13);
+  await press(0);
   await press(13);
   await press(0);
-  await page.waitForSelector('#profiles .profile, #message:not([hidden]), #title:not(:empty)');
-  const padSaved = saved(padUser);
+  await page.waitForSelector('#message:not([hidden])');
+  const padSaved = JSON.parse(fs.readFileSync(path.join(padUser, 'settings.json'), 'utf8'));
   console.log('pad run saved:', JSON.stringify(padSaved));
   assert.deepStrictEqual([padSaved.covers, padSaved.setupDone], [false, true]);
+  await shot('pad-no-games-shelf');
   await app.close();
 
   fs.rmSync(root, { recursive: true, force: true });

@@ -3,7 +3,40 @@ import { createHeart, disposeHearts } from './heart.js';
 
 const SHAPES = {
   dvd: { width: 1.35, height: 1.9, depth: 0.14, radius: 0.07, rim: 0.03 },
+  bluray: { width: 1.35, height: 1.7, depth: 0.13, radius: 0.11, rim: 0.03 },
+  minidisc: { width: 1.32, height: 1.5, depth: 0.15, radius: 0.05, rim: 0.035 },
+  card: { width: 1.05, height: 1.7, depth: 0.11, radius: 0.09, rim: 0.03 },
+  handheld: { width: 1.25, height: 1.4, depth: 0.14, radius: 0.07, rim: 0.03 },
+  jewel: { width: 1.42, height: 1.25, depth: 0.1, radius: 0.012, rim: 0.02 },
+  cartridge: { width: 1.3, height: 1.85, depth: 0.26, radius: 0.012, rim: 0, box: true },
+  wideCartridge: { width: 1.8, height: 1.28, depth: 0.36, radius: 0.012, rim: 0, box: true },
+  smallCartridge: { width: 1.15, height: 1.3, depth: 0.28, radius: 0.012, rim: 0, box: true },
   pc: { width: 1.35, height: 1.9, depth: 0.16, radius: 0.07, rim: 0.03 },
+};
+
+const SHAPE_OF_CONSOLE = {
+  gamecube: 'minidisc',
+  wii: 'dvd',
+  wiiu: 'dvd',
+  ps2: 'dvd',
+  ps4: 'bluray',
+  ps5: 'bluray',
+  switch: 'card',
+  switch2: 'card',
+  '3ds': 'handheld',
+  ds: 'handheld',
+  ps1: 'jewel',
+  dreamcast: 'jewel',
+  nes: 'cartridge',
+  megadrive: 'cartridge',
+  mastersystem: 'cartridge',
+  snes: 'wideCartridge',
+  n64: 'wideCartridge',
+  gb: 'smallCartridge',
+  gbc: 'smallCartridge',
+  gba: 'smallCartridge',
+  gamegear: 'smallCartridge',
+  steam: 'pc',
 };
 
 const LID_THICKNESS = 0.02;
@@ -12,11 +45,11 @@ const BEVEL = 0.012;
 const SURFACE_GAP = 0.001;
 const SPINE_FILL = 0.7;
 const SHADOW_SPREAD = 0.35;
-const ROUGHNESS = { plastic: 0.18, shell: 0.55 };
+const ROUGHNESS = { plastic: 0.18, box: 0.62, shell: 0.55 };
 const SELECTED_GLOSS = { strength: 0, extraRoughness: 1 };
 
-function shapeFor(kind) {
-  return kind === 'steam' ? SHAPES.pc : SHAPES.dvd;
+function shapeFor(consoleId) {
+  return SHAPES[SHAPE_OF_CONSOLE[consoleId] || 'dvd'];
 }
 
 function coverAspect(shape) {
@@ -104,7 +137,7 @@ function createCase(shape, colours) {
   const { width, height, depth } = shape;
   const geometries = geometriesFor(shape);
   const materials = sharedMaterials(colours);
-  const roughness = ROUGHNESS.plastic;
+  const roughness = shape.box ? ROUGHNESS.box : ROUGHNESS.plastic;
   const group = new THREE.Group();
 
   let mats = materials;

@@ -3,7 +3,6 @@ const os = require('node:os');
 const path = require('node:path');
 const assert = require('node:assert');
 const { _electron: electron } = require('playwright');
-const { pcGames } = require('./pcseed');
 
 const outDir = path.resolve(process.argv[2] || path.join(__dirname, '..', 'out', 'settings'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -14,10 +13,15 @@ async function main() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tink-settings-e2e-'));
   const data = path.join(root, 'data');
   const empty = path.join(root, 'empty');
+  const games = path.join(root, 'games', 'GameCube');
   fs.mkdirSync(data);
   fs.mkdirSync(empty);
-  const added = pcGames(root, ['Luigis Mansion', 'Wind Waker']);
-  fs.writeFileSync(path.join(data, 'settings.json'), JSON.stringify({ pcGames: added, setupDone: true }));
+  fs.mkdirSync(games, { recursive: true });
+  for (const name of ['Luigis Mansion (USA).rvz', 'Wind Waker (USA).rvz']) fs.writeFileSync(path.join(games, name), '');
+  fs.writeFileSync(path.join(data, 'settings.json'), JSON.stringify({ consoles: { gamecube: { folder: games } }, setupDone: true }));
+  const dolphin = path.join(root, 'picked', 'Dolphin.exe');
+  fs.mkdirSync(path.dirname(dolphin));
+  fs.writeFileSync(dolphin, '');
 
   const app = await electron.launch({
     args: [path.join(__dirname, '..'), `--user-data-dir=${path.join(root, 'user')}`],
@@ -35,6 +39,14 @@ async function main() {
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  await app.evaluate(({ dialog }) => {
+    dialog.showOpenDialog = async () => {
+      const next = globalThis.nextPick;
+      globalThis.nextPick = null;
+      return next ? { canceled: false, filePaths: [next] } : { canceled: true, filePaths: [] };
+    };
+  });
+  const pick = (file) => app.evaluate((_electron, value) => { globalThis.nextPick = value; }, file);
   const shot = async (name) => {
     await sleep(500);
     await page.screenshot({ path: path.join(outDir, `${name}.png`) });
@@ -58,14 +70,36 @@ async function main() {
   assert.strictEqual(await hints(), '', 'the shelf shows no hints');
   await shot('1-shelf-with-settings-hint');
 
-  await key(',');
-  assert.ok(await settingsOpen(), 'comma opens Settings');
-  await key('ArrowDown');
-  assert.strictEqual(await focusedRow(), 'Library');
-  await key('ArrowRight');
-  assert.strictEqual(await heading(), 'Library');
-  assert.ok((await focusedRow()).startsWith('Hidden games | None'), await focusedRow());
+  await key('Enter');
+
+  assert.strictEqual(await dialogText(), "Dolphin isn't set up.");
+  console.log('error 1:', await dialogText(), '| hints:', await hints());
+  await shot('2-error-not-set-up');
+  await key('Enter');
+  await sleep(300);
+  assert.ok(await settingsOpen(), 'Open Settings opens it');
   console.log('opened on:', await focusedRow(), '| hints:', await hints());
+  assert.ok((await focusedRow()).startsWith('GameCube'), 'focus lands on the GameCube emulator row');
+  assert.strictEqual(await heading(), 'Emulators');
+  assert.strictEqual(await selectedCategory(), 'Library');
+  await shot('3-settings-on-gamecube-emulator');
+
+  await pick(dolphin);
+  await key('Enter');
+  assert.strictEqual(readSettings().emulators.dolphin, dolphin);
+  console.log('after pick:', await focusedRow());
+  await shot('4-emulator-chosen');
+
+  await key(' ');
+  assert.strictEqual(readSettings().emulators.dolphin, undefined);
+  console.log('after Find automatically:', await focusedRow());
+  await pick(dolphin);
+  await key('Enter');
+
+  await key('Escape');
+  assert.ok(await settingsOpen(), 'B in a sub-list does not close Settings');
+  assert.strictEqual(await heading(), 'Library');
+  assert.ok((await focusedRow()).startsWith('Emulators'), await focusedRow());
   const fits = await page.$eval('#settings .setup-list', (list) => list.scrollHeight <= list.clientHeight);
   assert.ok(fits, 'the Library pane fits on one screen');
   await shot('5-library');
@@ -79,8 +113,24 @@ async function main() {
   await key('ArrowDown');
   assert.strictEqual(await focusedRow(), 'Library');
   await key('ArrowRight');
-  assert.ok((await focusedRow()).startsWith('Hidden games | None'), await focusedRow());
+  assert.ok((await focusedRow()).startsWith('Emulators'), await focusedRow());
 
+  await key('ArrowDown');
+  await key('Enter');
+  assert.strictEqual(await heading(), 'Games folders');
+  assert.ok((await focusedRow()).startsWith('GameCube'));
+  console.log('folder row:', await focusedRow(), '| hints:', await hints());
+  await key('ArrowLeft');
+  assert.ok((await focusedRow()).startsWith('Games folders'));
+
+  await key('ArrowDown');
+  await key('Enter');
+  assert.strictEqual(await heading(), 'Consoles');
+  await key('Escape');
+  assert.ok((await focusedRow()).startsWith('Consoles'));
+
+  await key('ArrowDown');
+  assert.ok((await focusedRow()).startsWith('Hidden games | None'), await focusedRow());
   await key('ArrowDown');
   assert.ok((await focusedRow()).startsWith('Rescan games'), await focusedRow());
   await key('Enter');
@@ -118,6 +168,14 @@ async function main() {
   await key('ArrowDown');
   assert.strictEqual(await heading(), 'Display');
   await key('ArrowRight');
+  assert.ok((await focusedRow()).startsWith('Start in fullscreen | On'), await focusedRow());
+  assert.strictEqual(await isFullscreen(), true);
+  await key('Enter');
+  assert.strictEqual(readSettings().fullscreen, false);
+  assert.strictEqual(await isFullscreen(), false);
+  await key('Enter');
+  assert.strictEqual(await isFullscreen(), true);
+
   const chosenPill = () => page.$eval('#settings .setup-row:focus .setup-pill.on', (pill) => pill.textContent);
   const pickValue = async (row, current, target, settingsKey, stored) => {
     assert.ok((await focusedRow()).startsWith(row), await focusedRow());
@@ -129,20 +187,11 @@ async function main() {
     assert.strictEqual(readSettings()[settingsKey], stored);
   };
 
-  assert.strictEqual(await isFullscreen(), true);
-  await pickValue('Screen', 'Fullscreen', 'Window', 'fullscreen', false);
-  assert.strictEqual(await isFullscreen(), false);
-  await pickValue('Screen', 'Window', 'Fullscreen', 'fullscreen', true);
-  assert.strictEqual(await isFullscreen(), true);
-
   await shot('6-display');
 
   await key('ArrowDown');
   await pickValue('Highlight', 'Rim', 'Snake', 'focusStyle', 'snake');
   await pickValue('Highlight', 'Snake', 'Rim', 'focusStyle', 'rim');
-  await key('ArrowDown');
-  await pickValue('Corners', 'Soft', 'Round', 'corners', 'round');
-  await pickValue('Corners', 'Round', 'Soft', 'corners', 'soft');
   await key('ArrowDown');
   await pickValue('Keyboard', 'Grid', 'Full', 'keyboard', 'full');
   await pickValue('Keyboard', 'Full', 'Grid', 'keyboard', 'grid');
@@ -155,7 +204,7 @@ async function main() {
   assert.ok((await focusedRow()).startsWith('Profiles on Home | On'), await focusedRow());
   assert.strictEqual(readSettings().homeProfiles, true);
   await key('ArrowDown');
-  await pickValue('Background', 'Picture', 'Calm picture', 'background', 'calm');
+  await pickValue('Background', 'Tint', 'Drift', 'background', 'drift');
 
   await key('Escape');
   await key('ArrowDown');
@@ -203,7 +252,7 @@ async function main() {
   await key('ArrowDown');
   assert.strictEqual(await focusedRow(), 'Add user');
   await key('Enter');
-  assert.strictEqual(await stepTitle(), 'Colour', 'with no pictures the icon step is skipped');
+  assert.strictEqual(await stepTitle(), 'Choose a background', 'with no pictures the icon step is skipped');
   await key('Enter');
   assert.strictEqual(await stepTitle(), 'Nickname');
   await page.keyboard.type('Kim');
@@ -226,7 +275,7 @@ async function main() {
   assert.strictEqual(await focusedRow(), 'Nickname | Jo');
   await key('ArrowDown');
   await key('Enter');
-  assert.strictEqual(await stepTitle(), 'Colour');
+  assert.strictEqual(await stepTitle(), 'Choose a background');
   await key('Escape');
   await backInSettings();
   assert.strictEqual(await focusedRow(), 'Icon | J', 'B on the first step goes back');
@@ -241,19 +290,22 @@ async function main() {
   await key('Escape');
   assert.strictEqual(await focusedRow(), 'Users');
 
+  fs.rmSync(path.join(games, 'Luigis Mansion (USA).rvz'));
   await key('Escape');
   assert.ok(!(await settingsOpen()), 'B closes Settings');
   await sleep(600);
-  assert.strictEqual(await page.evaluate(() => document.body.dataset.background), 'calm');
-  assert.strictEqual(await page.textContent('#title'), 'Luigis Mansion');
+  assert.strictEqual(await page.evaluate(() => document.body.dataset.background), 'drift');
+  assert.strictEqual(await page.textContent('#title'), 'Wind Waker');
+  console.log('row reloaded, title:', await page.textContent('#title'));
   await shot('15-shelf-after-settings');
 
-  fs.rmSync(added[0].exe);
+  fs.rmSync(path.join(games, 'Wind Waker (USA).rvz'));
   await key('Enter');
-  assert.strictEqual(await dialogText(), "This game can't be found.");
+  assert.strictEqual(await dialogText(), "This game file can't be found.");
   await shot('16-error-file-missing');
   await key('Enter');
   await sleep(600);
+  assert.notStrictEqual(await page.textContent('#title'), 'Wind Waker', 'the rescan drops the missing game');
   assert.strictEqual(await hints(), '');
 
   await page.evaluate(() => {

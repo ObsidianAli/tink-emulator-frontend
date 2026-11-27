@@ -1,4 +1,4 @@
-import { element, focusGlow, focusRow } from './dom.js';
+import { element, focusGlow, focusRow, shortPath } from './dom.js';
 import { screen } from './transition.js';
 import { badge } from './badge.js';
 import { editProfile, closeProfiles, PROFILES_MAX } from './profiles.js';
@@ -27,22 +27,17 @@ export function hideSettings() {
   root.hidden = true;
 }
 
-const HIGHLIGHTS = { rim: 'Rim', snake: 'Snake', under: 'Under', raised: 'Raised' };
-const CORNERS = { soft: 'Soft', round: 'Round' };
+const HIGHLIGHTS = { rim: 'Rim', snake: 'Snake', under: 'Under' };
 const KEYBOARDS = { grid: 'Grid', full: 'Full' };
 const HEARTS = { sticker: 'Sticker', small: 'Small' };
-const CASES = { classic: 'Classic', framed: 'Framed' };
-const BACKGROUNDS = { flat: 'Flat', colour: 'Colour', picture: 'Picture', soft: 'Soft picture', calm: 'Calm picture' };
-const NAME_STYLES = { plain: 'Plain', warm: 'Warm' };
+const BACKGROUNDS = { tint: 'Tint', flat: 'Flat', colour: 'Colour', picture: 'Picture', soft: 'Soft picture', art: 'Art', drift: 'Drift' };
 const TEXT_STYLES = { plain: 'Plain', outline: 'Outline', pill: 'Pill', fade: 'Fade' };
 const GAME_OPTIONS = { case: 'Beside the case', panel: 'Side panel' };
 const COVER_PICKERS = { page: 'Page', case: 'On the case' };
-const SCREENS = { full: 'Fullscreen', window: 'Window' };
 
-export async function openSettings({ focusCategory } = {}) {
+export async function openSettings({ focusConsole, focusCategory } = {}) {
   let state = await window.tink.getSettings();
   let users = await window.tink.getProfiles();
-  let boot = await window.tink.getBoot();
   return new Promise((resolve) => {
     let changed = false;
     let focus = 0;
@@ -144,6 +139,8 @@ export async function openSettings({ focusCategory } = {}) {
       return row.sound;
     }
 
+    const link = (name, label, status) => ({ id: name, label, status, hint: 'Open', activate: () => { view = name; focus = 0; render({ swap: true }); } });
+
     async function learnButton() {
       if (learning) return;
       learning = true;
@@ -213,6 +210,30 @@ export async function openSettings({ focusCategory } = {}) {
         if (users.profiles.length > 1) userRows.push({ label: 'Remove', group: true, hint: 'Remove', activate: () => removeUser(profile) });
         return userRows;
       }
+      if (view === 'emulators') {
+        return state.consoles.map((item) => {
+          const emulator = item.emulator;
+          return {
+            console: item.id,
+            label: item.name,
+            status: emulator.status,
+            found: emulator.found,
+            hint: 'Pick',
+            second: { label: 'Find automatically', run: () => change(window.tink.findAutomatically(emulator.id)) },
+            activate: () => change(window.tink.pickExe(emulator.id)),
+          };
+        });
+      }
+      if (view === 'folders') {
+        return state.consoles.map((item) => ({
+          label: item.name,
+          status: item.folder ? shortPath(item.folder) : 'None',
+          found: Boolean(item.folder),
+          hint: 'Pick',
+          second: item.folder ? { label: 'Skip', run: () => change(window.tink.clearFolder(item.id)) } : null,
+          activate: () => change(window.tink.pickFolder(item.id)),
+        }));
+      }
       if (view === 'hidden') {
         return [
           { id: 'all', label: 'Show all', hint: 'Show', activate: () => change(window.tink.showHiddenGames()) },
@@ -225,6 +246,18 @@ export async function openSettings({ focusCategory } = {}) {
           })),
         ];
       }
+      if (view === 'consoles') {
+        return state.consoleList.map((item) => ({
+          label: item.name,
+          status: item.hidden ? 'Hidden' : 'Shown',
+          hint: item.hidden ? 'Show' : 'Hide',
+          sound: 'toggle',
+          activate: () => change(window.tink.toggleConsole(item.id)),
+        }));
+      }
+      const emulatorsFound = state.consoles.filter((item) => item.emulator.found).length;
+      const foldersSet = state.consoles.filter((item) => item.folder).length;
+      const shown = state.consoleList.filter((item) => !item.hidden).length;
       const panes = {
         users: () => {
           const list = users.profiles.map((profile) => ({
@@ -244,6 +277,9 @@ export async function openSettings({ focusCategory } = {}) {
           return list;
         },
         library: () => [
+          link('emulators', 'Emulators', `${emulatorsFound} of ${state.consoles.length} found`),
+          link('folders', 'Games folders', `${foldersSet} of ${state.consoles.length} set`),
+          link('consoles', 'Consoles', `${shown} of ${state.consoleList.length} shown`),
           {
             id: 'hidden',
             label: 'Hidden games',
@@ -298,22 +334,13 @@ export async function openSettings({ focusCategory } = {}) {
         ],
         display: () => [
           {
-            ...choose('screen', 'Screen', SCREENS, 'screen', () => {}),
-            current: () => (state.fullscreen ? 'full' : 'window'),
-            choose: (value) => {
-              state.fullscreen = value === 'full';
-              for (const row of rows) row.paint?.();
-              window.tink.setFullscreen(state.fullscreen);
-            },
+            label: 'Start in fullscreen',
+            status: state.fullscreen ? 'On' : 'Off',
+            hint: 'Switch',
+            sound: 'toggle',
+            activate: () => change(window.tink.setFullscreen(!state.fullscreen), { reload: false }),
           },
-          choose('highlight', 'Highlight', HIGHLIGHTS, 'focusStyle', (value) => {
-            document.body.dataset.highlight = value;
-            window.tink.setFocusStyle(value);
-          }),
-          choose('corners', 'Corners', CORNERS, 'corners', (value) => {
-            document.body.dataset.corners = value;
-            window.tink.setCorners(value);
-          }),
+          choose('highlight', 'Highlight', HIGHLIGHTS, 'focusStyle', (value) => window.tink.setFocusStyle(value)),
           choose('keyboard', 'Keyboard', KEYBOARDS, 'keyboard', (value) => window.tink.setKeyboard(value)),
           {
             label: 'Profiles on Home',
@@ -324,21 +351,12 @@ export async function openSettings({ focusCategory } = {}) {
           },
           choose('background', 'Background', BACKGROUNDS, 'background', (value) => window.tink.setBackground(value)),
           choose('text', 'Text', TEXT_STYLES, 'textStyle', (value) => window.tink.setTextStyle(value)),
-          choose('names', 'Names', NAME_STYLES, 'names', (value) => window.tink.setNames(value)),
           choose('heart', 'Favourite heart', HEARTS, 'heart', (value) => window.tink.setHeart(value)),
-          choose('cases', 'Cases', CASES, 'cases', (value) => window.tink.setCases(value)),
           choose('gameOptions', 'Game options', GAME_OPTIONS, 'gameOptions', (value) => window.tink.setGameOptions(value)),
         ],
         sounds: soundRows,
         system: () => [
           { label: 'Version', status: state.version, plain: true },
-          ...(state.packaged ? [{
-            label: 'Start with Windows',
-            status: state.startWithWindows ? 'On' : 'Off',
-            hint: 'Switch',
-            sound: 'toggle',
-            activate: () => change(window.tink.setStartWithWindows(!state.startWithWindows), { reload: false }),
-          }] : []),
           { id: 'update', label: 'Check for updates', status: update, hint: 'Check', activate: checkUpdates },
           {
             id: 'screenshot',
@@ -348,22 +366,6 @@ export async function openSettings({ focusCategory } = {}) {
             second: state.screenshotButton ? { label: 'Clear', run: () => change(window.tink.clearScreenshotButton(), { reload: false }) } : null,
             activate: learnButton,
           },
-          ...(boot.available ? [{
-            id: 'boot',
-            label: 'Boot into Tink',
-            status: boot.on ? 'On' : 'Off',
-            hint: 'Switch',
-            sound: 'toggle',
-            activate: async () => {
-              active.busy = true;
-              try {
-                boot = await window.tink.setBoot(!boot.on);
-              } finally {
-                active.busy = false;
-              }
-              render();
-            },
-          }] : []),
         ],
       };
       return panes[CATEGORIES[category].id]();
@@ -433,6 +435,7 @@ export async function openSettings({ focusCategory } = {}) {
         else if (row.key) node.tabIndex = 0;
         else node.type = 'button';
         const name = element('span', 'setup-name', row.label);
+        if (row.sub) name.append(element('span', 'setup-sub', row.sub));
         if (row.badge) name.prepend(badge(row.badge, { className: 'small' }));
         node.append(name);
         if (row.side) node.append(badge(row.side, { className: 'small' }));
@@ -469,7 +472,8 @@ export async function openSettings({ focusCategory } = {}) {
         focusable.push(row);
       }
       rows = focusable;
-      const heading = element('h1', '', view === 'top' ? CATEGORIES[category].name : view === 'user' ? userProfile().name : 'Hidden games');
+      const titles = { emulators: 'Emulators', folders: 'Games folders', consoles: 'Consoles', hidden: 'Hidden games' };
+      const heading = element('h1', '', view === 'top' ? CATEGORIES[category].name : view === 'user' ? userProfile().name : titles[view]);
       if (swap) {
         heading.classList.add('settings-swap');
         list.classList.add('settings-swap');
@@ -487,7 +491,7 @@ export async function openSettings({ focusCategory } = {}) {
     }
 
     function showSettingsHints() {
-      if (column === 'categories') return setHints([{ button: 'a', label: 'Open' }, { button: 'b', label: 'Back' }]);
+      if (column === 'categories') return setHints([{ button: 'a', label: 'Open' }, { button: 'b', label: 'Close' }]);
       const row = rows[focus];
       if (typing) return setHints([{ button: 'a', label: 'Save' }, { button: 'b', label: 'Cancel' }]);
       const hints = [{ button: 'a', label: row.hint || 'Start' }];
@@ -574,7 +578,12 @@ export async function openSettings({ focusCategory } = {}) {
     screen(() => {
       root.hidden = false;
       build();
-      if (focusCategory) {
+      if (focusConsole) {
+        category = CATEGORIES.findIndex((item) => item.id === 'library');
+        column = 'pane';
+        view = 'emulators';
+        pendingFocus = (row) => row.console === focusConsole;
+      } else if (focusCategory) {
         category = CATEGORIES.findIndex((item) => item.id === focusCategory);
         column = 'pane';
       }

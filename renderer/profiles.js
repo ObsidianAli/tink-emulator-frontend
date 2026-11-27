@@ -1,13 +1,12 @@
 import { element, focusGlow } from './dom.js';
 import { screen as changeScreen } from './transition.js';
 import { badge, tick } from './badge.js';
-import { plusDrawing } from './icons.js';
 import { createKeyboard } from './keyboard.js';
 
 const root = document.getElementById('profiles');
 const COLOURS = ['blue', 'green', 'orange', 'red', 'purple', 'teal'];
 const NAME_MAX = 10;
-const TITLES = { icon: 'Icon', colour: 'Colour', name: 'Nickname' };
+const TITLES = { icon: 'Choose an icon', colour: 'Choose a background', name: 'Nickname' };
 export const PROFILES_MAX = 8;
 let active = null;
 
@@ -301,9 +300,7 @@ export async function chooseProfile({ canCancel = false, stay = false } = {}) {
         const add = element('button', 'profile');
         add.type = 'button';
         const avatar = element('span', 'profile-avatar');
-        const plus = element('div', 'badge');
-        plus.append(plusDrawing());
-        avatar.append(plus, focusGlow());
+        avatar.append(element('div', 'badge', '+'), focusGlow());
         add.append(avatar, element('span', '', 'Add user'));
         nodes.push(add);
       }

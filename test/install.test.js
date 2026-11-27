@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { progress } = require('../src/install');
+const { install, progress } = require('../src/install');
 
 function library(manifests) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tink-install-'));
@@ -14,6 +14,16 @@ function library(manifests) {
   }
   return dir;
 }
+
+test('install opens the Steam install link and nothing else', async () => {
+  const opened = [];
+  assert.strictEqual(await install('620', async (url) => opened.push(url)), true);
+  assert.deepStrictEqual(opened, ['steam://install/620']);
+  for (const bad of ['', 'abc', '620/../x', '1 2', '-5', null, undefined, '620?x=1']) {
+    assert.strictEqual(await install(bad, async (url) => opened.push(url)), false);
+  }
+  assert.strictEqual(opened.length, 1);
+});
 
 test('progress follows a download from queued to done', () => {
   const dir = library({

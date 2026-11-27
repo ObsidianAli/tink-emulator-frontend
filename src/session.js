@@ -68,7 +68,7 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
     set('playing', { front });
   }
 
-  function launchedPids() {
+  function emulatorPids() {
     const processes = attempt(platform.processes);
     return processes ? new Set([target.child.pid, ...descendants(processes, target.child.pid)]) : null;
   }
@@ -92,7 +92,7 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
     return findWindow(pids);
   }
 
-  async function watchLaunched() {
+  async function watchEmulator() {
     let exit = null;
     target.exited.then(
       () => { exit = { status: 'ended' }; poke(); },
@@ -106,7 +106,7 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
         await nap(null);
         continue;
       }
-      const hwnd = native ? findWindow(launchedPids()) : null;
+      const hwnd = native ? findWindow(emulatorPids()) : null;
       const left = (native ? LAUNCHER_AFTER_MS : PLAIN_HANDOFF_MS) - (clock.now() - start);
       if (hwnd !== null) await handoff(hwnd);
       else if (left <= 0) await handoff(null);
@@ -180,7 +180,7 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
     set('loading');
     let outcome;
     try {
-      if (target.kind === 'pc' && !native) outcome = await watchLaunched();
+      if (target.kind === 'emulator' || (target.kind === 'pc' && !native)) outcome = await watchEmulator();
       else outcome = await (native ? watchSteamNative() : watchSteamPlain());
     } catch (error) {
       outcome = { status: 'failed', error };
@@ -197,6 +197,7 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
 
   function currentWindow() {
     if (!native) return gameWindow;
+    if (target.kind === 'emulator') return findWindow(emulatorPids()) ?? gameWindow;
     const processes = attempt(platform.processes);
     const pids = steamPids();
     return (processes && pids && pids.size ? windowOf(processes, pids) : findWindow(pids)) ?? gameWindow;
@@ -217,6 +218,7 @@ function startSession(target, { platform, clock = realClock, onState = () => {},
     alive() {
       if (state !== 'playing') return false;
       if (!native) return true;
+      if (target.kind === 'emulator') return target.child.exitCode === null && target.child.signalCode === null;
       const pids = steamPids();
       return pids === null || pids.size > 0 || gameWindow === null;
     },

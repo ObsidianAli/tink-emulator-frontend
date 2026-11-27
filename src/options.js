@@ -1,3 +1,6 @@
+const { CONSOLES, EMULATORS, isConsole, isEmulator } = require('./presets');
+const { resolveEmulator } = require('./setup');
+const { isFile } = require('./detect');
 const { buttonLabel } = require('./pad');
 const { SOUND_CHOICES } = require('../renderer/sound');
 
@@ -5,29 +8,20 @@ const wantsFullscreen = (settings) => settings.fullscreen !== false;
 
 const showsHomeProfiles = (settings) => settings.homeProfiles !== false;
 
-const FOCUS_STYLES = ['rim', 'snake', 'under', 'raised'];
+const FOCUS_STYLES = ['rim', 'snake', 'under'];
 const focusStyle = (settings) => (FOCUS_STYLES.includes(settings.focusStyle) ? settings.focusStyle : 'rim');
 
-const BACKGROUNDS = ['flat', 'colour', 'picture', 'soft', 'calm'];
-const background = (settings) => (BACKGROUNDS.includes(settings.background) ? settings.background : 'picture');
+const BACKGROUNDS = ['tint', 'flat', 'colour', 'picture', 'soft', 'art', 'drift'];
+const background = (settings) => (BACKGROUNDS.includes(settings.background) ? settings.background : 'tint');
 
 const TEXT_STYLES = ['plain', 'outline', 'pill', 'fade'];
 const textStyle = (settings) => (TEXT_STYLES.includes(settings.textStyle) ? settings.textStyle : 'plain');
-
-const NAMES = ['plain', 'warm'];
-const names = (settings) => (NAMES.includes(settings.names) ? settings.names : 'warm');
-
-const CORNERS = ['soft', 'round'];
-const corners = (settings) => (CORNERS.includes(settings.corners) ? settings.corners : 'soft');
 
 const KEYBOARDS = ['grid', 'full'];
 const keyboard = (settings) => (KEYBOARDS.includes(settings.keyboard) ? settings.keyboard : 'grid');
 
 const HEARTS = ['sticker', 'small'];
 const heart = (settings) => (HEARTS.includes(settings.heart) ? settings.heart : 'sticker');
-
-const CASES = ['classic', 'framed'];
-const cases = (settings) => (CASES.includes(settings.cases) ? settings.cases : 'classic');
 
 const GAME_OPTIONS = ['case', 'panel'];
 const gameOptions = (settings) => (GAME_OPTIONS.includes(settings.gameOptions) ? settings.gameOptions : 'case');
@@ -46,18 +40,33 @@ function screenshotButton(settings) {
   return label ? { id, label } : null;
 }
 
-function buildSettings(settings, version) {
+function buildSettings(settings, detected, version) {
+  const consoles = Object.entries(CONSOLES).map(([id, preset]) => {
+    const entry = settings.consoles[id] || {};
+    let emulator;
+    if (preset.emulator) {
+      const chosen = settings.emulators && settings.emulators[preset.emulator];
+      const found = Boolean(resolveEmulator(settings, detected, preset.emulator));
+      emulator = {
+        id: preset.emulator,
+        label: EMULATORS[preset.emulator].label,
+        status: chosen && isFile(chosen) ? 'Chosen' : found ? 'Found' : 'Not found',
+        found,
+      };
+    } else {
+      const found = Boolean(entry.exe && isFile(entry.exe));
+      emulator = { id, label: 'Emulator', status: found ? 'Chosen' : 'Not chosen', found };
+    }
+    return { id, name: preset.name, emulator, folder: entry.folder || null };
+  });
   return {
     version,
     fullscreen: wantsFullscreen(settings),
     focusStyle: focusStyle(settings),
     background: background(settings),
     textStyle: textStyle(settings),
-    names: names(settings),
-    corners: corners(settings),
     keyboard: keyboard(settings),
     heart: heart(settings),
-    cases: cases(settings),
     gameOptions: gameOptions(settings),
     coverPicker: coverPicker(settings),
     sounds: sounds(settings),
@@ -65,7 +74,17 @@ function buildSettings(settings, version) {
     screenshotButton: screenshotButton(settings),
     covers: settings.covers === true,
     hasKey: steamKey(settings) !== '',
+    consoles,
   };
+}
+
+function clearEmulator(settings, id) {
+  if (isConsole(id) && !CONSOLES[id].emulator) {
+    if (settings.consoles[id]) delete settings.consoles[id].exe;
+    return;
+  }
+  if (!isEmulator(id)) throw new Error('Unknown emulator');
+  if (settings.emulators) delete settings.emulators[id];
 }
 
 function setFullscreen(settings, on) {
@@ -84,10 +103,6 @@ function setBackground(settings, mode) {
   if (BACKGROUNDS.includes(mode)) settings.background = mode;
 }
 
-function setCorners(settings, mode) {
-  if (CORNERS.includes(mode)) settings.corners = mode;
-}
-
 function setTextStyle(settings, mode) {
   if (TEXT_STYLES.includes(mode)) settings.textStyle = mode;
 }
@@ -96,16 +111,8 @@ function setKeyboard(settings, mode) {
   if (KEYBOARDS.includes(mode)) settings.keyboard = mode;
 }
 
-function setNames(settings, mode) {
-  if (NAMES.includes(mode)) settings.names = mode;
-}
-
 function setHeart(settings, mode) {
   if (HEARTS.includes(mode)) settings.heart = mode;
-}
-
-function setCases(settings, mode) {
-  if (CASES.includes(mode)) settings.cases = mode;
 }
 
 function setGameOptions(settings, mode) {
@@ -131,4 +138,4 @@ function setScreenshotButton(settings, id) {
   else delete settings.screenshotButton;
 }
 
-module.exports = { buildSettings, setFullscreen, setFocusStyle, setBackground, setTextStyle, setNames, setCorners, setKeyboard, setHeart, setCases, setGameOptions, setCoverPicker, setSounds, setHomeProfiles, setSteamKey, setScreenshotButton, screenshotButton, wantsFullscreen, steamKey };
+module.exports = { buildSettings, clearEmulator, setFullscreen, setFocusStyle, setBackground, setTextStyle, setKeyboard, setHeart, setGameOptions, setCoverPicker, setSounds, setHomeProfiles, setSteamKey, setScreenshotButton, screenshotButton, wantsFullscreen, steamKey };

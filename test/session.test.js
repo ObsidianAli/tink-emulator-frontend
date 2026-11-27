@@ -48,7 +48,7 @@ function fakeWindows({ native = true } = {}) {
   return world;
 }
 
-function launched() {
+function emulator() {
   let finish;
   let fail;
   const exited = new Promise((resolve, reject) => {
@@ -57,7 +57,7 @@ function launched() {
   });
   const child = { pid: 100, exitCode: null, signalCode: null };
   return {
-    target: { kind: 'pc', child, exited },
+    target: { kind: 'emulator', child, exited },
     exit() {
       child.exitCode = 0;
       finish();
@@ -82,6 +82,46 @@ function start(target, world, { ack = true } = {}) {
   });
   return { session, clock, states, restored };
 }
+
+test('an emulator hands over once its window shows and Tink comes back when it closes', async () => {
+  const world = fakeWindows();
+  const game = emulator();
+  const { session, clock, states, restored } = start(game.target, world);
+  world.processes.push({ pid: 100, ppid: 1, exe: 'C:\\Dolphin\\Dolphin.exe' }, { pid: 101, ppid: 100, exe: 'C:\\Dolphin\\helper.exe' });
+  world.windows = [{ hwnd: 7, pid: 55 }];
+  await clock.advance(1000);
+  assert.deepStrictEqual(states, ['loading'], 'an unrelated window is not the game');
+  world.windows.push({ hwnd: 9, pid: 101 });
+  await clock.advance(250);
+  assert.deepStrictEqual(states, ['loading', 'handoff', 'playing:{"front":true}']);
+  assert.deepStrictEqual(world.fronted, [9]);
+  game.exit();
+  const outcome = await session.done;
+  assert.strictEqual(outcome.status, 'ended');
+  assert.deepStrictEqual(states.slice(3), ['ended', 'restoring', 'idle']);
+  assert.deepStrictEqual(restored, [outcome]);
+});
+
+test('an emulator that cannot start fails without a handoff', async () => {
+  const world = fakeWindows();
+  const game = emulator();
+  const { session, states } = start(game.target, world);
+  game.fail(new Error('ENOENT'));
+  const outcome = await session.done;
+  assert.strictEqual(outcome.status, 'failed');
+  assert.match(outcome.error.message, /ENOENT/);
+  assert.deepStrictEqual(states, ['loading', 'restoring', 'idle']);
+});
+
+test('an emulator that closes before any window shows just comes back', async () => {
+  const world = fakeWindows();
+  const game = emulator();
+  const { session, clock, states } = start(game.target, world);
+  await clock.advance(500);
+  game.exit();
+  assert.strictEqual((await session.done).status, 'ended');
+  assert.ok(!states.includes('handoff'));
+});
 
 test('a Steam game hands over at its window and ends at once when Steam says nothing runs', async () => {
   const world = fakeWindows();
@@ -163,17 +203,17 @@ test('B while loading cancels, but not once the game is playing', async () => {
 
 test('the running game can be brought back to front, even with a new window', async () => {
   const world = fakeWindows();
-  world.processes.push({ pid: 300, ppid: 4, exe: path.join(GAME_DIR, 'downwell.exe') });
-  world.windows = [{ hwnd: 9, pid: 300 }];
-  const { session, clock } = start({ kind: 'steam', installDir: GAME_DIR }, world);
+  const game = emulator();
+  world.processes.push({ pid: 100, ppid: 1, exe: 'C:\\RPCS3\\rpcs3.exe' });
+  world.windows = [{ hwnd: 9, pid: 100 }];
+  const { session, clock } = start(game.target, world);
   await clock.advance(250);
   assert.strictEqual(session.alive(), true);
-  world.windows = [{ hwnd: 12, pid: 300 }];
+  world.windows = [{ hwnd: 12, pid: 100 }];
   assert.strictEqual(session.focus(), true);
   assert.deepStrictEqual(world.fronted, [9, 12]);
   assert.strictEqual(session.window(), 12);
-  world.processes = [];
-  await clock.advance(1000);
+  game.exit();
   await session.done;
   assert.strictEqual(session.alive(), false);
   assert.strictEqual(session.focus(), false);
@@ -182,23 +222,23 @@ test('the running game can be brought back to front, even with a new window', as
 
 test('without the renderer answering, the handoff goes ahead after 300 ms', async () => {
   const world = fakeWindows();
-  world.processes.push({ pid: 300, ppid: 4, exe: path.join(GAME_DIR, 'downwell.exe') });
-  world.windows = [{ hwnd: 9, pid: 300 }];
-  const { session, clock } = start({ kind: 'steam', installDir: GAME_DIR }, world, { ack: false });
+  const game = emulator();
+  world.processes.push({ pid: 100, ppid: 1, exe: 'C:\\Dolphin\\Dolphin.exe' });
+  world.windows = [{ hwnd: 9, pid: 100 }];
+  const { session, clock } = start(game.target, world, { ack: false });
   await clock.advance(200);
   assert.strictEqual(session.state(), 'handoff');
   assert.deepStrictEqual(world.fronted, []);
   await clock.advance(100);
   assert.strictEqual(session.state(), 'playing');
   assert.deepStrictEqual(world.fronted, [9]);
-  world.processes = [];
-  await clock.advance(1000);
+  game.exit();
   await session.done;
 });
 
-test('without native access a PC game hands over once it has run for 800 ms', async () => {
+test('without native access an emulator hands over once it has run for 800 ms', async () => {
   const world = fakeWindows({ native: false });
-  const game = launched();
+  const game = emulator();
   const { session, clock, states } = start(game.target, world);
   await clock.advance(700);
   assert.deepStrictEqual(states, ['loading']);

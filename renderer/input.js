@@ -37,29 +37,13 @@ function listenForInput(handler) {
   inputHandlers.push(handler);
 }
 
-const MOUSE_HIDE_MS = 2000;
-let mouseTimer = null;
-
-function hideMouse() {
-  clearTimeout(mouseTimer);
-  document.body.classList.remove('mouse-active');
-}
-
-document.addEventListener('mousemove', () => {
-  document.body.classList.add('mouse-active');
-  clearTimeout(mouseTimer);
-  mouseTimer = setTimeout(hideMouse, MOUSE_HIDE_MS);
-});
-
 function emitAction(action) {
-  hideMouse();
   let sound = null;
   for (const handler of inputHandlers) sound = handler(action) || sound;
   if (sound) playSound(sound);
 }
 
 document.addEventListener('keydown', (event) => {
-  hideMouse();
   if (event.target instanceof HTMLInputElement) return;
   if (keyCapture && keyCapture(event)) {
     event.preventDefault();

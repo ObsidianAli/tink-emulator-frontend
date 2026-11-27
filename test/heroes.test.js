@@ -10,7 +10,7 @@ const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a
 const SRC = `data:image/png;base64,${PNG.toString('base64')}`;
 const GRID = 'https://www.steamgriddb.com/api/v2';
 const portal = { console: 'steam', title: 'Portal', fileName: '400', art: artUrls('400') };
-const astro = { console: 'pc', title: 'Astro Bot', fileName: 'Astro Bot' };
+const astro = { console: 'ps5', title: 'Astro Bot', fileName: 'Astro Bot' };
 const json = (data) => new Response(JSON.stringify({ success: true, data }));
 const gridRoutes = {
   [`${GRID}/search/autocomplete/Astro%20Bot`]: json([{ id: 7, name: 'Astro Bot' }]),
