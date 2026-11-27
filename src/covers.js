@@ -1,10 +1,8 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { CONSOLES, coverColour } = require('./presets');
+const { coverColour } = require('./kinds');
 
-// libretro's own GitHub copy of its thumbnail library; thumbnails.libretro.com answers 404 for every file.
-const LIBRETRO = 'https://raw.githubusercontent.com/libretro-thumbnails';
 const GRIDDB = 'https://www.steamgriddb.com/api/v2';
 const MAX_BYTES = 8 * 1024 * 1024;
 const PARALLEL = 4;
@@ -17,20 +15,7 @@ const IMAGE_TYPES = [
   { ext: '.webp', mime: 'image/webp', magic: (b) => b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP' },
 ];
 
-// libretro writes these characters as "_" in its file names.
-const libretroSafe = (name) => name.replace(/[&*/:`<>?\\|"]/g, '_');
-
-function nameVariants(fileName) {
-  const noBrackets = fileName.replace(/\s*\[[^\]]*\]/g, '').trim();
-  const firstTag = noBrackets.match(/^[^(]*\([^)]*\)/);
-  const bare = noBrackets.replace(/\s*\([^)]*\)/g, '').trim();
-  return [...new Set([fileName, noBrackets, firstTag && firstTag[0].trim(), bare].filter(Boolean))];
-}
-
-function libretroUrl(system, name) {
-  const repo = system.replace(/ /g, '_');
-  return `${LIBRETRO}/${encodeURIComponent(repo)}/master/Named_Boxarts/${encodeURIComponent(libretroSafe(name))}.png`;
-}
+const fileSafe = (name) => name.replace(/[&*/:`<>?\\|"]/g, '_');
 
 class Rejected extends Error {}
 
@@ -118,7 +103,7 @@ function createCovers({ dir, pickedDir = `${dir}-picked`, enabled, steamGridKey,
     await writeAtomic(missesFile, JSON.stringify([...misses]));
   }
 
-  const coverBase = (game) => path.join(dir, game.console, libretroSafe(game.fileName));
+  const coverBase = (game) => path.join(dir, game.console, fileSafe(game.fileName));
   const missKey = (game) => `${game.console}/${game.fileName}`;
   const pickedBase = (game) => path.join(pickedDir, crypto.createHash('sha1').update(game.key || missKey(game)).digest('hex'));
 
@@ -149,10 +134,6 @@ function createCovers({ dir, pickedDir = `${dir}-picked`, enabled, steamGridKey,
     return null;
   }
 
-  function fromLibretro(system, game) {
-    return firstImage(game, nameVariants(game.fileName).map((name) => libretroUrl(system, name)));
-  }
-
   async function askGridDb(game, kind, query) {
     const ask = (route) => queue(() => griddbJson(fetchFn, steamGridKey, route, timeoutMs));
     const matches = await ask(`/search/autocomplete/${encodeURIComponent(game.title || game.fileName)}`);
@@ -167,8 +148,7 @@ function createCovers({ dir, pickedDir = `${dir}-picked`, enabled, steamGridKey,
 
   function coverSources(game) {
     if (game.art) return [() => firstImage(game, [game.art.cover, game.art.fallback])];
-    const system = CONSOLES[game.console] && CONSOLES[game.console].libretro;
-    return [system && (() => fromLibretro(system, game)), steamGridKey && (() => fromGridDb(game))].filter(Boolean);
+    return steamGridKey ? [() => fromGridDb(game)] : [];
   }
 
   async function resolve(game) {
@@ -223,4 +203,4 @@ function createCovers({ dir, pickedDir = `${dir}-picked`, enabled, steamGridKey,
   return { getCover, getDefault, pickedFrom, pick, unpick, redownload };
 }
 
-module.exports = { createCovers, download, griddbJson, writeAtomic, libretroUrl, nameVariants, limiter, Rejected, PARALLEL, TIMEOUT_MS };
+module.exports = { createCovers, download, griddbJson, writeAtomic, limiter, Rejected, PARALLEL, TIMEOUT_MS };

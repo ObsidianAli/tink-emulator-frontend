@@ -1,6 +1,3 @@
-const { CONSOLES, EMULATORS, isConsole, isEmulator } = require('./presets');
-const { resolveEmulator } = require('./setup');
-const { isFile } = require('./detect');
 const { buttonLabel } = require('./pad');
 const { SOUND_CHOICES } = require('../renderer/sound');
 
@@ -40,25 +37,7 @@ function screenshotButton(settings) {
   return label ? { id, label } : null;
 }
 
-function buildSettings(settings, detected, version) {
-  const consoles = Object.entries(CONSOLES).map(([id, preset]) => {
-    const entry = settings.consoles[id] || {};
-    let emulator;
-    if (preset.emulator) {
-      const chosen = settings.emulators && settings.emulators[preset.emulator];
-      const found = Boolean(resolveEmulator(settings, detected, preset.emulator));
-      emulator = {
-        id: preset.emulator,
-        label: EMULATORS[preset.emulator].label,
-        status: chosen && isFile(chosen) ? 'Chosen' : found ? 'Found' : 'Not found',
-        found,
-      };
-    } else {
-      const found = Boolean(entry.exe && isFile(entry.exe));
-      emulator = { id, label: 'Emulator', status: found ? 'Chosen' : 'Not chosen', found };
-    }
-    return { id, name: preset.name, emulator, folder: entry.folder || null };
-  });
+function buildSettings(settings, version) {
   return {
     version,
     fullscreen: wantsFullscreen(settings),
@@ -74,17 +53,7 @@ function buildSettings(settings, detected, version) {
     screenshotButton: screenshotButton(settings),
     covers: settings.covers === true,
     hasKey: steamKey(settings) !== '',
-    consoles,
   };
-}
-
-function clearEmulator(settings, id) {
-  if (isConsole(id) && !CONSOLES[id].emulator) {
-    if (settings.consoles[id]) delete settings.consoles[id].exe;
-    return;
-  }
-  if (!isEmulator(id)) throw new Error('Unknown emulator');
-  if (settings.emulators) delete settings.emulators[id];
 }
 
 function setFullscreen(settings, on) {
@@ -138,4 +107,4 @@ function setScreenshotButton(settings, id) {
   else delete settings.screenshotButton;
 }
 
-module.exports = { buildSettings, clearEmulator, setFullscreen, setFocusStyle, setBackground, setTextStyle, setKeyboard, setHeart, setGameOptions, setCoverPicker, setSounds, setHomeProfiles, setSteamKey, setScreenshotButton, screenshotButton, wantsFullscreen, steamKey };
+module.exports = { buildSettings, setFullscreen, setFocusStyle, setBackground, setTextStyle, setKeyboard, setHeart, setGameOptions, setCoverPicker, setSounds, setHomeProfiles, setSteamKey, setScreenshotButton, screenshotButton, wantsFullscreen, steamKey };

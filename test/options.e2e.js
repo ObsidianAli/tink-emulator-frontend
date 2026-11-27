@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const zlib = require('node:zlib');
 const { _electron: electron } = require('playwright');
+const { pcGames, idFor } = require('./pcseed');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const GRID = 'https://www.steamgriddb.com/api/v2';
@@ -42,19 +43,16 @@ async function main() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tink-options-e2e-'));
   const data = path.join(root, 'data');
   const empty = path.join(root, 'empty');
-  const folder = path.join(root, 'wii');
-  const seeded = path.join(data, 'covers', 'wii');
-  for (const dir of [seeded, empty, folder]) fs.mkdirSync(dir, { recursive: true });
-  for (const name of ['Pixel Deep', 'Star Moon', 'Wild Woods']) {
-    fs.writeFileSync(path.join(folder, `${name} (USA).iso`), '');
-    fs.writeFileSync(path.join(seeded, `${name} (USA).png`), colourPng(COLOURS.red));
-  }
+  const seeded = path.join(data, 'covers', 'pc');
+  for (const dir of [seeded, empty]) fs.mkdirSync(dir, { recursive: true });
+  const names = ['Pixel Deep', 'Star Moon', 'Wild Woods'];
+  for (const name of names) fs.writeFileSync(path.join(seeded, `${name}.png`), colourPng(COLOURS.red));
   fs.writeFileSync(path.join(data, 'settings.json'), JSON.stringify({
     setupDone: true,
     covers: false,
     steamGridDbKey: 'test-key',
-    consoles: { wii: { folder } },
-    profiles: [{ id: 'p1', name: 'Ali', hiddenConsoles: ['steam'] }, { id: 'p2', name: 'Sam', hiddenConsoles: ['steam'] }],
+    pcGames: pcGames(root, names),
+    profiles: [{ id: 'p1', name: 'Ali' }, { id: 'p2', name: 'Sam' }],
   }));
 
   const app = await electron.launch({
@@ -302,7 +300,7 @@ async function main() {
   await key('Enter');
   await optionsGone();
   await title('Star Moon');
-  assert.deepStrictEqual(settings().profiles[0].hiddenGames, ['wii:Pixel Deep (USA).iso']);
+  assert.deepStrictEqual(settings().profiles[0].hiddenGames, [`pc:${idFor('Pixel Deep')}`]);
 
   assert.deepStrictEqual(errors, [], 'no page errors');
   await app.close();

@@ -1,4 +1,4 @@
-import { element, focusGlow, focusRow, shortPath } from './dom.js';
+import { element, focusGlow, focusRow } from './dom.js';
 import { screen } from './transition.js';
 import { badge } from './badge.js';
 import { editProfile, closeProfiles, PROFILES_MAX } from './profiles.js';
@@ -36,9 +36,10 @@ const GAME_OPTIONS = { case: 'Beside the case', panel: 'Side panel' };
 const COVER_PICKERS = { page: 'Page', case: 'On the case' };
 const SCREENS = { full: 'Fullscreen', window: 'Window' };
 
-export async function openSettings({ focusConsole, focusCategory } = {}) {
+export async function openSettings({ focusCategory } = {}) {
   let state = await window.tink.getSettings();
   let users = await window.tink.getProfiles();
+  let boot = await window.tink.getBoot();
   return new Promise((resolve) => {
     let changed = false;
     let focus = 0;
@@ -140,8 +141,6 @@ export async function openSettings({ focusConsole, focusCategory } = {}) {
       return row.sound;
     }
 
-    const link = (name, label, status) => ({ id: name, label, status, hint: 'Open', activate: () => { view = name; focus = 0; render({ swap: true }); } });
-
     async function learnButton() {
       if (learning) return;
       learning = true;
@@ -211,30 +210,6 @@ export async function openSettings({ focusConsole, focusCategory } = {}) {
         if (users.profiles.length > 1) userRows.push({ label: 'Remove', group: true, hint: 'Remove', activate: () => removeUser(profile) });
         return userRows;
       }
-      if (view === 'emulators') {
-        return state.consoles.map((item) => {
-          const emulator = item.emulator;
-          return {
-            console: item.id,
-            label: item.name,
-            status: emulator.status,
-            found: emulator.found,
-            hint: 'Pick',
-            second: { label: 'Find automatically', run: () => change(window.tink.findAutomatically(emulator.id)) },
-            activate: () => change(window.tink.pickExe(emulator.id)),
-          };
-        });
-      }
-      if (view === 'folders') {
-        return state.consoles.map((item) => ({
-          label: item.name,
-          status: item.folder ? shortPath(item.folder) : 'None',
-          found: Boolean(item.folder),
-          hint: 'Pick',
-          second: item.folder ? { label: 'Skip', run: () => change(window.tink.clearFolder(item.id)) } : null,
-          activate: () => change(window.tink.pickFolder(item.id)),
-        }));
-      }
       if (view === 'hidden') {
         return [
           { id: 'all', label: 'Show all', hint: 'Show', activate: () => change(window.tink.showHiddenGames()) },
@@ -247,18 +222,6 @@ export async function openSettings({ focusConsole, focusCategory } = {}) {
           })),
         ];
       }
-      if (view === 'consoles') {
-        return state.consoleList.map((item) => ({
-          label: item.name,
-          status: item.hidden ? 'Hidden' : 'Shown',
-          hint: item.hidden ? 'Show' : 'Hide',
-          sound: 'toggle',
-          activate: () => change(window.tink.toggleConsole(item.id)),
-        }));
-      }
-      const emulatorsFound = state.consoles.filter((item) => item.emulator.found).length;
-      const foldersSet = state.consoles.filter((item) => item.folder).length;
-      const shown = state.consoleList.filter((item) => !item.hidden).length;
       const panes = {
         users: () => {
           const list = users.profiles.map((profile) => ({
@@ -278,9 +241,6 @@ export async function openSettings({ focusConsole, focusCategory } = {}) {
           return list;
         },
         library: () => [
-          link('emulators', 'Emulators', `${emulatorsFound} of ${state.consoles.length} found`),
-          link('folders', 'Games folders', `${foldersSet} of ${state.consoles.length} set`),
-          link('consoles', 'Consoles', `${shown} of ${state.consoleList.length} shown`),
           {
             id: 'hidden',
             label: 'Hidden games',
@@ -376,6 +336,22 @@ export async function openSettings({ focusConsole, focusCategory } = {}) {
             second: state.screenshotButton ? { label: 'Clear', run: () => change(window.tink.clearScreenshotButton(), { reload: false }) } : null,
             activate: learnButton,
           },
+          ...(boot.available ? [{
+            id: 'boot',
+            label: 'Boot into Tink',
+            status: boot.on ? 'On' : 'Off',
+            hint: 'Switch',
+            sound: 'toggle',
+            activate: async () => {
+              active.busy = true;
+              try {
+                boot = await window.tink.setBoot(!boot.on);
+              } finally {
+                active.busy = false;
+              }
+              render();
+            },
+          }] : []),
         ],
       };
       return panes[CATEGORIES[category].id]();
@@ -445,7 +421,6 @@ export async function openSettings({ focusConsole, focusCategory } = {}) {
         else if (row.key) node.tabIndex = 0;
         else node.type = 'button';
         const name = element('span', 'setup-name', row.label);
-        if (row.sub) name.append(element('span', 'setup-sub', row.sub));
         if (row.badge) name.prepend(badge(row.badge, { className: 'small' }));
         node.append(name);
         if (row.side) node.append(badge(row.side, { className: 'small' }));
@@ -482,8 +457,7 @@ export async function openSettings({ focusConsole, focusCategory } = {}) {
         focusable.push(row);
       }
       rows = focusable;
-      const titles = { emulators: 'Emulators', folders: 'Games folders', consoles: 'Consoles', hidden: 'Hidden games' };
-      const heading = element('h1', '', view === 'top' ? CATEGORIES[category].name : view === 'user' ? userProfile().name : titles[view]);
+      const heading = element('h1', '', view === 'top' ? CATEGORIES[category].name : view === 'user' ? userProfile().name : 'Hidden games');
       if (swap) {
         heading.classList.add('settings-swap');
         list.classList.add('settings-swap');
@@ -588,12 +562,7 @@ export async function openSettings({ focusConsole, focusCategory } = {}) {
     screen(() => {
       root.hidden = false;
       build();
-      if (focusConsole) {
-        category = CATEGORIES.findIndex((item) => item.id === 'library');
-        column = 'pane';
-        view = 'emulators';
-        pendingFocus = (row) => row.console === focusConsole;
-      } else if (focusCategory) {
+      if (focusCategory) {
         category = CATEGORIES.findIndex((item) => item.id === focusCategory);
         column = 'pane';
       }

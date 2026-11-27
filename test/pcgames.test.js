@@ -107,13 +107,12 @@ test('a game from several sources is listed once with the best exe and its folde
   assert.strictEqual(games.filter((g) => /fort epic/i.test(g.title)).length, 1);
 });
 
-test('emulators Tink already has are left out', async () => {
+test('emulator programs are left out', async () => {
   const world = pcWorld();
   touch(world.root, 'Games/Dol Stuff/Dolphin.exe', 5000);
-  touch(world.root, 'Games/My Custom Emu/emu.exe', 5000);
-  const games = await run(world, { exclude: { exes: [path.join(world.root, 'Games', 'My Custom Emu', 'emu.exe')] } });
+  const games = await run(world);
   fs.rmSync(world.root, { recursive: true, force: true });
-  assert.ok(!games.some((g) => /dol|emu|retro/i.test(g.title)));
+  assert.ok(!games.some((g) => /dol|retro/i.test(g.title)));
 });
 
 test('missing folders and a failing registry give an empty list instead of throwing', async () => {
